@@ -1,7 +1,7 @@
 package finder
 
 import (
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // BreadthFirstFinder is a Breadth-First-Search pathfinder.

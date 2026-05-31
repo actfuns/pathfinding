@@ -1,8 +1,8 @@
 package hpa
 
 import (
-	"github.com/parasol/pathfinding/core"
-	"github.com/parasol/pathfinding/finder"
+	"github.com/actfuns/navpath/core"
+	"github.com/actfuns/navpath/finder"
 )
 
 // HPAStarFinder implements Hierarchical Pathfinding A*.

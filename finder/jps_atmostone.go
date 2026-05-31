@@ -1,7 +1,7 @@
 package finder
 
 import (
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // JPFMoveDiagonallyIfAtMostOneObstacle is JPS that moves diagonally when at most one obstacle exists.

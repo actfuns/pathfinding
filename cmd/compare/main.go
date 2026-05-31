@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/parasol/pathfinding/core"
-	"github.com/parasol/pathfinding/finder"
+	"github.com/actfuns/navpath/core"
+	"github.com/actfuns/navpath/finder"
 )
 
 var scenarios = []struct {

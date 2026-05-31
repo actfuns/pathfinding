@@ -1,7 +1,7 @@
 package finder
 
 import (
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // JumpPointFinder creates a JPS finder based on the diagonal movement setting.

@@ -3,7 +3,7 @@ package hpa
 import (
 	"testing"
 
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // ref: hpastar (C#) — https://github.com/ByteExceptions/hpastar

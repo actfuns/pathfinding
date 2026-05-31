@@ -1,9 +1,9 @@
 package navmap
 
 import (
-	"github.com/parasol/pathfinding/core"
-	"github.com/parasol/pathfinding/finder"
-	"github.com/parasol/pathfinding/hpa"
+	"github.com/actfuns/navpath/core"
+	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/navpath/hpa"
 )
 
 // TileMap wraps a core.Grid with coordinate conversion and pathfinding.

@@ -1,7 +1,7 @@
 package hpa
 
 import (
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // HPABuilder builds the hierarchical portal graph from a Grid.

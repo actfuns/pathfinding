@@ -1,7 +1,7 @@
 package finder
 
 import (
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // BiAStarFinder is a bidirectional A* pathfinder.

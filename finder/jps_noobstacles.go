@@ -1,7 +1,7 @@
 package finder
 
 import (
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // JPFMoveDiagonallyIfNoObstacles is JPS that only moves diagonally when there are no obstacles.

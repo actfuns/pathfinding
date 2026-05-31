@@ -3,8 +3,8 @@ package hpa
 import (
 	"testing"
 
-	"github.com/parasol/pathfinding/core"
-	"github.com/parasol/pathfinding/finder"
+	"github.com/actfuns/navpath/core"
+	"github.com/actfuns/navpath/finder"
 )
 
 // TestHPASingleChunk verifies HPA* falls back to A* when start and end are in the same chunk.

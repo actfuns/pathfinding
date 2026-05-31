@@ -3,7 +3,7 @@ package pathfinding_test
 import (
 	"testing"
 
-	"github.com/parasol/pathfinding/finder"
+	"github.com/actfuns/navpath/finder"
 )
 
 // TestAllAgainstJS is an integration test that verifies all finder algorithms

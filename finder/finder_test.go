@@ -3,7 +3,7 @@ package finder
 import (
 	"testing"
 
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // testScenarios are shared across all finder tests.

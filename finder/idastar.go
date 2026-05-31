@@ -3,7 +3,7 @@ package finder
 import (
 	"time"
 
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // IDAStarFinder is an Iterative Deepening A* pathfinder.

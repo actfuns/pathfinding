@@ -3,8 +3,8 @@ package hpa
 import (
 	"testing"
 
-	"github.com/parasol/pathfinding/core"
-	"github.com/parasol/pathfinding/finder"
+	"github.com/actfuns/navpath/core"
+	"github.com/actfuns/navpath/finder"
 )
 
 func TestDefaultHPAConfig(t *testing.T) {

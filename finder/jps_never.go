@@ -1,7 +1,7 @@
 package finder
 
 import (
-	"github.com/parasol/pathfinding/core"
+	"github.com/actfuns/navpath/core"
 )
 
 // JPFNeverMoveDiagonally is JPS with only horizontal/vertical movement.
