@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	pf "github.com/parasol/pathfinding"
+	"github.com/parasol/pathfinding/core"
+	"github.com/parasol/pathfinding/finder"
 )
 
 var scenarios = []struct {
@@ -57,31 +58,31 @@ var scenarios = []struct {
 
 type finderDef struct {
 	name   string
-	finder pf.Finder
+	finder core.Finder
 }
 
 func main() {
 	finders := []finderDef{
-		{"AStar", pf.NewAStarFinder(nil)},
-		{"BestFirst", pf.NewBestFirstFinder(nil)},
-		{"Dijkstra", pf.NewDijkstraFinder(nil)},
-		{"BreadthFirst", pf.NewBreadthFirstFinder(nil)},
-		{"BiAStar", pf.NewBiAStarFinder(nil)},
-		{"BiBestFirst", pf.NewBiBestFirstFinder(nil)},
-		{"BiDijkstra", pf.NewBiDijkstraFinder(nil)},
-		{"BiBreadthFirst", pf.NewBiBreadthFirstFinder(nil)},
-		{"IDAStar", pf.NewIDAStarFinder(nil)},
-		{"JPFAtMostOne", pf.JumpPointFinder(&pf.FinderOptions{DiagonalMovement: pf.DiagonalIfAtMostOneObstacle})},
-		{"JPFNever", pf.JumpPointFinder(&pf.FinderOptions{DiagonalMovement: pf.DiagonalNever})},
-		{"JPFAlways", pf.JumpPointFinder(&pf.FinderOptions{DiagonalMovement: pf.DiagonalAlways})},
-		{"JPFOnlyWhenNoObstacles", pf.JumpPointFinder(&pf.FinderOptions{DiagonalMovement: pf.DiagonalOnlyWhenNoObstacles})},
+		{"AStar", finder.NewAStarFinder(nil)},
+		{"BestFirst", finder.NewBestFirstFinder(nil)},
+		{"Dijkstra", finder.NewDijkstraFinder(nil)},
+		{"BreadthFirst", finder.NewBreadthFirstFinder(nil)},
+		{"BiAStar", finder.NewBiAStarFinder(nil)},
+		{"BiBestFirst", finder.NewBiBestFirstFinder(nil)},
+		{"BiDijkstra", finder.NewBiDijkstraFinder(nil)},
+		{"BiBreadthFirst", finder.NewBiBreadthFirstFinder(nil)},
+		{"IDAStar", finder.NewIDAStarFinder(nil)},
+		{"JPFAtMostOne", finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: core.DiagonalIfAtMostOneObstacle})},
+		{"JPFNever", finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: core.DiagonalNever})},
+		{"JPFAlways", finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: core.DiagonalAlways})},
+		{"JPFOnlyWhenNoObstacles", finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: core.DiagonalOnlyWhenNoObstacles})},
 	}
 
 	allPassed := true
 
 	for _, f := range finders {
 		for i, s := range scenarios {
-			grid := pf.NewGrid(s.matrix)
+			grid := core.NewGrid(s.matrix)
 			path := f.finder.FindPath(s.startX, s.startY, s.endX, s.endY, grid)
 
 			if path == nil || len(path) == 0 {
@@ -134,7 +135,7 @@ func main() {
 	// Output in JS-comparable format
 	for _, f := range finders {
 		for i, s := range scenarios {
-			grid := pf.NewGrid(s.matrix)
+			grid := core.NewGrid(s.matrix)
 			path := f.finder.FindPath(s.startX, s.startY, s.endX, s.endY, grid)
 			if path == nil {
 				path = [][2]int{}
