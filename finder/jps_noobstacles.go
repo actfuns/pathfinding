@@ -6,9 +6,9 @@ type JPFMoveDiagonallyIfNoObstacles struct {
 }
 
 // NewJPFMoveDiagonallyIfNoObstacles creates a new JPFMoveDiagonallyIfNoObstacles.
-func NewJPFMoveDiagonallyIfNoObstacles(opt *FinderOptions) *JPFMoveDiagonallyIfNoObstacles {
+func NewJPFMoveDiagonallyIfNoObstacles(opts ...Option) *JPFMoveDiagonallyIfNoObstacles {
 	f := &JPFMoveDiagonallyIfNoObstacles{}
-	f.JumpPointFinderBase = *NewJumpPointFinderBase(opt)
+	f.JumpPointFinderBase = *NewJumpPointFinderBase(opts...)
 	f.jumpFn = noObstaclesJump
 	f.findNeighborsFn = noObstaclesFindNeighbors
 	return f

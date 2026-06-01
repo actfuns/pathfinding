@@ -8,22 +8,13 @@ type AStarFinder struct {
 }
 
 // NewAStarFinder creates a new AStarFinder with default options.
-func NewAStarFinder(opt *FinderOptions) *AStarFinder {
+func NewAStarFinder(opts ...Option) *AStarFinder {
+	opt := ApplyOptions(opts)
 	f := &AStarFinder{
 		Heuristic:        Manhattan,
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
 	}
-	if opt != nil {
-		f.applyOptions(opt)
-	}
-	if f.DiagonalMovement != DiagonalNever {
-		f.Heuristic = Octile
-	}
-	return f
-}
-
-func (f *AStarFinder) applyOptions(opt *FinderOptions) {
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
 	} else if opt.AllowDiagonal {
@@ -39,6 +30,10 @@ func (f *AStarFinder) applyOptions(opt *FinderOptions) {
 	if opt.Weight > 0 {
 		f.Weight = opt.Weight
 	}
+	if f.DiagonalMovement != DiagonalNever {
+		f.Heuristic = Octile
+	}
+	return f
 }
 
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.

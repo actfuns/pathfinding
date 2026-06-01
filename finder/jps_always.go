@@ -6,9 +6,9 @@ type JPFAlwaysMoveDiagonally struct {
 }
 
 // NewJPFAlwaysMoveDiagonally creates a new JPFAlwaysMoveDiagonally.
-func NewJPFAlwaysMoveDiagonally(opt *FinderOptions) *JPFAlwaysMoveDiagonally {
+func NewJPFAlwaysMoveDiagonally(opts ...Option) *JPFAlwaysMoveDiagonally {
 	f := &JPFAlwaysMoveDiagonally{}
-	f.JumpPointFinderBase = *NewJumpPointFinderBase(opt)
+	f.JumpPointFinderBase = *NewJumpPointFinderBase(opts...)
 	f.jumpFn = alwaysJump
 	f.findNeighborsFn = alwaysFindNeighbors
 	return f

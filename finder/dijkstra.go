@@ -6,9 +6,9 @@ type DijkstraFinder struct {
 }
 
 // NewDijkstraFinder creates a new DijkstraFinder.
-func NewDijkstraFinder(opt *FinderOptions) *DijkstraFinder {
+func NewDijkstraFinder(opts ...Option) *DijkstraFinder {
 	f := &DijkstraFinder{}
-	inner := NewAStarFinder(opt)
+	inner := NewAStarFinder(opts...)
 	f.AStarFinder = *inner
 	f.Heuristic = func(dx, dy float64) float64 {
 		return 0

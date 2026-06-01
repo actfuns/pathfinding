@@ -18,28 +18,27 @@ type HPAStarFinder struct {
 }
 
 // NewHPAStarFinder creates an HPA* finder.
-func NewHPAStarFinder(opt *finder.FinderOptions) *HPAStarFinder {
+func NewHPAStarFinder(opts ...finder.Option) *HPAStarFinder {
 	f := &HPAStarFinder{
 		Heuristic:        finder.Manhattan,
 		Weight:           1,
 		DiagonalMovement: finder.DiagonalNever,
 	}
-	if opt != nil {
-		if opt.DiagonalMovement != 0 {
-			f.DiagonalMovement = opt.DiagonalMovement
-		} else if opt.AllowDiagonal {
-			if opt.DontCrossCorners {
-				f.DiagonalMovement = finder.DiagonalOnlyWhenNoObstacles
-			} else {
-				f.DiagonalMovement = finder.DiagonalIfAtMostOneObstacle
-			}
+	opt := finder.ApplyOptions(opts)
+	if opt.DiagonalMovement != 0 {
+		f.DiagonalMovement = opt.DiagonalMovement
+	} else if opt.AllowDiagonal {
+		if opt.DontCrossCorners {
+			f.DiagonalMovement = finder.DiagonalOnlyWhenNoObstacles
+		} else {
+			f.DiagonalMovement = finder.DiagonalIfAtMostOneObstacle
 		}
-		if opt.Heuristic != nil {
-			f.Heuristic = opt.Heuristic
-		}
-		if opt.Weight > 0 {
-			f.Weight = opt.Weight
-		}
+	}
+	if opt.Heuristic != nil {
+		f.Heuristic = opt.Heuristic
+	}
+	if opt.Weight > 0 {
+		f.Weight = opt.Weight
 	}
 	if f.DiagonalMovement != finder.DiagonalNever {
 		f.Heuristic = finder.Octile

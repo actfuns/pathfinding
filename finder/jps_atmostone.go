@@ -6,9 +6,9 @@ type JPFMoveDiagonallyIfAtMostOneObstacle struct {
 }
 
 // NewJPFMoveDiagonallyIfAtMostOneObstacle creates a new JPFMoveDiagonallyIfAtMostOneObstacle.
-func NewJPFMoveDiagonallyIfAtMostOneObstacle(opt *FinderOptions) *JPFMoveDiagonallyIfAtMostOneObstacle {
+func NewJPFMoveDiagonallyIfAtMostOneObstacle(opts ...Option) *JPFMoveDiagonallyIfAtMostOneObstacle {
 	f := &JPFMoveDiagonallyIfAtMostOneObstacle{}
-	f.JumpPointFinderBase = *NewJumpPointFinderBase(opt)
+	f.JumpPointFinderBase = *NewJumpPointFinderBase(opts...)
 	f.jumpFn = atMostOneJump
 	f.findNeighborsFn = atMostOneFindNeighbors
 	return f

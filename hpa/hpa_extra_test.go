@@ -81,30 +81,24 @@ func TestHPAWorldIsSingleChunk(t *testing.T) {
 
 func TestNewHPAStarFinderWithOptions(t *testing.T) {
 	// Diagonal movement
-	f := NewHPAStarFinder(&finder.FinderOptions{
-		AllowDiagonal:    true,
-		DontCrossCorners: false,
-	})
+	f := NewHPAStarFinder(finder.WithAllowDiagonal(false))
 	if f.DiagonalMovement != finder.DiagonalIfAtMostOneObstacle {
 		t.Errorf("expected DiagonalIfAtMostOneObstacle, got %v", f.DiagonalMovement)
 	}
 
 	// Diagonal + no cross corners
-	f2 := NewHPAStarFinder(&finder.FinderOptions{
-		AllowDiagonal:    true,
-		DontCrossCorners: true,
-	})
+	f2 := NewHPAStarFinder(finder.WithAllowDiagonal(true))
 	if f2.DiagonalMovement != finder.DiagonalOnlyWhenNoObstacles {
 		t.Errorf("expected DiagonalOnlyWhenNoObstacles, got %v", f2.DiagonalMovement)
 	}
 
 	// Explicit DiagonalMovement + custom heuristic
 	customHeuristic := func(dx, dy float64) float64 { return dx + dy + 1 }
-	f3 := NewHPAStarFinder(&finder.FinderOptions{
-		DiagonalMovement: finder.DiagonalAlways,
-		Heuristic:        customHeuristic,
-		Weight:           1.5,
-	})
+	f3 := NewHPAStarFinder(
+		finder.WithDiagonal(finder.DiagonalAlways),
+		finder.WithHeuristic(customHeuristic),
+		finder.WithWeight(1.5),
+	)
 	if f3.DiagonalMovement != finder.DiagonalAlways {
 		t.Errorf("expected DiagonalAlways, got %v", f3.DiagonalMovement)
 	}

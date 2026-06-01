@@ -6,19 +6,18 @@ type BiBreadthFirstFinder struct {
 }
 
 // NewBiBreadthFirstFinder creates a new BiBreadthFirstFinder.
-func NewBiBreadthFirstFinder(opt *FinderOptions) *BiBreadthFirstFinder {
+func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
+	opt := ApplyOptions(opts)
 	f := &BiBreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
 	}
-	if opt != nil {
-		if opt.DiagonalMovement != 0 {
-			f.DiagonalMovement = opt.DiagonalMovement
-		} else if opt.AllowDiagonal {
-			if opt.DontCrossCorners {
-				f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
-			} else {
-				f.DiagonalMovement = DiagonalIfAtMostOneObstacle
-			}
+	if opt.DiagonalMovement != 0 {
+		f.DiagonalMovement = opt.DiagonalMovement
+	} else if opt.AllowDiagonal {
+		if opt.DontCrossCorners {
+			f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
+		} else {
+			f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 		}
 	}
 	return f

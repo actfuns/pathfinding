@@ -6,9 +6,9 @@ type JPFNeverMoveDiagonally struct {
 }
 
 // NewJPFNeverMoveDiagonally creates a new JPFNeverMoveDiagonally.
-func NewJPFNeverMoveDiagonally(opt *FinderOptions) *JPFNeverMoveDiagonally {
+func NewJPFNeverMoveDiagonally(opts ...Option) *JPFNeverMoveDiagonally {
 	f := &JPFNeverMoveDiagonally{}
-	f.JumpPointFinderBase = *NewJumpPointFinderBase(opt)
+	f.JumpPointFinderBase = *NewJumpPointFinderBase(opts...)
 	f.jumpFn = neverJump
 	f.findNeighborsFn = neverFindNeighbors
 	return f

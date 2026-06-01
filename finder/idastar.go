@@ -12,7 +12,8 @@ type IDAStarFinder struct {
 }
 
 // NewIDAStarFinder creates a new IDAStarFinder.
-func NewIDAStarFinder(opt *FinderOptions) *IDAStarFinder {
+func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
+	opt := ApplyOptions(opts)
 	f := &IDAStarFinder{
 		Heuristic:        Manhattan,
 		Weight:           1,
@@ -20,25 +21,23 @@ func NewIDAStarFinder(opt *FinderOptions) *IDAStarFinder {
 		TrackRecursion:   false,
 		TimeLimit:        -1,
 	}
-	if opt != nil {
-		if opt.DiagonalMovement != 0 {
-			f.DiagonalMovement = opt.DiagonalMovement
-		} else if opt.AllowDiagonal {
-			if opt.DontCrossCorners {
-				f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
-			} else {
-				f.DiagonalMovement = DiagonalIfAtMostOneObstacle
-			}
+	if opt.DiagonalMovement != 0 {
+		f.DiagonalMovement = opt.DiagonalMovement
+	} else if opt.AllowDiagonal {
+		if opt.DontCrossCorners {
+			f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
+		} else {
+			f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 		}
-		if opt.Heuristic != nil {
-			f.Heuristic = opt.Heuristic
-		}
-		if opt.Weight > 0 {
-			f.Weight = opt.Weight
-		}
-		f.TrackRecursion = opt.TrackRecursion
-		f.TimeLimit = opt.TimeLimit
 	}
+	if opt.Heuristic != nil {
+		f.Heuristic = opt.Heuristic
+	}
+	if opt.Weight > 0 {
+		f.Weight = opt.Weight
+	}
+	f.TrackRecursion = opt.TrackRecursion
+	f.TimeLimit = opt.TimeLimit
 	if f.DiagonalMovement != DiagonalNever {
 		f.Heuristic = Octile
 	}

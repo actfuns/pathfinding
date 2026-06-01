@@ -6,19 +6,18 @@ type BreadthFirstFinder struct {
 }
 
 // NewBreadthFirstFinder creates a new BreadthFirstFinder.
-func NewBreadthFirstFinder(opt *FinderOptions) *BreadthFirstFinder {
+func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
+	opt := ApplyOptions(opts)
 	f := &BreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
 	}
-	if opt != nil {
-		if opt.DiagonalMovement != 0 {
-			f.DiagonalMovement = opt.DiagonalMovement
-		} else if opt.AllowDiagonal {
-			if opt.DontCrossCorners {
-				f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
-			} else {
-				f.DiagonalMovement = DiagonalIfAtMostOneObstacle
-			}
+	if opt.DiagonalMovement != 0 {
+		f.DiagonalMovement = opt.DiagonalMovement
+	} else if opt.AllowDiagonal {
+		if opt.DontCrossCorners {
+			f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
+		} else {
+			f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 		}
 	}
 	return f

@@ -8,28 +8,27 @@ type BiAStarFinder struct {
 }
 
 // NewBiAStarFinder creates a new BiAStarFinder.
-func NewBiAStarFinder(opt *FinderOptions) *BiAStarFinder {
+func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
+	opt := ApplyOptions(opts)
 	f := &BiAStarFinder{
 		Heuristic:        Manhattan,
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
 	}
-	if opt != nil {
-		if opt.DiagonalMovement != 0 {
-			f.DiagonalMovement = opt.DiagonalMovement
-		} else if opt.AllowDiagonal {
-			if opt.DontCrossCorners {
-				f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
-			} else {
-				f.DiagonalMovement = DiagonalIfAtMostOneObstacle
-			}
+	if opt.DiagonalMovement != 0 {
+		f.DiagonalMovement = opt.DiagonalMovement
+	} else if opt.AllowDiagonal {
+		if opt.DontCrossCorners {
+			f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
+		} else {
+			f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 		}
-		if opt.Heuristic != nil {
-			f.Heuristic = opt.Heuristic
-		}
-		if opt.Weight > 0 {
-			f.Weight = opt.Weight
-		}
+	}
+	if opt.Heuristic != nil {
+		f.Heuristic = opt.Heuristic
+	}
+	if opt.Weight > 0 {
+		f.Weight = opt.Weight
 	}
 	if f.DiagonalMovement != DiagonalNever {
 		f.Heuristic = Octile

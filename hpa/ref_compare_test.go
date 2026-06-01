@@ -153,7 +153,7 @@ func TestHPAReachablePortals(t *testing.T) {
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	// Start at (1,1) in chunk 0 — should find reachable portals
 	keys := f.findReachablePortals(grid, world, 1, 1, 0)
 	if len(keys) == 0 {
@@ -174,7 +174,7 @@ func TestHPAConcretePathValid(t *testing.T) {
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	result := f.FindPath(0, 0, 19, 1, grid, world)
 	if result.Waypoints == nil {
 		t.Fatal("expected path, got nil")
@@ -200,7 +200,7 @@ func TestHPAManyChunks(t *testing.T) {
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	result := f.FindPath(0, 1, 31, 1, grid, world)
 	if result.Waypoints == nil {
 		t.Fatal("expected path, got nil")

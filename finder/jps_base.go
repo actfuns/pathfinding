@@ -15,17 +15,16 @@ type JumpPointFinderBase struct {
 }
 
 // NewJumpPointFinderBase creates a new JumpPointFinderBase.
-func NewJumpPointFinderBase(opt *FinderOptions) *JumpPointFinderBase {
+func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
+	opt := ApplyOptions(opts)
 	f := &JumpPointFinderBase{
 		Heuristic:      Manhattan,
 		TrackRecursion: false,
 	}
-	if opt != nil {
-		if opt.Heuristic != nil {
-			f.Heuristic = opt.Heuristic
-		}
-		f.TrackRecursion = opt.TrackRecursion
+	if opt.Heuristic != nil {
+		f.Heuristic = opt.Heuristic
 	}
+	f.TrackRecursion = opt.TrackRecursion
 	return f
 }
 
@@ -102,18 +101,16 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node) {
 }
 
 // JumpPointFinder creates a JPS finder based on the diagonal movement setting.
-func JumpPointFinder(opt *FinderOptions) Finder {
-	if opt == nil {
-		opt = &FinderOptions{}
-	}
+func JumpPointFinder(opts ...Option) Finder {
+	opt := ApplyOptions(opts)
 	switch opt.DiagonalMovement {
 	case DiagonalNever:
-		return NewJPFNeverMoveDiagonally(opt)
+		return NewJPFNeverMoveDiagonally(opts...)
 	case DiagonalAlways:
-		return NewJPFAlwaysMoveDiagonally(opt)
+		return NewJPFAlwaysMoveDiagonally(opts...)
 	case DiagonalOnlyWhenNoObstacles:
-		return NewJPFMoveDiagonallyIfNoObstacles(opt)
+		return NewJPFMoveDiagonallyIfNoObstacles(opts...)
 	default:
-		return NewJPFMoveDiagonallyIfAtMostOneObstacle(opt)
+		return NewJPFMoveDiagonallyIfAtMostOneObstacle(opts...)
 	}
 }

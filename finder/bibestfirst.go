@@ -6,9 +6,9 @@ type BiBestFirstFinder struct {
 }
 
 // NewBiBestFirstFinder creates a new BiBestFirstFinder.
-func NewBiBestFirstFinder(opt *FinderOptions) *BiBestFirstFinder {
+func NewBiBestFirstFinder(opts ...Option) *BiBestFirstFinder {
 	f := &BiBestFirstFinder{}
-	inner := NewBiAStarFinder(opt)
+	inner := NewBiAStarFinder(opts...)
 	f.BiAStarFinder = *inner
 	orig := f.Heuristic
 	f.Heuristic = func(dx, dy float64) float64 {

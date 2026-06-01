@@ -7,11 +7,10 @@ type BestFirstFinder struct {
 }
 
 // NewBestFirstFinder creates a new BestFirstFinder.
-func NewBestFirstFinder(opt *FinderOptions) *BestFirstFinder {
+func NewBestFirstFinder(opts ...Option) *BestFirstFinder {
 	f := &BestFirstFinder{}
-	inner := NewAStarFinder(opt)
+	inner := NewAStarFinder(opts...)
 	f.AStarFinder = *inner
-	// Override heuristic: multiply by 1,000,000
 	orig := f.Heuristic
 	f.Heuristic = func(dx, dy float64) float64 {
 		return orig(dx, dy) * 1000000

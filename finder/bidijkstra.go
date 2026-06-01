@@ -6,9 +6,9 @@ type BiDijkstraFinder struct {
 }
 
 // NewBiDijkstraFinder creates a new BiDijkstraFinder.
-func NewBiDijkstraFinder(opt *FinderOptions) *BiDijkstraFinder {
+func NewBiDijkstraFinder(opts ...Option) *BiDijkstraFinder {
 	f := &BiDijkstraFinder{}
-	inner := NewBiAStarFinder(opt)
+	inner := NewBiAStarFinder(opts...)
 	f.BiAStarFinder = *inner
 	f.Heuristic = func(dx, dy float64) float64 {
 		return 0

@@ -17,7 +17,7 @@ func TestHPASingleChunk(t *testing.T) {
 		{0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	result := f.FindPath(0, 0, 4, 4, grid, world)
 	if result.Waypoints == nil {
 		t.Fatal("expected path, got nil")
@@ -43,7 +43,7 @@ func TestHPATwoChunks(t *testing.T) {
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	result := f.FindPath(0, 0, 19, 3, grid, world)
 	if result.Waypoints == nil {
 		t.Fatal("expected path, got nil")
@@ -69,7 +69,7 @@ func TestHPAWithObstacles(t *testing.T) {
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	result := f.FindPath(0, 0, 15, 7, grid, world)
 	if result.Waypoints == nil {
 		t.Fatal("expected path, got nil")
@@ -89,7 +89,7 @@ func TestHPAUnreachable(t *testing.T) {
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	result := f.FindPath(0, 2, 19, 2, grid, world)
 	if result.Waypoints != nil {
 		t.Error("expected nil path for unreachable destination, got a path")
@@ -103,7 +103,7 @@ func TestHPAStartIsWall(t *testing.T) {
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	result := f.FindPath(0, 0, 19, 1, grid, world)
 	if result.Waypoints != nil {
 		t.Error("expected nil for wall start")
@@ -120,10 +120,7 @@ func TestHPASameChunkDiagonal(t *testing.T) {
 		{0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(&finder.FinderOptions{
-		AllowDiagonal:    true,
-		DontCrossCorners: false,
-	})
+		f := NewHPAStarFinder(finder.WithAllowDiagonal(false))
 	result := f.FindPath(0, 0, 4, 4, grid, world)
 	if result.Waypoints == nil {
 		t.Fatal("expected path, got nil")
@@ -141,7 +138,7 @@ func TestHPAMediumGrid(t *testing.T) {
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-	f := NewHPAStarFinder(nil)
+	f := NewHPAStarFinder()
 	result := f.FindPath(0, 0, 19, 3, grid, world)
 	if result.Waypoints == nil {
 		t.Fatal("expected path, got nil")
