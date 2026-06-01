@@ -1,27 +1,23 @@
 package finder
 
-import (
-	"github.com/actfuns/navpath/core"
-)
-
 // BiBreadthFirstFinder is a bidirectional BFS pathfinder.
 type BiBreadthFirstFinder struct {
-	DiagonalMovement core.DiagonalMovement
+	DiagonalMovement DiagonalMovement
 }
 
 // NewBiBreadthFirstFinder creates a new BiBreadthFirstFinder.
 func NewBiBreadthFirstFinder(opt *FinderOptions) *BiBreadthFirstFinder {
 	f := &BiBreadthFirstFinder{
-		DiagonalMovement: core.DiagonalNever,
+		DiagonalMovement: DiagonalNever,
 	}
 	if opt != nil {
 		if opt.DiagonalMovement != 0 {
 			f.DiagonalMovement = opt.DiagonalMovement
 		} else if opt.AllowDiagonal {
 			if opt.DontCrossCorners {
-				f.DiagonalMovement = core.DiagonalOnlyWhenNoObstacles
+				f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
 			} else {
-				f.DiagonalMovement = core.DiagonalIfAtMostOneObstacle
+				f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 			}
 		}
 	}
@@ -29,7 +25,7 @@ func NewBiBreadthFirstFinder(opt *FinderOptions) *BiBreadthFirstFinder {
 }
 
 // FindPath finds a path using bidirectional BFS.
-func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid) [][2]int {
+func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 
@@ -38,8 +34,8 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid *co
 		BY_END   = 2
 	)
 
-	startOpenList := make([]*core.Node, 0, 64)
-	endOpenList := make([]*core.Node, 0, 64)
+	startOpenList := make([]*Node, 0, 64)
+	endOpenList := make([]*Node, 0, 64)
 
 	startOpenList = append(startOpenList, startNode)
 	startNode.Opened = 1
@@ -51,20 +47,21 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid *co
 	endNode.Parent = nil
 	endNode.By = BY_END
 
+	neighborBuf := make([]*Node, 0, 8)
+
 	for len(startOpenList) > 0 && len(endOpenList) > 0 {
-		// Expand start side
 		node := startOpenList[0]
 		startOpenList = startOpenList[1:]
 		node.Closed = true
 
-		neighbors := grid.GetNeighbors(node, f.DiagonalMovement)
+		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
 			if neighbor.Closed {
 				continue
 			}
 			if neighbor.Opened != 0 {
 				if neighbor.By == BY_END {
-					return core.BiBacktrace(node, neighbor)
+					return BiBacktrace(node, neighbor)
 				}
 				continue
 			}
@@ -74,19 +71,18 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid *co
 			neighbor.By = BY_START
 		}
 
-		// Expand end side
 		node = endOpenList[0]
 		endOpenList = endOpenList[1:]
 		node.Closed = true
 
-		neighbors = grid.GetNeighbors(node, f.DiagonalMovement)
+		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
 			if neighbor.Closed {
 				continue
 			}
 			if neighbor.Opened != 0 {
 				if neighbor.By == BY_START {
-					return core.BiBacktrace(neighbor, node)
+					return BiBacktrace(neighbor, node)
 				}
 				continue
 			}

@@ -1,9 +1,5 @@
 package finder
 
-import (
-	"github.com/actfuns/navpath/core"
-)
-
 // JPFMoveDiagonallyIfAtMostOneObstacle is JPS that moves diagonally when at most one obstacle exists.
 type JPFMoveDiagonallyIfAtMostOneObstacle struct {
 	JumpPointFinderBase
@@ -57,22 +53,21 @@ func atMostOneJump(b *JumpPointFinderBase, x, y, px, py int) *[2]int {
 		}
 	}
 
-	// moving diagonally, must make sure at least one neighbor is open
 	if grid.IsWalkableAt(x+dx, y) || grid.IsWalkableAt(x, y+dy) {
 		return atMostOneJump(b, x+dx, y+dy, x, y)
 	}
 	return nil
 }
 
-func atMostOneFindNeighbors(b *JumpPointFinderBase, node *core.Node) [][2]int {
+func atMostOneFindNeighbors(b *JumpPointFinderBase, node *Node) [][2]int {
 	parent := node.Parent
 	x, y := node.X, node.Y
 	grid := b.grid
 
 	if parent != nil {
 		px, py := parent.X, parent.Y
-		dx := (x - px) / core.MaxInt(core.AbsInt(x-px), 1)
-		dy := (y - py) / core.MaxInt(core.AbsInt(y-py), 1)
+		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
+		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 
 		neighbors := make([][2]int, 0, 5)
 
@@ -118,7 +113,7 @@ func atMostOneFindNeighbors(b *JumpPointFinderBase, node *core.Node) [][2]int {
 		return neighbors
 	}
 
-	neighborNodes := grid.GetNeighbors(node, core.DiagonalIfAtMostOneObstacle)
+	neighborNodes := grid.GetNeighbors(node, DiagonalIfAtMostOneObstacle, b.neighborBuf)
 	neighbors := make([][2]int, len(neighborNodes))
 	for i, n := range neighborNodes {
 		neighbors[i] = [2]int{n.X, n.Y}

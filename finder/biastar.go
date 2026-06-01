@@ -1,31 +1,27 @@
 package finder
 
-import (
-	"github.com/actfuns/navpath/core"
-)
-
 // BiAStarFinder is a bidirectional A* pathfinder.
 type BiAStarFinder struct {
-	Heuristic        core.HeuristicFunc
+	Heuristic        HeuristicFunc
 	Weight           float64
-	DiagonalMovement core.DiagonalMovement
+	DiagonalMovement DiagonalMovement
 }
 
 // NewBiAStarFinder creates a new BiAStarFinder.
 func NewBiAStarFinder(opt *FinderOptions) *BiAStarFinder {
 	f := &BiAStarFinder{
-		Heuristic:        core.Manhattan,
+		Heuristic:        Manhattan,
 		Weight:           1,
-		DiagonalMovement: core.DiagonalNever,
+		DiagonalMovement: DiagonalNever,
 	}
 	if opt != nil {
 		if opt.DiagonalMovement != 0 {
 			f.DiagonalMovement = opt.DiagonalMovement
 		} else if opt.AllowDiagonal {
 			if opt.DontCrossCorners {
-				f.DiagonalMovement = core.DiagonalOnlyWhenNoObstacles
+				f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
 			} else {
-				f.DiagonalMovement = core.DiagonalIfAtMostOneObstacle
+				f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 			}
 		}
 		if opt.Heuristic != nil {
@@ -35,14 +31,14 @@ func NewBiAStarFinder(opt *FinderOptions) *BiAStarFinder {
 			f.Weight = opt.Weight
 		}
 	}
-	if f.DiagonalMovement != core.DiagonalNever {
-		f.Heuristic = core.Octile
+	if f.DiagonalMovement != DiagonalNever {
+		f.Heuristic = Octile
 	}
 	return f
 }
 
 // FindPath finds a path using bidirectional A*.
-func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid) [][2]int {
+func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 
@@ -51,9 +47,9 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid
 		BY_END   = 2
 	)
 
-	cmp := func(a, b *core.Node) bool { return a.F < b.F }
-	startOpenList := core.NewMinHeap(cmp)
-	endOpenList := core.NewMinHeap(cmp)
+	cmp := func(a, b *Node) bool { return a.F < b.F }
+	startOpenList := NewMinHeap(cmp)
+	endOpenList := NewMinHeap(cmp)
 
 	startNode.G = 0
 	startNode.F = 0
@@ -65,18 +61,19 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid
 	endOpenList.Push(endNode)
 	endNode.Opened = BY_END
 
+	neighborBuf := make([]*Node, 0, 8)
+
 	for !startOpenList.Empty() && !endOpenList.Empty() {
-		// Expand from start side
 		node := startOpenList.Pop()
 		node.Closed = true
 
-		neighbors := grid.GetNeighbors(node, f.DiagonalMovement)
+		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
 			if neighbor.Closed {
 				continue
 			}
 			if neighbor.Opened == BY_END {
-				return core.BiBacktrace(node, neighbor)
+				return BiBacktrace(node, neighbor)
 			}
 
 			x, y := neighbor.X, neighbor.Y
@@ -84,13 +81,13 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid
 			if x-node.X == 0 || y-node.Y == 0 {
 				ng = node.G + 1
 			} else {
-				ng = node.G + core.SQRT2
+				ng = node.G + SQRT2
 			}
 
 			if neighbor.Opened == 0 || ng < neighbor.G {
 				neighbor.G = ng
 				if neighbor.Opened == 0 {
-					neighbor.H = f.Weight * f.Heuristic(float64(core.AbsInt(x-endX)), float64(core.AbsInt(y-endY)))
+					neighbor.H = f.Weight * f.Heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
 				}
 				neighbor.F = neighbor.G + neighbor.H
 				neighbor.Parent = node
@@ -104,17 +101,16 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid
 			}
 		}
 
-		// Expand from end side
 		node = endOpenList.Pop()
 		node.Closed = true
 
-		neighbors = grid.GetNeighbors(node, f.DiagonalMovement)
+		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
 			if neighbor.Closed {
 				continue
 			}
 			if neighbor.Opened == BY_START {
-				return core.BiBacktrace(neighbor, node)
+				return BiBacktrace(neighbor, node)
 			}
 
 			x, y := neighbor.X, neighbor.Y
@@ -122,13 +118,13 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid
 			if x-node.X == 0 || y-node.Y == 0 {
 				ng = node.G + 1
 			} else {
-				ng = node.G + core.SQRT2
+				ng = node.G + SQRT2
 			}
 
 			if neighbor.Opened == 0 || ng < neighbor.G {
 				neighbor.G = ng
 				if neighbor.Opened == 0 {
-					neighbor.H = f.Weight * f.Heuristic(float64(core.AbsInt(x-startX)), float64(core.AbsInt(y-startY)))
+					neighbor.H = f.Weight * f.Heuristic(float64(AbsInt(x-startX)), float64(AbsInt(y-startY)))
 				}
 				neighbor.F = neighbor.G + neighbor.H
 				neighbor.Parent = node

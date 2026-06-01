@@ -1,7 +1,7 @@
 // Package waypoint provides graph-based pathfinding on arbitrary waypoint graphs.
 //
 // A WaypointGraph consists of nodes with positions and connections (edges) between them.
-// WaypointFinder implements core.Finder by finding the closest waypoint nodes to
+// WaypointFinder implements finder.Finder by finding the closest waypoint nodes to
 // the start/end tile coordinates and running A* on the graph.
 //
 // Reference: Roy-T.AStar (C#) — INode/Node/Edge pattern with Connect() fluent API

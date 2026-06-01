@@ -5,7 +5,7 @@ import "math"
 // WaypointFinder implements A* search on a waypoint graph.
 //
 // It can be used directly with a WaypointGraph, or it can wrap a graph
-// to implement core.Finder by mapping tile coordinates to the closest
+// to implement finder.Finder by mapping tile coordinates to the closest
 // waypoint nodes.
 type WaypointFinder struct {
 	graph *WaypointGraph

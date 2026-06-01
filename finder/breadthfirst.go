@@ -1,27 +1,23 @@
 package finder
 
-import (
-	"github.com/actfuns/navpath/core"
-)
-
 // BreadthFirstFinder is a Breadth-First-Search pathfinder.
 type BreadthFirstFinder struct {
-	DiagonalMovement core.DiagonalMovement
+	DiagonalMovement DiagonalMovement
 }
 
 // NewBreadthFirstFinder creates a new BreadthFirstFinder.
 func NewBreadthFirstFinder(opt *FinderOptions) *BreadthFirstFinder {
 	f := &BreadthFirstFinder{
-		DiagonalMovement: core.DiagonalNever,
+		DiagonalMovement: DiagonalNever,
 	}
 	if opt != nil {
 		if opt.DiagonalMovement != 0 {
 			f.DiagonalMovement = opt.DiagonalMovement
 		} else if opt.AllowDiagonal {
 			if opt.DontCrossCorners {
-				f.DiagonalMovement = core.DiagonalOnlyWhenNoObstacles
+				f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
 			} else {
-				f.DiagonalMovement = core.DiagonalIfAtMostOneObstacle
+				f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 			}
 		}
 	}
@@ -29,12 +25,14 @@ func NewBreadthFirstFinder(opt *FinderOptions) *BreadthFirstFinder {
 }
 
 // FindPath finds a path using BFS.
-func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid) [][2]int {
+func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
-	openList := make([]*core.Node, 0, 64)
+	openList := make([]*Node, 0, 64)
 	openList = append(openList, startNode)
 	startNode.Opened = 1
+
+	neighborBuf := make([]*Node, 0, 8)
 
 	for len(openList) > 0 {
 		node := openList[0]
@@ -42,10 +40,10 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid *core
 		node.Closed = true
 
 		if node == endNode {
-			return core.Backtrace(endNode)
+			return Backtrace(endNode)
 		}
 
-		neighbors := grid.GetNeighbors(node, f.DiagonalMovement)
+		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
 			if neighbor.Closed || neighbor.Opened != 0 {
 				continue

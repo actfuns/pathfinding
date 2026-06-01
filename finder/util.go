@@ -1,4 +1,4 @@
-package core
+package finder
 
 import "math"
 
@@ -9,7 +9,6 @@ func Backtrace(node *Node) [][2]int {
 		path = append(path, [2]int{node.X, node.Y})
 		node = node.Parent
 	}
-	// Reverse in place
 	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
 		path[i], path[j] = path[j], path[i]
 	}
@@ -28,7 +27,6 @@ func BiBacktrace(nodeA, nodeB *Node) [][2]int {
 		pathB = append(pathB, [2]int{nodeB.X, nodeB.Y})
 		nodeB = nodeB.Parent
 	}
-	// Reverse pathA, then append pathB (keep pathB order as-is since it was built from end->start)
 	for i, j := 0, len(pathA)-1; i < j; i, j = i+1, j-1 {
 		pathA[i], pathA[j] = pathA[j], pathA[i]
 	}
@@ -93,7 +91,6 @@ func ExpandPath(path [][2]int) [][2]int {
 	expanded := make([][2]int, 0, len(path)*2)
 	for i := 0; i < len(path)-1; i++ {
 		interpolated := Interpolate(path[i][0], path[i][1], path[i+1][0], path[i+1][1])
-		// Add all but the last point (to avoid duplicates)
 		expanded = append(expanded, interpolated[:len(interpolated)-1]...)
 	}
 	expanded = append(expanded, path[len(path)-1])
@@ -101,7 +98,7 @@ func ExpandPath(path [][2]int) [][2]int {
 }
 
 // SmoothenPath smooths a path by removing unnecessary waypoints.
-func SmoothenPath(grid *Grid, path [][2]int) [][2]int {
+func SmoothenPath(grid Grid, path [][2]int) [][2]int {
 	if len(path) < 2 {
 		return path
 	}

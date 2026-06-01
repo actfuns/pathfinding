@@ -1,26 +1,22 @@
 package finder
 
-import (
-	"time"
-
-	"github.com/actfuns/navpath/core"
-)
+import "time"
 
 // IDAStarFinder is an Iterative Deepening A* pathfinder.
 type IDAStarFinder struct {
-	Heuristic        core.HeuristicFunc
+	Heuristic        HeuristicFunc
 	Weight           float64
-	DiagonalMovement core.DiagonalMovement
+	DiagonalMovement DiagonalMovement
 	TrackRecursion   bool
-	TimeLimit        float64 // seconds, <= 0 for infinite
+	TimeLimit        float64
 }
 
 // NewIDAStarFinder creates a new IDAStarFinder.
 func NewIDAStarFinder(opt *FinderOptions) *IDAStarFinder {
 	f := &IDAStarFinder{
-		Heuristic:        core.Manhattan,
+		Heuristic:        Manhattan,
 		Weight:           1,
-		DiagonalMovement: core.DiagonalNever,
+		DiagonalMovement: DiagonalNever,
 		TrackRecursion:   false,
 		TimeLimit:        -1,
 	}
@@ -29,9 +25,9 @@ func NewIDAStarFinder(opt *FinderOptions) *IDAStarFinder {
 			f.DiagonalMovement = opt.DiagonalMovement
 		} else if opt.AllowDiagonal {
 			if opt.DontCrossCorners {
-				f.DiagonalMovement = core.DiagonalOnlyWhenNoObstacles
+				f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
 			} else {
-				f.DiagonalMovement = core.DiagonalIfAtMostOneObstacle
+				f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 			}
 		}
 		if opt.Heuristic != nil {
@@ -43,34 +39,35 @@ func NewIDAStarFinder(opt *FinderOptions) *IDAStarFinder {
 		f.TrackRecursion = opt.TrackRecursion
 		f.TimeLimit = opt.TimeLimit
 	}
-	if f.DiagonalMovement != core.DiagonalNever {
-		f.Heuristic = core.Octile
+	if f.DiagonalMovement != DiagonalNever {
+		f.Heuristic = Octile
 	}
 	return f
 }
 
 // FindPath finds a path using IDA*.
-func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid) [][2]int {
+func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
 
-	h := func(a, b *core.Node) float64 {
-		return f.Heuristic(float64(core.AbsInt(b.X-a.X)), float64(core.AbsInt(b.Y-a.Y)))
+	h := func(a, b *Node) float64 {
+		return f.Heuristic(float64(AbsInt(b.X-a.X)), float64(AbsInt(b.Y-a.Y)))
 	}
 
-	cost := func(a, b *core.Node) float64 {
+	cost := func(a, b *Node) float64 {
 		if a.X == b.X || a.Y == b.Y {
 			return 1
 		}
-		return core.SQRT2
+		return SQRT2
 	}
 
 	startTime := time.Now()
 	hasTimeLimit := f.TimeLimit > 0
 
-	var search func(node *core.Node, g, cutoff float64, route [][2]int, depth int) (float64, bool)
+	neighborBuf := make([]*Node, 0, 8)
+	var search func(node *Node, g, cutoff float64, route [][2]int, depth int) (float64, bool)
 
-	search = func(node *core.Node, g, cutoff float64, route [][2]int, depth int) (float64, bool) {
+	search = func(node *Node, g, cutoff float64, route [][2]int, depth int) (float64, bool) {
 		if hasTimeLimit && time.Since(startTime).Seconds() > f.TimeLimit {
 			return 0, false
 		}
@@ -86,7 +83,7 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid
 		}
 
 		min := float64(0)
-		neighbors := grid.GetNeighbors(node, f.DiagonalMovement)
+		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 
 		for _, neighbor := range neighbors {
 			if f.TrackRecursion {

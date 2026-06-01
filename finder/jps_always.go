@@ -1,9 +1,5 @@
 package finder
 
-import (
-	"github.com/actfuns/navpath/core"
-)
-
 // JPFAlwaysMoveDiagonally is JPS that always moves diagonally.
 type JPFAlwaysMoveDiagonally struct {
 	JumpPointFinderBase
@@ -35,7 +31,6 @@ func alwaysJump(b *JumpPointFinderBase, x, y, px, py int) *[2]int {
 		return &[2]int{x, y}
 	}
 
-	// check for forced neighbors
 	if dx != 0 && dy != 0 {
 		if (grid.IsWalkableAt(x-dx, y+dy) && !grid.IsWalkableAt(x-dx, y)) ||
 			(grid.IsWalkableAt(x+dx, y-dy) && !grid.IsWalkableAt(x, y-dy)) {
@@ -61,15 +56,15 @@ func alwaysJump(b *JumpPointFinderBase, x, y, px, py int) *[2]int {
 	return alwaysJump(b, x+dx, y+dy, x, y)
 }
 
-func alwaysFindNeighbors(b *JumpPointFinderBase, node *core.Node) [][2]int {
+func alwaysFindNeighbors(b *JumpPointFinderBase, node *Node) [][2]int {
 	parent := node.Parent
 	x, y := node.X, node.Y
 	grid := b.grid
 
 	if parent != nil {
 		px, py := parent.X, parent.Y
-		dx := (x - px) / core.MaxInt(core.AbsInt(x-px), 1)
-		dy := (y - py) / core.MaxInt(core.AbsInt(y-py), 1)
+		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
+		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 
 		neighbors := make([][2]int, 0, 5)
 
@@ -115,7 +110,7 @@ func alwaysFindNeighbors(b *JumpPointFinderBase, node *core.Node) [][2]int {
 		return neighbors
 	}
 
-	neighborNodes := grid.GetNeighbors(node, core.DiagonalAlways)
+	neighborNodes := grid.GetNeighbors(node, DiagonalAlways, b.neighborBuf)
 	neighbors := make([][2]int, len(neighborNodes))
 	for i, n := range neighborNodes {
 		neighbors[i] = [2]int{n.X, n.Y}

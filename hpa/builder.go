@@ -1,7 +1,7 @@
 package hpa
 
 import (
-	"github.com/actfuns/navpath/core"
+	"github.com/actfuns/navpath/finder"
 )
 
 // HPABuilder builds the hierarchical portal graph from a Grid.
@@ -17,12 +17,12 @@ func NewHPABuilder(cfg HPAConfig) *HPABuilder {
 // Build constructs the HPA world: partition grid into chunks, detect edge
 // portals (one per walkable cell on each chunk edge), connect internal
 // portals (BFS within chunk), and connect external portals (adjacent chunk).
-func (b *HPABuilder) Build(grid *core.Grid) *HPAWorld {
+func (b *HPABuilder) Build(grid finder.Grid) *HPAWorld {
 	cs := b.cfg.ChunkSize
 	if cs < 2 {
 		cs = 16
 	}
-	pw, ph := padSize(grid.Width, grid.Height, cs)
+	pw, ph := padSize(grid.Width(), grid.Height(), cs)
 	cmx := pw / cs
 	cmy := ph / cs
 
@@ -35,14 +35,17 @@ func (b *HPABuilder) Build(grid *core.Grid) *HPAWorld {
 		ChunkSize:    cs,
 	}
 
+	// Pre-allocate neighbor buffer for all GetNeighbors calls during build.
+	neighborBuf := make([]*finder.Node, 0, 8)
+
 	for cy := 0; cy < cmy; cy++ {
 		for cx := 0; cx < cmx; cx++ {
-			b.buildChunkPortals(grid, w, cx, cy)
+			b.buildChunkPortals(grid, w, cx, cy, neighborBuf)
 		}
 	}
 	for cy := 0; cy < cmy; cy++ {
 		for cx := 0; cx < cmx; cx++ {
-			b.connectInternals(grid, w, cx, cy)
+			b.connectInternals(grid, w, cx, cy, neighborBuf)
 		}
 	}
 	return w
@@ -68,26 +71,26 @@ const (
 )
 
 // buildChunkPortals creates one portal per walkable edge cell.
-func (b *HPABuilder) buildChunkPortals(grid *core.Grid, w *HPAWorld, cx, cy int) {
+func (b *HPABuilder) buildChunkPortals(grid finder.Grid, w *HPAWorld, cx, cy int, nb []*finder.Node) {
 	cs := w.ChunkSize
 	chunkID := cy*w.ChunkMapX + cx
 	ox := cx * cs
 	oy := cy * cs
 
 	// North edge: dir=0, cells (ox..ox+cs-1, oy), opposite dir=S=2
-	b.edgePortals(grid, w, chunkID, ox, oy, cs, 0, DirS, false)
+	b.edgePortals(grid, w, chunkID, ox, oy, cs, DirN, DirS, false, nb)
 	// South edge: dir=2, cells (ox..ox+cs-1, oy+cs-1), opposite dir=N=0
-	b.edgePortals(grid, w, chunkID, ox, oy+cs-1, cs, 2, DirN, false)
+	b.edgePortals(grid, w, chunkID, ox, oy+cs-1, cs, DirS, DirN, false, nb)
 	// West edge: dir=3, cells (ox, oy..oy+cs-1), opposite dir=E=1
-	b.edgePortals(grid, w, chunkID, ox, oy, cs, 3, DirE, true)
+	b.edgePortals(grid, w, chunkID, ox, oy, cs, DirW, DirE, true, nb)
 	// East edge: dir=1, cells (ox+cs-1, oy..oy+cs-1), opposite dir=W=3
-	b.edgePortals(grid, w, chunkID, ox+cs-1, oy, cs, 1, DirW, true)
+	b.edgePortals(grid, w, chunkID, ox+cs-1, oy, cs, DirE, DirW, true, nb)
 }
 
-// edgePortals creates portals for each walkable cell on a chunk edge.
-func (b *HPABuilder) edgePortals(grid *core.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, oppDir int, vertical bool) {
+// edgePortals creates portals for each walkable cell on a chunk edge,
+// then finds external (cross-chunk) neighbors using grid.GetNeighbors.
+func (b *HPABuilder) edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, oppDir int, vertical bool, nb []*finder.Node) {
 	for pos := 0; pos < cs; pos++ {
-		// World coordinates of this edge cell
 		var cx, cy int
 		if vertical {
 			cx, cy = ox, oy+pos
@@ -105,36 +108,46 @@ func (b *HPABuilder) edgePortals(grid *core.Grid, w *HPAWorld, chunkID, ox, oy, 
 		w.Portals[key] = p
 		w.NumPortals++
 
-		// External connection: neighbor cell beyond this edge
-		var nx, ny int
-		if vertical {
-			nx, ny = cx, cy
-			if dir == DirE {
-				nx = cx + 1
-			} else {
-				nx = cx - 1
+		// External connection: find neighbors via grid.GetNeighbors that
+		// lie in a different chunk. This works for all grid topologies
+		// (orthogonal, hex, staggered).
+		tmpNode := &finder.Node{X: cx, Y: cy, Walkable: true}
+		neighbors := grid.GetNeighbors(tmpNode, finder.DiagonalNever, nb)
+		for _, n := range neighbors {
+			nx, ny := n.X, n.Y
+			if nx < 0 || nx >= grid.Width() || ny < 0 || ny >= grid.Height() {
+				continue
 			}
-		} else {
-			nx, ny = cx, cy
-			if dir == DirN {
-				ny = cy - 1
-			} else {
-				ny = cy + 1
+			nChunk := (ny/cs)*w.ChunkMapX + nx/cs
+			if nChunk == chunkID {
+				continue
 			}
-		}
-		if nx >= 0 && nx < grid.Width && ny >= 0 && ny < grid.Height && grid.IsWalkableAt(nx, ny) {
-			nchunkID := (ny/cs)*w.ChunkMapX + nx/cs
-			if nchunkID != chunkID {
-				ekey := PortalKey(nchunkID, pos, oppDir, cs)
-				p.ExternalPortals[0] = ekey
-				p.ExternalCount = 1
+			if !grid.IsWalkableAt(nx, ny) {
+				continue
+			}
+			ekey := PortalKey(nChunk, pos, oppDir, cs)
+			// Avoid duplicates (possible at chunk corners where a cell
+			// might have >1 external neighbor to the same chunk)
+			dup := false
+			for ei := 0; ei < p.ExternalCount; ei++ {
+				if p.ExternalPortals[ei] == ekey {
+					dup = true
+					break
+				}
+			}
+			if dup {
+				continue
+			}
+			if p.ExternalCount < len(p.ExternalPortals) {
+				p.ExternalPortals[p.ExternalCount] = ekey
+				p.ExternalCount++
 			}
 		}
 	}
 }
 
 // connectInternals runs BFS between all pairs of portals in the same chunk.
-func (b *HPABuilder) connectInternals(grid *core.Grid, w *HPAWorld, cx, cy int) {
+func (b *HPABuilder) connectInternals(grid finder.Grid, w *HPAWorld, cx, cy int, nb []*finder.Node) {
 	cs := w.ChunkSize
 	chunkID := cy*w.ChunkMapX + cx
 	ox := cx * cs
@@ -156,7 +169,7 @@ func (b *HPABuilder) connectInternals(grid *core.Grid, w *HPAWorld, cx, cy int) 
 
 	for i := 0; i < len(keys)-1; i++ {
 		pi := w.Portals[keys[i]]
-		costs := bfsCostsInChunk(grid, pi.CenterX, pi.CenterY, ox, oy, cs)
+		costs := bfsCostsInChunk(grid, pi.CenterX, pi.CenterY, ox, oy, cs, nb)
 		for j := i + 1; j < len(keys); j++ {
 			pj := w.Portals[keys[j]]
 			cost := getBfsCost(costs, pj.CenterX, pj.CenterY, ox, oy, cs)
@@ -174,8 +187,9 @@ func (b *HPABuilder) connectInternals(grid *core.Grid, w *HPAWorld, cx, cy int) 
 	}
 }
 
-// bfsCostsInChunk runs BFS (4-dir, cost 10 per step) within a chunk bounds.
-func bfsCostsInChunk(grid *core.Grid, sx, sy, ox, oy, cs int) []int {
+// bfsCostsInChunk runs BFS within a chunk bounds using the grid's actual
+// neighbor topology (works for orthogonal, hex, and staggered grids).
+func bfsCostsInChunk(grid finder.Grid, sx, sy, ox, oy, cs int, nb []*finder.Node) []int {
 	if !grid.IsWalkableAt(sx, sy) {
 		return nil
 	}
@@ -196,15 +210,21 @@ func bfsCostsInChunk(grid *core.Grid, sx, sy, ox, oy, cs int) []int {
 	costs[sKey] = 0
 	queue = append(queue, [2]int{sx, sy})
 
-	dirs := [][2]int{{0, -1}, {1, 0}, {0, 1}, {-1, 0}}
+	// Use a reusable tmp node for GetNeighbors calls
+	tmpNode := &finder.Node{Walkable: true}
+
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
 		cx, cy := cur[0], cur[1]
 		ck := toKey(cx, cy)
 		cc := costs[ck]
-		for _, d := range dirs {
-			nx, ny := cx+d[0], cy+d[1]
+
+		tmpNode.X = cx
+		tmpNode.Y = cy
+		neighbors := grid.GetNeighbors(tmpNode, finder.DiagonalNever, nb)
+		for _, n := range neighbors {
+			nx, ny := n.X, n.Y
 			if !inside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
 				continue
 			}

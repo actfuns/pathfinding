@@ -1,7 +1,6 @@
 package hpa
 
 import (
-	"github.com/actfuns/navpath/core"
 	"github.com/actfuns/navpath/finder"
 )
 
@@ -13,26 +12,26 @@ import (
 //  2. Concrete pathfinding — A* within each cluster between consecutive
 //     portal centers (plus start→first portal, last portal→end).
 type HPAStarFinder struct {
-	Heuristic        core.HeuristicFunc
+	Heuristic        finder.HeuristicFunc
 	Weight           float64
-	DiagonalMovement core.DiagonalMovement
+	DiagonalMovement finder.DiagonalMovement
 }
 
 // NewHPAStarFinder creates an HPA* finder.
 func NewHPAStarFinder(opt *finder.FinderOptions) *HPAStarFinder {
 	f := &HPAStarFinder{
-		Heuristic:        core.Manhattan,
+		Heuristic:        finder.Manhattan,
 		Weight:           1,
-		DiagonalMovement: core.DiagonalNever,
+		DiagonalMovement: finder.DiagonalNever,
 	}
 	if opt != nil {
 		if opt.DiagonalMovement != 0 {
 			f.DiagonalMovement = opt.DiagonalMovement
 		} else if opt.AllowDiagonal {
 			if opt.DontCrossCorners {
-				f.DiagonalMovement = core.DiagonalOnlyWhenNoObstacles
+				f.DiagonalMovement = finder.DiagonalOnlyWhenNoObstacles
 			} else {
-				f.DiagonalMovement = core.DiagonalIfAtMostOneObstacle
+				f.DiagonalMovement = finder.DiagonalIfAtMostOneObstacle
 			}
 		}
 		if opt.Heuristic != nil {
@@ -42,8 +41,8 @@ func NewHPAStarFinder(opt *finder.FinderOptions) *HPAStarFinder {
 			f.Weight = opt.Weight
 		}
 	}
-	if f.DiagonalMovement != core.DiagonalNever {
-		f.Heuristic = core.Octile
+	if f.DiagonalMovement != finder.DiagonalNever {
+		f.Heuristic = finder.Octile
 	}
 	return f
 }
@@ -65,7 +64,7 @@ type HPAFindResult struct {
 
 // FindPath performs HPA* on the given grid, using the pre-built HPAWorld.
 // Returns both the abstract portal sequence and the concrete path.
-func (f *HPAStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid, world *HPAWorld) *HPAFindResult {
+func (f *HPAStarFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid, world *HPAWorld) *HPAFindResult {
 	startChunk := world.ChunkIDOf(startX, startY)
 	endChunk := world.ChunkIDOf(endX, endY)
 
@@ -254,12 +253,13 @@ func (f *HPAStarFinder) heuristicCost(a, b *Portal) float64 {
 
 // findReachablePortals finds portals in the same chunk as (sx, sy) that
 // are reachable via BFS within the chunk.
-func (f *HPAStarFinder) findReachablePortals(grid *core.Grid, world *HPAWorld, sx, sy int, chunkID int) []int {
+func (f *HPAStarFinder) findReachablePortals(grid finder.Grid, world *HPAWorld, sx, sy int, chunkID int) []int {
 	cs := world.ChunkSize
 	cx := (sx / cs) * cs
 	cy := (sy / cs) * cs
+	nb := make([]*finder.Node, 0, 8)
 
-	costs := bfsCostsInChunk(grid, sx, sy, cx, cy, cs)
+	costs := bfsCostsInChunk(grid, sx, sy, cx, cy, cs, nb)
 
 	dirs := []int{DirN, DirE, DirS, DirW}
 	var result []int
@@ -280,7 +280,7 @@ func (f *HPAStarFinder) findReachablePortals(grid *core.Grid, world *HPAWorld, s
 }
 
 // concreteFind runs A* on the concrete grid between two points (within a chunk).
-func (f *HPAStarFinder) concreteFind(grid *core.Grid, sx, sy, ex, ey int) [][2]int {
+func (f *HPAStarFinder) concreteFind(grid finder.Grid, sx, sy, ex, ey int) [][2]int {
 	astar := &finder.AStarFinder{
 		Heuristic:        f.Heuristic,
 		Weight:           f.Weight,

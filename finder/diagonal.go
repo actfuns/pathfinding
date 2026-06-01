@@ -1,4 +1,4 @@
-package core
+package finder
 
 // DiagonalMovement represents allowed diagonal movement types.
 type DiagonalMovement int

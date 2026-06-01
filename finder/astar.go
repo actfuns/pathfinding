@@ -1,40 +1,24 @@
 package finder
 
-import (
-	"github.com/actfuns/navpath/core"
-)
-
-// FinderOptions holds common options for all finders.
-type FinderOptions struct {
-	AllowDiagonal    bool
-	DontCrossCorners bool
-	DiagonalMovement core.DiagonalMovement
-	Heuristic        core.HeuristicFunc
-	Weight           float64
-	TrackRecursion   bool
-	TimeLimit        float64 // in seconds, <= 0 for infinite
-}
-
 // AStarFinder is an implementation of the A* pathfinding algorithm.
 type AStarFinder struct {
-	Heuristic        core.HeuristicFunc
+	Heuristic        HeuristicFunc
 	Weight           float64
-	DiagonalMovement core.DiagonalMovement
+	DiagonalMovement DiagonalMovement
 }
 
 // NewAStarFinder creates a new AStarFinder with default options.
 func NewAStarFinder(opt *FinderOptions) *AStarFinder {
 	f := &AStarFinder{
-		Heuristic:        core.Manhattan,
+		Heuristic:        Manhattan,
 		Weight:           1,
-		DiagonalMovement: core.DiagonalNever,
+		DiagonalMovement: DiagonalNever,
 	}
 	if opt != nil {
 		f.applyOptions(opt)
 	}
-	// When diagonal movement is allowed, use octile heuristic
-	if f.DiagonalMovement != core.DiagonalNever {
-		f.Heuristic = core.Octile
+	if f.DiagonalMovement != DiagonalNever {
+		f.Heuristic = Octile
 	}
 	return f
 }
@@ -44,9 +28,9 @@ func (f *AStarFinder) applyOptions(opt *FinderOptions) {
 		f.DiagonalMovement = opt.DiagonalMovement
 	} else if opt.AllowDiagonal {
 		if opt.DontCrossCorners {
-			f.DiagonalMovement = core.DiagonalOnlyWhenNoObstacles
+			f.DiagonalMovement = DiagonalOnlyWhenNoObstacles
 		} else {
-			f.DiagonalMovement = core.DiagonalIfAtMostOneObstacle
+			f.DiagonalMovement = DiagonalIfAtMostOneObstacle
 		}
 	}
 	if opt.Heuristic != nil {
@@ -58,8 +42,8 @@ func (f *AStarFinder) applyOptions(opt *FinderOptions) {
 }
 
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.
-func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid) [][2]int {
-	openList := core.NewMinHeap(func(a, b *core.Node) bool {
+func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+	openList := NewMinHeap(func(a, b *Node) bool {
 		return a.F < b.F
 	})
 	startNode := grid.GetNodeAt(startX, startY)
@@ -70,15 +54,17 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid) 
 	openList.Push(startNode)
 	startNode.Opened = 1
 
+	neighborBuf := make([]*Node, 0, 8)
+
 	for !openList.Empty() {
 		node := openList.Pop()
 		node.Closed = true
 
 		if node == endNode {
-			return core.Backtrace(endNode)
+			return Backtrace(endNode)
 		}
 
-		neighbors := grid.GetNeighbors(node, f.DiagonalMovement)
+		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
 			if neighbor.Closed {
 				continue
@@ -89,13 +75,13 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid *core.Grid) 
 			if x-node.X == 0 || y-node.Y == 0 {
 				ng = node.G + 1
 			} else {
-				ng = node.G + core.SQRT2
+				ng = node.G + SQRT2
 			}
 
 			if neighbor.Opened == 0 || ng < neighbor.G {
 				neighbor.G = ng
 				if neighbor.Opened == 0 {
-					neighbor.H = f.Weight * f.Heuristic(float64(core.AbsInt(x-endX)), float64(core.AbsInt(y-endY)))
+					neighbor.H = f.Weight * f.Heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
 				}
 				neighbor.F = neighbor.G + neighbor.H
 				neighbor.Parent = node

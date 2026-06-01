@@ -1,43 +1,23 @@
 package finder
 
-import (
-	"github.com/actfuns/navpath/core"
-)
-
-// JumpPointFinder creates a JPS finder based on the diagonal movement setting.
-func JumpPointFinder(opt *FinderOptions) core.Finder {
-	if opt == nil {
-		opt = &FinderOptions{}
-	}
-	switch opt.DiagonalMovement {
-	case core.DiagonalNever:
-		return NewJPFNeverMoveDiagonally(opt)
-	case core.DiagonalAlways:
-		return NewJPFAlwaysMoveDiagonally(opt)
-	case core.DiagonalOnlyWhenNoObstacles:
-		return NewJPFMoveDiagonallyIfNoObstacles(opt)
-	default:
-		return NewJPFMoveDiagonallyIfAtMostOneObstacle(opt)
-	}
-}
-
 // JumpPointFinderBase is the base implementation for Jump Point Search.
 type JumpPointFinderBase struct {
-	Heuristic        core.HeuristicFunc
+	Heuristic        HeuristicFunc
 	TrackRecursion   bool
-	grid             *core.Grid
-	startNode        *core.Node
-	endNode          *core.Node
-	openList         *core.MinHeap
+	grid             Grid
+	startNode        *Node
+	endNode          *Node
+	openList         *MinHeap
+	neighborBuf      []*Node
 
 	jumpFn          func(b *JumpPointFinderBase, x, y, px, py int) *[2]int
-	findNeighborsFn func(b *JumpPointFinderBase, node *core.Node) [][2]int
+	findNeighborsFn func(b *JumpPointFinderBase, node *Node) [][2]int
 }
 
 // NewJumpPointFinderBase creates a new JumpPointFinderBase.
 func NewJumpPointFinderBase(opt *FinderOptions) *JumpPointFinderBase {
 	f := &JumpPointFinderBase{
-		Heuristic:      core.Manhattan,
+		Heuristic:      Manhattan,
 		TrackRecursion: false,
 	}
 	if opt != nil {
@@ -50,13 +30,14 @@ func NewJumpPointFinderBase(opt *FinderOptions) *JumpPointFinderBase {
 }
 
 // FindPath finds a path using JPS.
-func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid *core.Grid) [][2]int {
-	b.openList = core.NewMinHeap(func(a, bNode *core.Node) bool {
+func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+	b.openList = NewMinHeap(func(a, bNode *Node) bool {
 		return a.F < bNode.F
 	})
 	b.startNode = grid.GetNodeAt(startX, startY)
 	b.endNode = grid.GetNodeAt(endX, endY)
 	b.grid = grid
+	b.neighborBuf = make([]*Node, 0, 8)
 
 	b.startNode.G = 0
 	b.startNode.F = 0
@@ -68,7 +49,7 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid *cor
 		node.Closed = true
 
 		if node == b.endNode {
-			return core.ExpandPath(core.Backtrace(b.endNode))
+			return ExpandPath(Backtrace(b.endNode))
 		}
 
 		b.identifySuccessors(node)
@@ -77,7 +58,7 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid *cor
 	return nil
 }
 
-func (b *JumpPointFinderBase) identifySuccessors(node *core.Node) {
+func (b *JumpPointFinderBase) identifySuccessors(node *Node) {
 	grid := b.grid
 	heuristic := b.Heuristic
 	openList := b.openList
@@ -99,13 +80,13 @@ func (b *JumpPointFinderBase) identifySuccessors(node *core.Node) {
 			continue
 		}
 
-		d := core.Octile(float64(core.AbsInt(jx-x)), float64(core.AbsInt(jy-y)))
+		d := Octile(float64(AbsInt(jx-x)), float64(AbsInt(jy-y)))
 		ng := node.G + d
 
 		if jumpNode.Opened == 0 || ng < jumpNode.G {
 			jumpNode.G = ng
 			if jumpNode.Opened == 0 {
-				jumpNode.H = heuristic(float64(core.AbsInt(jx-endX)), float64(core.AbsInt(jy-endY)))
+				jumpNode.H = heuristic(float64(AbsInt(jx-endX)), float64(AbsInt(jy-endY)))
 			}
 			jumpNode.F = jumpNode.G + jumpNode.H
 			jumpNode.Parent = node
@@ -117,5 +98,22 @@ func (b *JumpPointFinderBase) identifySuccessors(node *core.Node) {
 				openList.UpdateItem(jumpNode)
 			}
 		}
+	}
+}
+
+// JumpPointFinder creates a JPS finder based on the diagonal movement setting.
+func JumpPointFinder(opt *FinderOptions) Finder {
+	if opt == nil {
+		opt = &FinderOptions{}
+	}
+	switch opt.DiagonalMovement {
+	case DiagonalNever:
+		return NewJPFNeverMoveDiagonally(opt)
+	case DiagonalAlways:
+		return NewJPFAlwaysMoveDiagonally(opt)
+	case DiagonalOnlyWhenNoObstacles:
+		return NewJPFMoveDiagonallyIfNoObstacles(opt)
+	default:
+		return NewJPFMoveDiagonallyIfAtMostOneObstacle(opt)
 	}
 }

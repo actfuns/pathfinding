@@ -3,7 +3,7 @@ package hpa
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/core"
+	"github.com/actfuns/navpath/grid"
 )
 
 // ref: hpastar (C#) — https://github.com/ByteExceptions/hpastar
@@ -64,7 +64,7 @@ func TestHPAPortalKeyEncoding(t *testing.T) {
 // per walkable cell on each chunk edge (vs C# ref's run-based merging).
 func TestHPAPortalPerCell(t *testing.T) {
 	// Grid with partial obstacles on the north edge of chunk (8,8)-(15,15)
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -87,7 +87,7 @@ func TestHPAPortalPerCell(t *testing.T) {
 // TestHPAExternalConnections verifies external portal connections
 // between adjacent chunks match the C# ref's approach (opposite direction).
 func TestHPAExternalConnections(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -111,7 +111,7 @@ func TestHPAExternalConnections(t *testing.T) {
 // TestHPABFSQuadDir verifies internal BFS uses 4-direction with cost 10,
 // matching the C# ref's approach.
 func TestHPABFSQuadDir(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0},
@@ -148,7 +148,7 @@ func TestHPABFSQuadDir(t *testing.T) {
 // TestHPAReachablePortals verifies FindPortalNodes behavior: start can reach
 // its chunk's portals via BFS (same as C# ref's FindPortalNodes).
 func TestHPAReachablePortals(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -169,7 +169,7 @@ func TestHPAReachablePortals(t *testing.T) {
 // TestHPAConcretePathValid verifies the concrete A* fallback per segment
 // produces valid walkable paths.
 func TestHPAConcretePathValid(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -194,7 +194,7 @@ func TestHPAConcretePathValid(t *testing.T) {
 
 // TestHPAManyChunks verifies HPA* on a larger grid crossing many chunk boundaries.
 func TestHPAManyChunks(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -213,7 +213,7 @@ func TestHPAManyChunks(t *testing.T) {
 // TestHPAPortalCount verifies portal count is deterministic and
 // consistent with per-cell approach.
 func TestHPAPortalCount(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},

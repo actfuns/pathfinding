@@ -3,13 +3,13 @@ package hpa
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/core"
 	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/navpath/grid"
 )
 
 // TestHPASingleChunk verifies HPA* falls back to A* when start and end are in the same chunk.
 func TestHPASingleChunk(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -36,7 +36,7 @@ func TestHPASingleChunk(t *testing.T) {
 
 // TestHPATwoChunks verifies a path crossing chunk boundaries on an open grid.
 func TestHPATwoChunks(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -58,7 +58,7 @@ func TestHPATwoChunks(t *testing.T) {
 
 // TestHPAWithObstacles verifies HPA* on a grid with obstacles.
 func TestHPAWithObstacles(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0},
@@ -81,7 +81,7 @@ func TestHPAWithObstacles(t *testing.T) {
 
 // TestHPAUnreachable verifies HPA* returns empty when there's no path.
 func TestHPAUnreachable(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
@@ -98,7 +98,7 @@ func TestHPAUnreachable(t *testing.T) {
 
 // TestHPAStartIsWall verifies wall start returns empty.
 func TestHPAStartIsWall(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -112,7 +112,7 @@ func TestHPAStartIsWall(t *testing.T) {
 
 // TestHPASameChunkDiagonal verifies HPA* with diagonal movement for a same-chunk path.
 func TestHPASameChunkDiagonal(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -134,7 +134,7 @@ func TestHPASameChunkDiagonal(t *testing.T) {
 
 // TestHPAMediumGrid verifies HPA* on a medium-sized open grid.
 func TestHPAMediumGrid(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -163,7 +163,7 @@ func assertStartEnd(t *testing.T, path [][2]int, sx, sy, ex, ey int) {
 	}
 }
 
-func verifyWalkable(t *testing.T, grid *core.Grid, path [][2]int) {
+func verifyWalkable(t *testing.T, grid finder.Grid, path [][2]int) {
 	t.Helper()
 	for i, wp := range path {
 		if !grid.IsWalkableAt(wp[0], wp[1]) {

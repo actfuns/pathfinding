@@ -3,8 +3,8 @@ package hpa
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/core"
 	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/navpath/grid"
 )
 
 func TestDefaultHPAConfig(t *testing.T) {
@@ -36,7 +36,7 @@ func TestChunkOf(t *testing.T) {
 }
 
 func TestHPAWorldChunkIDOf(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -65,7 +65,7 @@ func TestHPAWorldChunkIDOf(t *testing.T) {
 }
 
 func TestHPAWorldIsSingleChunk(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -85,7 +85,7 @@ func TestNewHPAStarFinderWithOptions(t *testing.T) {
 		AllowDiagonal:    true,
 		DontCrossCorners: false,
 	})
-	if f.DiagonalMovement != core.DiagonalIfAtMostOneObstacle {
+	if f.DiagonalMovement != finder.DiagonalIfAtMostOneObstacle {
 		t.Errorf("expected DiagonalIfAtMostOneObstacle, got %v", f.DiagonalMovement)
 	}
 
@@ -94,18 +94,18 @@ func TestNewHPAStarFinderWithOptions(t *testing.T) {
 		AllowDiagonal:    true,
 		DontCrossCorners: true,
 	})
-	if f2.DiagonalMovement != core.DiagonalOnlyWhenNoObstacles {
+	if f2.DiagonalMovement != finder.DiagonalOnlyWhenNoObstacles {
 		t.Errorf("expected DiagonalOnlyWhenNoObstacles, got %v", f2.DiagonalMovement)
 	}
 
 	// Explicit DiagonalMovement + custom heuristic
 	customHeuristic := func(dx, dy float64) float64 { return dx + dy + 1 }
 	f3 := NewHPAStarFinder(&finder.FinderOptions{
-		DiagonalMovement: core.DiagonalAlways,
+		DiagonalMovement: finder.DiagonalAlways,
 		Heuristic:        customHeuristic,
 		Weight:           1.5,
 	})
-	if f3.DiagonalMovement != core.DiagonalAlways {
+	if f3.DiagonalMovement != finder.DiagonalAlways {
 		t.Errorf("expected DiagonalAlways, got %v", f3.DiagonalMovement)
 	}
 	if f3.Weight != 1.5 {
@@ -114,7 +114,7 @@ func TestNewHPAStarFinderWithOptions(t *testing.T) {
 }
 
 func TestHPAWorldChunkMapSize(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	grid := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})

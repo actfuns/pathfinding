@@ -1,14 +1,9 @@
-package core
+package finder
 
-import (
-	"math"
-)
-
+// SQRT2 is the square root of 2.
 const SQRT2 = 1.4142135623730951
 
-var Sqrt = math.Sqrt
-var Abs = math.Abs
-
+// AbsInt returns the absolute value of x.
 func AbsInt(x int) int {
 	if x < 0 {
 		return -x
@@ -16,6 +11,7 @@ func AbsInt(x int) int {
 	return x
 }
 
+// MaxInt returns the larger of a and b.
 func MaxInt(a, b int) int {
 	if a > b {
 		return a

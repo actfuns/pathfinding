@@ -1,9 +1,5 @@
 package finder
 
-import (
-	"github.com/actfuns/navpath/core"
-)
-
 // JPFNeverMoveDiagonally is JPS with only horizontal/vertical movement.
 type JPFNeverMoveDiagonally struct {
 	JumpPointFinderBase
@@ -55,15 +51,15 @@ func neverJump(b *JumpPointFinderBase, x, y, px, py int) *[2]int {
 	return neverJump(b, x+dx, y+dy, x, y)
 }
 
-func neverFindNeighbors(b *JumpPointFinderBase, node *core.Node) [][2]int {
+func neverFindNeighbors(b *JumpPointFinderBase, node *Node) [][2]int {
 	parent := node.Parent
 	x, y := node.X, node.Y
 	grid := b.grid
 
 	if parent != nil {
 		px, py := parent.X, parent.Y
-		dx := (x - px) / core.MaxInt(core.AbsInt(x-px), 1)
-		dy := (y - py) / core.MaxInt(core.AbsInt(y-py), 1)
+		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
+		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 
 		neighbors := make([][2]int, 0, 3)
 
@@ -91,7 +87,7 @@ func neverFindNeighbors(b *JumpPointFinderBase, node *core.Node) [][2]int {
 		return neighbors
 	}
 
-	neighborNodes := grid.GetNeighbors(node, core.DiagonalNever)
+	neighborNodes := grid.GetNeighbors(node, DiagonalNever, b.neighborBuf)
 	neighbors := make([][2]int, len(neighborNodes))
 	for i, n := range neighborNodes {
 		neighbors[i] = [2]int{n.X, n.Y}

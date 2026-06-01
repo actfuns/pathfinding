@@ -1,4 +1,4 @@
-package core
+package finder
 
 // Node represents a single node on a grid.
 type Node struct {

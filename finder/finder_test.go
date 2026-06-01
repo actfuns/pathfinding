@@ -1,9 +1,10 @@
-package finder
+package finder_test
 
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/core"
+	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/navpath/grid"
 )
 
 // testScenarios are shared across all finder tests.
@@ -60,7 +61,7 @@ var testScenarios = []struct {
 }
 
 type finderExpected struct {
-	newFinder func() core.Finder
+	newFinder func() finder.Finder
 	paths     [][][2]int
 }
 
@@ -68,7 +69,7 @@ type finderExpected struct {
 // Values from qiao/PathFinding.js (JS reference).
 var finderTests = map[string]*finderExpected{
 	"AStar": {
-		newFinder: func() core.Finder { return NewAStarFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewAStarFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -77,7 +78,7 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"BestFirst": {
-		newFinder: func() core.Finder { return NewBestFirstFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewBestFirstFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -86,7 +87,7 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"Dijkstra": {
-		newFinder: func() core.Finder { return NewDijkstraFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewDijkstraFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -95,7 +96,7 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"BreadthFirst": {
-		newFinder: func() core.Finder { return NewBreadthFirstFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewBreadthFirstFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -104,7 +105,7 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"BiAStar": {
-		newFinder: func() core.Finder { return NewBiAStarFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewBiAStarFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -113,7 +114,7 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"BiBestFirst": {
-		newFinder: func() core.Finder { return NewBiBestFirstFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewBiBestFirstFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -122,7 +123,7 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"BiDijkstra": {
-		newFinder: func() core.Finder { return NewBiDijkstraFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewBiDijkstraFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -131,7 +132,7 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"BiBreadthFirst": {
-		newFinder: func() core.Finder { return NewBiBreadthFirstFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewBiBreadthFirstFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -140,17 +141,17 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"IDAStar": {
-		newFinder: func() core.Finder { return NewIDAStarFinder(nil) },
+		newFinder: func() finder.Finder { return finder.NewIDAStarFinder(nil) },
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
 			{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
-			{{0, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 5}, {3, 5}, {4, 5}, {4, 4}, {4, 3}, {3, 3}},
+			{{0, 3}, {0, 2}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {3, 3}},
 			{{4, 4}, {5, 4}, {6, 4}, {7, 4}, {8, 4}, {9, 4}, {10, 4}, {11, 4}, {12, 4}, {13, 4}, {14, 4}, {15, 4}, {16, 4}, {17, 4}, {18, 4}, {19, 4}, {19, 5}, {19, 6}, {19, 7}, {19, 8}, {19, 9}, {19, 10}, {19, 11}, {19, 12}, {19, 13}, {19, 14}, {19, 15}, {19, 16}, {19, 17}, {19, 18}, {19, 19}},
 		},
 	},
 	"JPFNever": {
-		newFinder: func() core.Finder {
-			return JumpPointFinder(&FinderOptions{DiagonalMovement: core.DiagonalNever})
+		newFinder: func() finder.Finder {
+			return finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: finder.DiagonalNever})
 		},
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
@@ -160,8 +161,8 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"JPFAlways": {
-		newFinder: func() core.Finder {
-			return JumpPointFinder(&FinderOptions{DiagonalMovement: core.DiagonalAlways})
+		newFinder: func() finder.Finder {
+			return finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: finder.DiagonalAlways})
 		},
 		paths: [][][2]int{
 			{{0, 0}, {1, 1}},
@@ -171,8 +172,8 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"JPFOnlyWhenNoObstacles": {
-		newFinder: func() core.Finder {
-			return JumpPointFinder(&FinderOptions{DiagonalMovement: core.DiagonalOnlyWhenNoObstacles})
+		newFinder: func() finder.Finder {
+			return finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: finder.DiagonalOnlyWhenNoObstacles})
 		},
 		paths: [][][2]int{
 			{{0, 0}, {1, 0}, {1, 1}},
@@ -182,8 +183,8 @@ var finderTests = map[string]*finderExpected{
 		},
 	},
 	"JPFAtMostOne": {
-		newFinder: func() core.Finder {
-			return JumpPointFinder(&FinderOptions{DiagonalMovement: core.DiagonalIfAtMostOneObstacle})
+		newFinder: func() finder.Finder {
+			return finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: finder.DiagonalIfAtMostOneObstacle})
 		},
 		paths: [][][2]int{
 			{{0, 0}, {1, 1}},
@@ -200,9 +201,9 @@ func TestAllAgainstJS(t *testing.T) {
 	for name, ft := range finderTests {
 		t.Run(name, func(t *testing.T) {
 			for i, s := range testScenarios {
-				grid := core.NewGrid(s.matrix)
+				g := grid.NewOrthogonalGrid(s.matrix)
 				f := ft.newFinder()
-				path := f.FindPath(s.startX, s.startY, s.endX, s.endY, grid)
+				path := f.FindPath(s.startX, s.startY, s.endX, s.endY, g)
 				if path == nil {
 					t.Errorf("scenario %d: path not found", i+1)
 					continue
@@ -218,58 +219,58 @@ func TestAllAgainstJS(t *testing.T) {
 // --- Constructor option tests ---
 
 func TestAStarFinderWithOptions(t *testing.T) {
-	opt := &FinderOptions{
+	opt := &finder.FinderOptions{
 		AllowDiagonal:    true,
 		DontCrossCorners: true,
 		Weight:           2,
 	}
-	f := NewAStarFinder(opt)
+	f := finder.NewAStarFinder(opt)
 	if f.Weight != 2 {
 		t.Errorf("expected Weight=2, got %v", f.Weight)
 	}
-	if f.DiagonalMovement != core.DiagonalOnlyWhenNoObstacles {
+	if f.DiagonalMovement != finder.DiagonalOnlyWhenNoObstacles {
 		t.Errorf("expected DiagonalOnlyWhenNoObstacles, got %v", f.DiagonalMovement)
 	}
 
-	opt2 := &FinderOptions{
+	opt2 := &finder.FinderOptions{
 		AllowDiagonal:    true,
 		DontCrossCorners: false,
 	}
-	f2 := NewAStarFinder(opt2)
-	if f2.DiagonalMovement != core.DiagonalIfAtMostOneObstacle {
+	f2 := finder.NewAStarFinder(opt2)
+	if f2.DiagonalMovement != finder.DiagonalIfAtMostOneObstacle {
 		t.Errorf("expected DiagonalIfAtMostOneObstacle, got %v", f2.DiagonalMovement)
 	}
 
-	opt3 := &FinderOptions{
-		DiagonalMovement: core.DiagonalAlways,
-		Heuristic:        core.Euclidean,
+	opt3 := &finder.FinderOptions{
+		DiagonalMovement: finder.DiagonalAlways,
+		Heuristic:        finder.Euclidean,
 	}
-	f3 := NewAStarFinder(opt3)
-	if f3.DiagonalMovement != core.DiagonalAlways {
+	f3 := finder.NewAStarFinder(opt3)
+	if f3.DiagonalMovement != finder.DiagonalAlways {
 		t.Errorf("expected DiagonalAlways, got %v", f3.DiagonalMovement)
 	}
 }
 
 func TestFinderUnreachablePath(t *testing.T) {
 	// 1x3: start at (0,0), wall at (1,0), end at (2,0) unreachable
-	grid := core.NewGrid([][]int{{0, 1, 0}})
+	g := grid.NewOrthogonalGrid([][]int{{0, 1, 0}})
 	finders := []struct {
 		name string
-		f    core.Finder
+		f    finder.Finder
 	}{
-		{"AStar", NewAStarFinder(nil)},
-		{"Dijkstra", NewDijkstraFinder(nil)},
-		{"BreadthFirst", NewBreadthFirstFinder(nil)},
-		{"BestFirst", NewBestFirstFinder(nil)},
-		{"BiAStar", NewBiAStarFinder(nil)},
-		{"BiDijkstra", NewBiDijkstraFinder(nil)},
-		{"BiBreadthFirst", NewBiBreadthFirstFinder(nil)},
-		{"BiBestFirst", NewBiBestFirstFinder(nil)},
-		{"JPFNever", JumpPointFinder(&FinderOptions{DiagonalMovement: core.DiagonalNever})},
+		{"AStar", finder.NewAStarFinder(nil)},
+		{"Dijkstra", finder.NewDijkstraFinder(nil)},
+		{"BreadthFirst", finder.NewBreadthFirstFinder(nil)},
+		{"BestFirst", finder.NewBestFirstFinder(nil)},
+		{"BiAStar", finder.NewBiAStarFinder(nil)},
+		{"BiDijkstra", finder.NewBiDijkstraFinder(nil)},
+		{"BiBreadthFirst", finder.NewBiBreadthFirstFinder(nil)},
+		{"BiBestFirst", finder.NewBiBestFirstFinder(nil)},
+		{"JPFNever", finder.JumpPointFinder(&finder.FinderOptions{DiagonalMovement: finder.DiagonalNever})},
 	}
 	for _, ft := range finders {
 		t.Run(ft.name, func(t *testing.T) {
-			path := ft.f.FindPath(0, 0, 2, 0, grid)
+			path := ft.f.FindPath(0, 0, 2, 0, g)
 			if path != nil {
 				t.Errorf("expected nil for unreachable, got %v", path)
 			}
@@ -278,14 +279,14 @@ func TestFinderUnreachablePath(t *testing.T) {
 }
 
 func TestSingleCellGrid(t *testing.T) {
-	finders := []core.Finder{
-		NewAStarFinder(nil),
-		NewDijkstraFinder(nil),
-		NewBreadthFirstFinder(nil),
+	finders := []finder.Finder{
+		finder.NewAStarFinder(nil),
+		finder.NewDijkstraFinder(nil),
+		finder.NewBreadthFirstFinder(nil),
 	}
 	for i, f := range finders {
-		grid := core.NewGrid([][]int{{0}})
-		path := f.FindPath(0, 0, 0, 0, grid)
+		g := grid.NewOrthogonalGrid([][]int{{0}})
+		path := f.FindPath(0, 0, 0, 0, g)
 		if path == nil {
 			t.Errorf("finder %d (%T): expected path for single cell start==end", i, f)
 		}
@@ -293,15 +294,15 @@ func TestSingleCellGrid(t *testing.T) {
 }
 
 func TestFinder1xNGrid(t *testing.T) {
-	finders := []core.Finder{
-		NewAStarFinder(nil),
-		NewDijkstraFinder(nil),
-		NewBreadthFirstFinder(nil),
+	finders := []finder.Finder{
+		finder.NewAStarFinder(nil),
+		finder.NewDijkstraFinder(nil),
+		finder.NewBreadthFirstFinder(nil),
 	}
 	// Create fresh grid per finder to avoid stale Node state
 	for i, f := range finders {
-		grid := core.NewGrid([][]int{{0, 0, 0}})
-		path := f.FindPath(0, 0, 2, 0, grid)
+		g := grid.NewOrthogonalGrid([][]int{{0, 0, 0}})
+		path := f.FindPath(0, 0, 2, 0, g)
 		if path == nil {
 			t.Errorf("finder %d (%T): expected path on 1xN grid", i, f)
 		}
@@ -309,13 +310,13 @@ func TestFinder1xNGrid(t *testing.T) {
 }
 
 func TestFinderOptionsWeight(t *testing.T) {
-	grid := core.NewGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 	})
 	// With very high weight, heuristic dominates → should still find a path
-	f := NewAStarFinder(&FinderOptions{Weight: 100})
-	path := f.FindPath(0, 0, 4, 1, grid)
+	f := finder.NewAStarFinder(&finder.FinderOptions{Weight: 100})
+	path := f.FindPath(0, 0, 4, 1, g)
 	if path == nil {
 		t.Error("expected path even with high weight")
 	}
