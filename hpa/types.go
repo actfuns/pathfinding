@@ -22,9 +22,9 @@ type Portal struct {
 	ExternalPortals [5]int // diagonal can need up to 5
 
 	// Internal connections to other portals in the same chunk
-	InternalCount    int
-	InternalPortals  [255]int // portal key of connected portal
-	InternalCosts    [255]int // movement cost (octile * 10)
+	InternalCount   int
+	InternalPortals [255]int // portal key of connected portal
+	InternalCosts   [255]int // movement cost (octile * 10)
 }
 
 func newPortal(cx, cy int) *Portal {

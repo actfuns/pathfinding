@@ -2,13 +2,13 @@ package finder
 
 // JumpPointFinderBase is the base implementation for Jump Point Search.
 type JumpPointFinderBase struct {
-	Heuristic        HeuristicFunc
-	TrackRecursion   bool
-	grid             Grid
-	startNode        *Node
-	endNode          *Node
-	openList         *MinHeap
-	neighborBuf      []*Node
+	Heuristic      HeuristicFunc
+	TrackRecursion bool
+	grid           Grid
+	startNode      *Node
+	endNode        *Node
+	openList       *MinHeap
+	neighborBuf    []*Node
 
 	jumpFn          func(b *JumpPointFinderBase, x, y, px, py int) *[2]int
 	findNeighborsFn func(b *JumpPointFinderBase, node *Node) [][2]int

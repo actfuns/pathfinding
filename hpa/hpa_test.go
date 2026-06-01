@@ -120,7 +120,7 @@ func TestHPASameChunkDiagonal(t *testing.T) {
 		{0, 0, 0, 0, 0},
 	})
 	world := NewHPABuilder(HPAConfig{ChunkSize: 8}).Build(grid)
-		f := NewHPAStarFinder(finder.WithAllowDiagonal(false))
+	f := NewHPAStarFinder(finder.WithAllowDiagonal(false))
 	result := f.FindPath(0, 0, 4, 4, grid, world)
 	if result.Waypoints == nil {
 		t.Fatal("expected path, got nil")

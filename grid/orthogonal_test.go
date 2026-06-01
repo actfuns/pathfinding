@@ -35,7 +35,7 @@ func TestOrthogonalTileToWorld(t *testing.T) {
 	}, 32, 32)
 
 	tests := []struct {
-		tx, ty    int
+		tx, ty int
 		wx, wy float32
 	}{
 		{0, 0, 16, 16},

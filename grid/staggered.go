@@ -59,7 +59,7 @@ func (g *StaggeredGrid) WithFinder(f finder.Finder) *StaggeredGrid {
 	return g
 }
 
-func (g *StaggeredGrid) isStaggerX() bool { return g.staggerAxis == "x" }
+func (g *StaggeredGrid) isStaggerX() bool    { return g.staggerAxis == "x" }
 func (g *StaggeredGrid) isStaggerEven() bool { return g.staggerIndex == "even" }
 func (g *StaggeredGrid) isShifted(index int) bool {
 	// Use bitwise AND for correct behavior with negative indices (matching Tiled's C++ (y & 1))
@@ -71,11 +71,13 @@ func (g *StaggeredGrid) isShifted(index int) bool {
 
 // --- tile coordinate implementations of finder.Grid ---
 
-func (g *StaggeredGrid) index(x, y int) int                     { return y*g.width + x }
-func (g *StaggeredGrid) Width() int                             { return g.width }
-func (g *StaggeredGrid) Height() int                            { return g.height }
-func (g *StaggeredGrid) IsInside(x, y int) bool                 { return x >= 0 && x < g.width && y >= 0 && y < g.height }
-func (g *StaggeredGrid) GetNodeAt(x, y int) *finder.Node        { return g.nodes[g.index(x, y)] }
+func (g *StaggeredGrid) index(x, y int) int { return y*g.width + x }
+func (g *StaggeredGrid) Width() int         { return g.width }
+func (g *StaggeredGrid) Height() int        { return g.height }
+func (g *StaggeredGrid) IsInside(x, y int) bool {
+	return x >= 0 && x < g.width && y >= 0 && y < g.height
+}
+func (g *StaggeredGrid) GetNodeAt(x, y int) *finder.Node { return g.nodes[g.index(x, y)] }
 
 func (g *StaggeredGrid) IsWalkableAt(x, y int) bool {
 	if !g.IsInside(x, y) {
@@ -227,13 +229,13 @@ func (g *StaggeredGrid) screenToTileCoords(sx, sy float64) (int, int) {
 // Mirrors HexagonalRenderer::topLeft.
 func staggeredTopLeft(x, y int, staggerX, staggerEven bool) (int, int) {
 	if staggerX {
-		if (x&1) != 0 != staggerEven {
+		if (x & 1) != 0 != staggerEven {
 			return x - 1, y
 		}
 		return x - 1, y - 1
 	}
 	// staggerY
-	if (y&1) != 0 != staggerEven {
+	if (y & 1) != 0 != staggerEven {
 		return x, y - 1
 	}
 	return x - 1, y - 1
@@ -242,12 +244,12 @@ func staggeredTopLeft(x, y int, staggerX, staggerEven bool) (int, int) {
 // staggeredTopRight returns the top-right neighbor in staggered coordinates.
 func staggeredTopRight(x, y int, staggerX, staggerEven bool) (int, int) {
 	if staggerX {
-		if (x&1) != 0 != staggerEven {
+		if (x & 1) != 0 != staggerEven {
 			return x + 1, y
 		}
 		return x + 1, y - 1
 	}
-	if (y&1) != 0 != staggerEven {
+	if (y & 1) != 0 != staggerEven {
 		return x + 1, y - 1
 	}
 	return x, y - 1
@@ -256,12 +258,12 @@ func staggeredTopRight(x, y int, staggerX, staggerEven bool) (int, int) {
 // staggeredBottomLeft returns the bottom-left neighbor in staggered coordinates.
 func staggeredBottomLeft(x, y int, staggerX, staggerEven bool) (int, int) {
 	if staggerX {
-		if (x&1) != 0 != staggerEven {
+		if (x & 1) != 0 != staggerEven {
 			return x - 1, y + 1
 		}
 		return x - 1, y
 	}
-	if (y&1) != 0 != staggerEven {
+	if (y & 1) != 0 != staggerEven {
 		return x, y + 1
 	}
 	return x - 1, y + 1
@@ -270,12 +272,12 @@ func staggeredBottomLeft(x, y int, staggerX, staggerEven bool) (int, int) {
 // staggeredBottomRight returns the bottom-right neighbor in staggered coordinates.
 func staggeredBottomRight(x, y int, staggerX, staggerEven bool) (int, int) {
 	if staggerX {
-		if (x&1) != 0 != staggerEven {
+		if (x & 1) != 0 != staggerEven {
 			return x + 1, y + 1
 		}
 		return x + 1, y
 	}
-	if (y&1) != 0 != staggerEven {
+	if (y & 1) != 0 != staggerEven {
 		return x + 1, y + 1
 	}
 	return x, y + 1
@@ -342,26 +344,26 @@ func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagonal
 		// x-axis stagger
 		if shifted {
 			cardinals = [][2]int{
-				{x - 1, y},     // W
-				{x + 1, y},     // E
-				{x, y - 1},     // N (same x)
-				{x, y + 1},     // S (same x)
+				{x - 1, y}, // W
+				{x + 1, y}, // E
+				{x, y - 1}, // N (same x)
+				{x, y + 1}, // S (same x)
 			}
 		} else {
 			cardinals = [][2]int{
-				{x - 1, y},     // W
-				{x + 1, y},     // E
-				{x, y - 1},     // N (same x)
-				{x, y + 1},     // S (same x)
+				{x - 1, y}, // W
+				{x + 1, y}, // E
+				{x, y - 1}, // N (same x)
+				{x, y + 1}, // S (same x)
 			}
 		}
 	} else {
 		// y-axis stagger
 		cardinals = [][2]int{
-			{x, y - 1},     // N
-			{x, y + 1},     // S
-			{x - 1, y},     // W
-			{x + 1, y},     // E
+			{x, y - 1}, // N
+			{x, y + 1}, // S
+			{x - 1, y}, // W
+			{x + 1, y}, // E
 		}
 	}
 

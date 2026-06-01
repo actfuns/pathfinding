@@ -82,11 +82,11 @@ func (g *HexGrid) initParams() {
 }
 
 func (g *HexGrid) doStaggerX(x int) bool {
-	return g.staggerX && ((x & 1) != 0) != g.staggerEven
+	return g.staggerX && ((x&1) != 0) != g.staggerEven
 }
 
 func (g *HexGrid) doStaggerY(y int) bool {
-	return !g.staggerX && ((y & 1) != 0) != g.staggerEven
+	return !g.staggerX && ((y&1) != 0) != g.staggerEven
 }
 
 // WithFinder sets the pathfinder and returns the grid.
@@ -315,12 +315,12 @@ func (g *HexGrid) GetNeighbors(node *finder.Node, _ finder.DiagonalMovement, buf
 		// Flat-top: odd column shifts down
 		if x%2 == 1 {
 			dirs = [6][2]int{
-				{0, -1},  // NW
-				{1, -1},  // NE
-				{1, 0},   // E
-				{1, 1},   // SE
-				{0, 1},   // SW
-				{-1, 0},  // W
+				{0, -1}, // NW
+				{1, -1}, // NE
+				{1, 0},  // E
+				{1, 1},  // SE
+				{0, 1},  // SW
+				{-1, 0}, // W
 			}
 		} else {
 			dirs = [6][2]int{
@@ -345,12 +345,12 @@ func (g *HexGrid) GetNeighbors(node *finder.Node, _ finder.DiagonalMovement, buf
 			}
 		} else {
 			dirs = [6][2]int{
-				{1, -1},  // NE
-				{0, -1},  // NW
-				{-1, 0},  // W
-				{-1, 1},  // SW
-				{0, 1},   // SE
-				{1, 0},   // E
+				{1, -1}, // NE
+				{0, -1}, // NW
+				{-1, 0}, // W
+				{-1, 1}, // SW
+				{0, 1},  // SE
+				{1, 0},  // E
 			}
 		}
 	}

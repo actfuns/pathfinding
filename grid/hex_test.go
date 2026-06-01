@@ -23,7 +23,7 @@ func TestHexPointyTileToWorld(t *testing.T) {
 	g := NewHexGrid([][]int{{0}}, 64, 64, 32, false, false)
 
 	tests := []struct {
-		tx, ty    int
+		tx, ty int
 		px, py float32
 	}{
 		{0, 0, 16, 0},
@@ -46,12 +46,12 @@ func TestHexPointyWorldToTile(t *testing.T) {
 
 	// Test known pixel-to-tile mappings (derived from screenToTileCoords algorithm)
 	tests := []struct {
-		px, py    float32
+		px, py float32
 		tx, ty int
 	}{
-		{16, 0, -1, -1},  // tile (0,0) screen top-left is outside the hex
+		{16, 0, -1, -1}, // tile (0,0) screen top-left is outside the hex
 		{80, 0, 0, -1},
-		{64, 24, 1, 0},   // near center of tile (1,0) area
+		{64, 24, 1, 0}, // near center of tile (1,0) area
 	}
 	for _, tt := range tests {
 		tx, ty := g.WorldToTile(tt.px, tt.py)
@@ -68,12 +68,12 @@ func TestHexPointyConsistent(t *testing.T) {
 	// Sampling points that should map to specific tiles (verified through
 	// the 4-candidate-center algorithm distances)
 	pointToTile := map[[2]float32][2]int{
-		{20, 5}:   {-1, -1},
-		{40, 5}:   {0, 0},   // near tile (0,0) top area
-		{60, 20}:  {0, 0},    // inside tile (1,0)
-		{90, 5}:   {1, 0},
-		{40, 30}:  {0, 0},    // inside tile (0,0) lower area
-		{55, 25}:  {0, 0},
+		{20, 5}:  {-1, -1},
+		{40, 5}:  {0, 0}, // near tile (0,0) top area
+		{60, 20}: {0, 0}, // inside tile (1,0)
+		{90, 5}:  {1, 0},
+		{40, 30}: {0, 0}, // inside tile (0,0) lower area
+		{55, 25}: {0, 0},
 	}
 	for pos, expected := range pointToTile {
 		tx, ty := g.WorldToTile(pos[0], pos[1])
@@ -99,7 +99,7 @@ func TestHexFlatTileToWorld(t *testing.T) {
 	g := NewHexGrid([][]int{{0}}, 64, 64, 32, true, false)
 
 	tests := []struct {
-		tx, ty    int
+		tx, ty int
 		px, py float32
 	}{
 		{0, 0, 0, 16},

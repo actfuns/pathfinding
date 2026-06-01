@@ -111,7 +111,7 @@ func appendPoint(path [][2]float64, x, y float64) [][2]float64 {
 
 // aNode is an internal A* node wrapping a waypoint node.
 type aNode struct {
-	node   *WaypointNode
+	node    *WaypointNode
 	g, h, f float64
 	parent  *aNode
 	closed  bool

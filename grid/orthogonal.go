@@ -44,12 +44,14 @@ func (g *OrthogonalGrid) WithFinder(f finder.Finder) *OrthogonalGrid {
 
 // --- tile coordinate implementations of finder.Grid ---
 
-func (g *OrthogonalGrid) index(x, y int) int       { return y*g.width + x }
-func (g *OrthogonalGrid) Width() int                { return g.width }
-func (g *OrthogonalGrid) Height() int               { return g.height }
-func (g *OrthogonalGrid) TileWidth() int            { return g.tileW }
-func (g *OrthogonalGrid) TileHeight() int           { return g.tileH }
-func (g *OrthogonalGrid) IsInside(x, y int) bool    { return x >= 0 && x < g.width && y >= 0 && y < g.height }
+func (g *OrthogonalGrid) index(x, y int) int { return y*g.width + x }
+func (g *OrthogonalGrid) Width() int         { return g.width }
+func (g *OrthogonalGrid) Height() int        { return g.height }
+func (g *OrthogonalGrid) TileWidth() int     { return g.tileW }
+func (g *OrthogonalGrid) TileHeight() int    { return g.tileH }
+func (g *OrthogonalGrid) IsInside(x, y int) bool {
+	return x >= 0 && x < g.width && y >= 0 && y < g.height
+}
 func (g *OrthogonalGrid) GetNodeAt(x, y int) *finder.Node { return g.nodes[g.index(x, y)] }
 
 func (g *OrthogonalGrid) IsWalkableAt(x, y int) bool {

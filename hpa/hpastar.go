@@ -57,8 +57,8 @@ type hpaNode struct {
 
 // HPAFindResult holds the result of an HPA* query.
 type HPAFindResult struct {
-	PortalKeys []int     // sequence of portal keys (can be empty)
-	Waypoints  [][2]int  // full concrete path (can be nil if no path)
+	PortalKeys []int    // sequence of portal keys (can be empty)
+	Waypoints  [][2]int // full concrete path (can be nil if no path)
 }
 
 // FindPath performs HPA* on the given grid, using the pre-built HPAWorld.

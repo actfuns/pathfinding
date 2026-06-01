@@ -20,7 +20,7 @@ func TestStaggeredTileToWorld(t *testing.T) {
 
 	// tileToScreenCoords from Tiled test
 	tests := []struct {
-		tx, ty    int
+		tx, ty int
 		px, py float32
 	}{
 		{0, 0, 0, 0},
@@ -48,7 +48,7 @@ func TestStaggeredWorldToTile(t *testing.T) {
 	// Tiled test: QCOMPARE(floor(x), floor(expected_x)), floor(y), floor(expected_y)
 	// So (10,16) → tile(0,0) means screenToTileCoords returns (0.xx, 0.xx) not exact integer
 	tests := []struct {
-		px, py    float32
+		px, py float32
 		tx, ty int
 	}{
 		{10, 16, 0, 0},
@@ -81,7 +81,7 @@ func TestStaggeredWorldToTileTiledSuite(t *testing.T) {
 	//                         (64, 32) is at the corner — in Tiled it maps to tile (0,1) floor.
 	// (32, -16) → (0, -2)
 	tests := []struct {
-		px, py    float32
+		px, py float32
 		tx, ty int
 	}{
 		{10, 16, 0, 0},
@@ -104,8 +104,8 @@ func TestStaggeredWorldToTileTiledSuite(t *testing.T) {
 func TestStaggeredRelativeCoords(t *testing.T) {
 	// staggerY, odd
 	tests := []struct {
-		x, y int
-		fn   func(int, int, bool, bool) (int, int)
+		x, y   int
+		fn     func(int, int, bool, bool) (int, int)
 		ex, ey int
 	}{
 		// topLeft
