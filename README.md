@@ -51,6 +51,7 @@
 | **Breadth-First Search** | ✅ | 广度优先遍历 |
 | **IDA\*** | ❌ | 迭代加深 A\*，内存占用极低 |
 | **JPS (Jump Point Search)** | ❌ | 跳点搜索，利用网格对称性加速 |
+| **JPS+ (Jump Point Search Plus)** | ❌ | JPS 优化变体，Precompute 跳点表，O(1) 查表替换递归扫描 |
 
 #### JPS 变体
 
@@ -62,6 +63,19 @@
 | **JPS — Always** | 始终允许对角线 | 开阔地形 |
 | **JPS — NoObstacles** | 无障碍时允许对角线 | 半开阔地形 |
 | **JPS — AtMostOne** | 最多一个障碍时允许对角线 | 复杂障碍布局 |
+
+#### JPS+ (Jump Point Search Plus)
+
+JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `jump()` 扫描：
+
+| 特性 | 说明 |
+| :--- | :--- |
+| **Precompute** | 两阶段预计算：Phase 1 检测 Primary Jump Points，Phase 2 计算 8 方向距离表 |
+| **export/import** | `PrecomputedData()` / `LoadPrecomputed()` 支持烘焙数据导出为文件，服务端启动直接加载 |
+| **searchSeq 全局唯一** | 所有 finder 的 `searchSeq` 通过全局原子计数器初始化，不同 finder 可安全共享同一 grid |
+
+适用场景：**障碍物密集的静态小地图**（如游戏房间内布局固定的障碍地图）。
+开阔地图无 forced neighbor 时退化为 A* 行为。
 
 ### 网格类型
 
@@ -233,6 +247,30 @@ g.ConnectNearby(15, grid)
 // 寻路
 f := waypoint.NewWaypointFinder(g)
 path := f.FindPath(0, 0, 10, 10, grid)
+```
+
+### JPS+ 使用示例
+
+```go
+import (
+    "github.com/actfuns/pathfinding/finder"
+    "github.com/actfuns/pathfinding/grid"
+)
+
+// 创建网格
+matrix := [][]int{{0, 0, 0}, {0, 1, 0}, {0, 0, 0}}
+g := grid.NewOrthogonalGrid(matrix)
+
+// 创建 finder 并预计算
+f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
+f.Precompute(g)
+
+// 寻路
+path := f.FindPath(0, 0, 2, 2, g)
+
+// 导出烘焙数据供后续启动直接加载
+data, _ := f.PrecomputedData()
+// os.WriteFile("map_data.bin", data, 0644)
 ```
 
 ## 设计原则

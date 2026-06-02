@@ -18,6 +18,7 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 	f := &BiBreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
 		neighborBuf:      make([]*Node, 0, 8),
+		searchSeq:        newSearchSeq(),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement

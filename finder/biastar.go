@@ -28,6 +28,7 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
 		neighborBuf:      make([]*Node, 0, 8),
+		searchSeq:        newSearchSeq(),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement

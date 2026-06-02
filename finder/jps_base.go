@@ -35,6 +35,7 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 		DiagonalMovement: opt.DiagonalMovement,
 		TrackRecursion:   false,
 		neighborBuf:      make([]*Node, 0, 8),
+		searchSeq:        newSearchSeq(),
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic

@@ -17,6 +17,7 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 	f := &BreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
 		neighborBuf:      make([]*Node, 0, 8),
+		searchSeq:        newSearchSeq(),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
