@@ -116,6 +116,8 @@ func (g *OrthogonalGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 }
 
 // FindPath finds a path between two world positions through the grid.
+// The returned [][2]float32 is backed by an internal buffer and is only
+// valid until the next FindPath/FindSmoothPath call on the same grid.
 func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
@@ -144,6 +146,7 @@ func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 }
 
 // FindSmoothPath finds a path between two world positions and smooths it.
+// Same buffer contract as FindPath.
 func (g *OrthogonalGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
