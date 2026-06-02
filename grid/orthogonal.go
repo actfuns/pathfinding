@@ -17,6 +17,8 @@ type OrthogonalGrid struct {
 	nodes    []*finder.Node
 	finder   finder.Finder
 	worldBuf [][2]float32
+
+	smoothing bool // auto-smooth path via SmoothenTilePath (default true)
 }
 
 // Finder returns the pathfinder associated with this grid.
@@ -35,6 +37,13 @@ func WithOrthogonalFinder(f finder.Finder) OrthogonalOption {
 	return func(g *OrthogonalGrid) { g.finder = f }
 }
 
+// WithGridSmoothing enables or disables automatic path smoothing.
+// Enable (default) for A*/JPS finders; disable when using WaypointFinder
+// which already does its own string-pulling smoothing.
+func WithGridSmoothing(enabled bool) OrthogonalOption {
+	return func(g *OrthogonalGrid) { g.smoothing = enabled }
+}
+
 // NewOrthogonalGrid creates an OrthogonalGrid from a matrix (0=walkable, non-zero=obstacle).
 // Default tile size is 1×1 world unit. Default finder is AStarFinder.
 func NewOrthogonalGrid(matrix [][]int, opts ...OrthogonalOption) *OrthogonalGrid {
@@ -48,7 +57,7 @@ func NewOrthogonalGrid(matrix [][]int, opts ...OrthogonalOption) *OrthogonalGrid
 			nodes = append(nodes, n)
 		}
 	}
-	g := &OrthogonalGrid{width: w, height: h, tileW: 1, tileH: 1, nodes: nodes, finder: finder.NewAStarFinder()}
+	g := &OrthogonalGrid{width: w, height: h, tileW: 1, tileH: 1, nodes: nodes, finder: finder.NewAStarFinder(), smoothing: true}
 	for _, opt := range opts {
 		opt(g)
 	}
@@ -149,6 +158,9 @@ func (g *OrthogonalGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 // FindPath finds a path between two world positions through the grid.
 // The returned [][2]float32 is backed by an internal buffer and is only
 // valid until the next FindPath/FindSmoothPath call on the same grid.
+// Automatically smooths the path via SmoothenTilePath when smoothing is enabled
+// (default). Disable with WithGridSmoothing(false) when using a finder that
+// already does its own smoothing, such as WaypointFinder.
 func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
@@ -161,6 +173,9 @@ func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	path := g.finder.FindPath(sx, sy, ex, ey, g)
 	if path == nil {
 		return nil
+	}
+	if g.smoothing {
+		path = g.SmoothenTilePath(path)
 	}
 	if cap(g.worldBuf) >= len(path) {
 		g.worldBuf = g.worldBuf[:len(path)]
