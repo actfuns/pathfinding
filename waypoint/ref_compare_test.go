@@ -5,27 +5,7 @@ import (
 	"testing"
 )
 
-// ref: epiplon-waypoints (C# Unity) — https://github.com/epiplon/Waypoints
-//
-// Our implementation shares the following structural properties:
-//
-// 1. Graph structure: nodes with positions + list of connections
-// 2. Connection cost: Euclidean distance between node positions
-// 3. Closest-node: find node nearest to a given position (Euclidean)
-// 4. Path search: start → nearest node → ... → nearest node → end
-//
-// Key differences from epiplon:
-//   - epiplon uses recursive DFS with heuristic-based connection sorting
-//     (greedy best-first). We use proper A* with optimality guarantees.
-//   - epiplon includes line-of-sight checks (Physics.Linecast) for
-//     connection validation. Our graph assumes pre-validated connections.
-//   - epiplon has ConnectionType (Static/Dynamic/Null). We have no type
-//     system — edges are always traversable.
-//   - epiplon's DFS can produce suboptimal paths. Our A* produces
-//     optimal shortest paths.
-//   - epiplon returns List<Connection>; we return [][2]float64.
-
-// TestWaypointGraphStructure verifies node/edge structure matches epiplon's.
+// TestWaypointGraphStructure verifies node/edge structure.
 func TestWaypointGraphStructure(t *testing.T) {
 	g := NewWaypointGraph()
 	a := g.AddNode(0, 0)
@@ -44,8 +24,7 @@ func TestWaypointGraphStructure(t *testing.T) {
 	}
 }
 
-// TestWaypointEdgeCost verifies edge cost is Euclidean distance,
-// matching epiplon's Vector3.Distance based cost.
+// TestWaypointEdgeCost verifies edge cost is Euclidean distance.
 func TestWaypointEdgeCost(t *testing.T) {
 	g := NewWaypointGraph()
 	a := g.AddNode(0, 0)
@@ -61,8 +40,7 @@ func TestWaypointEdgeCost(t *testing.T) {
 	}
 }
 
-// TestWaypointFindClosest verifies FindClosest matches epiplon's
-// FindClosestNode behavior (nearest node by Euclidean distance).
+// TestWaypointFindClosest verifies FindClosest returns the nearest node by Euclidean distance.
 func TestWaypointFindClosest(t *testing.T) {
 	g := NewWaypointGraph()
 	g.AddNode(0, 0)
@@ -85,8 +63,7 @@ func TestWaypointFindClosest(t *testing.T) {
 	}
 }
 
-// TestWaypointPathCost verifies A* finds optimal (shortest) path,
-// which is a key advantage over epiplon's DFS approach.
+// TestWaypointPathCost verifies A* finds optimal (shortest) path.
 func TestWaypointPathCost(t *testing.T) {
 	g := NewWaypointGraph()
 	a := g.AddNode(0, 0)
@@ -124,8 +101,7 @@ func TestWaypointPathCost(t *testing.T) {
 	t.Logf("waypoint path: %v, cost: %.2f", path, cost)
 }
 
-// TestWaypointEmptyGraph verifies FindPath returns nil for empty graph,
-// matching epiplon's QueryPath returning empty list.
+// TestWaypointEmptyGraph verifies FindPath returns nil for empty graph.
 func TestWaypointEmptyGraph(t *testing.T) {
 	g := NewWaypointGraph()
 	f := NewWaypointFinder(g)
@@ -135,8 +111,7 @@ func TestWaypointEmptyGraph(t *testing.T) {
 	}
 }
 
-// TestWaypointDisconnectedGraph verifies FindPath returns nil when
-// start and end are in disconnected components.
+// TestWaypointDisconnectedGraph verifies FindPath returns nil for disconnected components.
 func TestWaypointDisconnectedGraph(t *testing.T) {
 	g := NewWaypointGraph()
 	g.AddNode(0, 0)
@@ -179,8 +154,7 @@ func TestWaypointStartEndPositions(t *testing.T) {
 	}
 }
 
-// TestWaypointPathIsReverseable verifies paths work in both directions
-// (epiplon's graph is undirected, same as our Connect()).
+// TestWaypointPathIsReverseable verifies paths work in both directions.
 func TestWaypointPathIsReverseable(t *testing.T) {
 	g := NewWaypointGraph()
 	a := g.AddNode(0, 0)

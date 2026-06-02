@@ -3,8 +3,6 @@
 // A WaypointGraph consists of nodes with positions and connections (edges) between them.
 // WaypointFinder implements finder.Finder by finding the closest waypoint nodes to
 // the start/end tile coordinates and running A* on the graph.
-//
-// Reference: epiplon/Waypoints (C# Unity) — Node/Connection pattern with ConnectionType
 package waypoint
 
 import "math"
@@ -17,8 +15,6 @@ func sqrt(x float64) float64 {
 }
 
 // EdgeState represents the traversability state of a waypoint connection.
-//
-// Reference: epiplon/Waypoints ConnectionType enum.
 //   - Static:  always traversable (default)
 //   - Dynamic: temporarily traversable, may be blocked by moving obstacles
 //   - Null:    not traversable (treated as removed)

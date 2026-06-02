@@ -6,11 +6,10 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
-// WaypointFinder implements A* search on a waypoint graph.
+// WaypointFinder implements finder.Finder on a waypoint graph.
 //
-// It can be used directly with a WaypointGraph, or it can wrap a graph
-// to implement finder.Finder by mapping tile coordinates to the closest
-// waypoint nodes.
+// It finds the closest waypoint nodes with line-of-sight to the start/end
+// positions (via the grid parameter) and runs A* on the graph.
 type WaypointFinder struct {
 	graph *WaypointGraph
 }
@@ -20,32 +19,38 @@ func NewWaypointFinder(graph *WaypointGraph) *WaypointFinder {
 	return &WaypointFinder{graph: graph}
 }
 
-// FindPathOnGrid finds a path between two world positions on a tile grid,
-// using LOS-based node selection to only pick waypoints with a clear line
-// of sight from the start/end positions.
-func (f *WaypointFinder) FindPathOnGrid(startX, startY, endX, endY float64, g finder.Grid) [][2]float64 {
-	startNode := f.graph.FindClosestWithLOS(startX, startY, g)
-	endNode := f.graph.FindClosestWithLOS(endX, endY, g)
+// FindPath implements finder.Finder by searching the waypoint graph.
+// The grid is used for LOS-based node selection — only nodes with a clear
+// line of sight from the start/end position are considered.
+func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [][2]int {
+	sx, sy := float64(startX), float64(startY)
+	ex, ey := float64(endX), float64(endY)
+
+	startNode := f.graph.FindClosestWithLOS(sx, sy, grid)
+	endNode := f.graph.FindClosestWithLOS(ex, ey, grid)
 	if startNode == nil || endNode == nil {
 		return nil
 	}
 	if startNode == endNode {
-		return [][2]float64{{startX, startY}, {endX, endY}}
+		return [][2]int{{startX, startY}, {endX, endY}}
 	}
 
-	// A* on the graph (shared with FindPathFloat)
-	return f.findPathInternal(startNode, endNode, startX, startY, endX, endY)
+	path := f.findPathInternal(startNode, endNode, sx, sy, ex, ey)
+	if path == nil {
+		return nil
+	}
+
+	// Convert float64 path to int tile coordinates
+	result := make([][2]int, len(path))
+	for i, p := range path {
+		result[i] = [2]int{int(p[0]), int(p[1])}
+	}
+	return result
 }
 
-// FindPath finds a path on the waypoint graph from the closest node
-// to (startX, startY) to the closest node to (endX, endY).
-func (f *WaypointFinder) FindPath(startX, startY, endX, endY int) [][2]float64 {
-	sx, sy := float64(startX), float64(startY)
-	ex, ey := float64(endX), float64(endY)
-	return f.FindPathFloat(sx, sy, ex, ey)
-}
-
-// FindPathFloat finds a path between two world-coordinate positions.
+// FindPathFloat finds a path in world-space coordinates using distance-based
+// node selection (no LOS checking). Consider using FindPath (which implements
+// finder.Finder) for grid-integrated pathfinding.
 func (f *WaypointFinder) FindPathFloat(startX, startY, endX, endY float64) [][2]float64 {
 	startNode := f.graph.FindClosest(startX, startY)
 	endNode := f.graph.FindClosest(endX, endY)
@@ -125,7 +130,7 @@ func heuristic(a, b *WaypointNode) float64 {
 	return math.Sqrt(dx*dx + dy*dy)
 }
 
-// appendPoint adds (x,y) to the path only if it differs from the last point.
+// appendPoint adds (x, y) to the path only if it differs from the last point.
 func appendPoint(path [][2]float64, x, y float64) [][2]float64 {
 	if len(path) > 0 && path[len(path)-1][0] == x && path[len(path)-1][1] == y {
 		return path

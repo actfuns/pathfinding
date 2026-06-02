@@ -4,8 +4,7 @@ import (
 	"testing"
 )
 
-// TestConnectOneWay verifies the directed connection method (epiplon supports
-// directed connections; we expose ConnectOneWay for that use case).
+// TestConnectOneWay verifies the directed connection method.
 func TestConnectOneWay(t *testing.T) {
 	g := NewWaypointGraph()
 	a := g.AddNode(0, 0)
@@ -32,7 +31,7 @@ func TestConnectOneWay(t *testing.T) {
 	}
 }
 
-// TestFindPathInt verifies the int overload of FindPath works correctly.
+// TestFindPathInt verifies FindPathFloat returns correct path.
 func TestFindPathInt(t *testing.T) {
 	g := NewWaypointGraph()
 	a := g.AddNode(0, 0)
@@ -43,8 +42,7 @@ func TestFindPathInt(t *testing.T) {
 
 	f := NewWaypointFinder(g)
 
-	// int version converts to float and calls FindPathFloat
-	path := f.FindPath(0, 0, 10, 0)
+	path := f.FindPathFloat(0, 0, 10, 0)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
