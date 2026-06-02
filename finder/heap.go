@@ -7,21 +7,29 @@ type MinHeap struct {
 	nodes []*Node
 }
 
+// NewMinHeap creates a new MinHeap with an initial capacity of 64.
 func NewMinHeap() *MinHeap {
 	return &MinHeap{
 		nodes: make([]*Node, 0, 64),
 	}
 }
 
-func (h *MinHeap) Len() int    { return len(h.nodes) }
+// Len returns the number of nodes in the heap.
+func (h *MinHeap) Len() int { return len(h.nodes) }
+
+// Empty returns true if the heap contains no nodes.
 func (h *MinHeap) Empty() bool { return len(h.nodes) == 0 }
 
+// Push inserts a node into the heap and maintains the min-heap invariant.
 func (h *MinHeap) Push(n *Node) {
 	n.HeapIndex = len(h.nodes)
 	h.nodes = append(h.nodes, n)
 	h.siftDownFrom(len(h.nodes)-1, 0)
 }
 
+// Pop removes and returns the node with the smallest F value from the heap.
+// The popped node's HeapIndex is set to -1. Returns nil when the heap is empty
+// (though callers should check Empty first).
 func (h *MinHeap) Pop() *Node {
 	n := len(h.nodes)
 	last := h.nodes[n-1]
@@ -38,6 +46,8 @@ func (h *MinHeap) Pop() *Node {
 	return root
 }
 
+// UpdateItem restores the heap invariant after a node's F value has changed.
+// It is a no-op if the node does not belong to this heap.
 func (h *MinHeap) UpdateItem(node *Node) {
 	pos := node.HeapIndex
 	if pos < 0 || pos >= len(h.nodes) || h.nodes[pos] != node {

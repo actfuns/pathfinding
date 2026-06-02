@@ -2,8 +2,19 @@ package finder
 
 // AStarFinder is an implementation of the A* pathfinding algorithm.
 type AStarFinder struct {
-	Heuristic        HeuristicFunc
-	Weight           float64
+	// Heuristic is the heuristic function used to estimate the cost from a node
+	// to the goal. Defaults to Manhattan for cardinal-only movement and Octile
+	// for diagonal movement.
+	Heuristic HeuristicFunc
+
+	// Weight is the multiplier applied to the heuristic estimate (H-cost)
+	// to bias the search. Values > 1 make the search faster but potentially
+	// suboptimal; values < 1 make it more accurate but slower. Defaults to 1.
+	Weight float64
+
+	// DiagonalMovement controls whether diagonal moves are allowed and under
+	// what obstacle conditions. See DiagonalMovement values for details.
+	// Defaults to DiagonalNever when not configured via Options.
 	DiagonalMovement DiagonalMovement
 
 	searchSeq   int // incremented each FindPath call for node state reset

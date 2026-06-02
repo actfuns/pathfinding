@@ -2,6 +2,8 @@ package finder
 
 // BreadthFirstFinder is a Breadth-First-Search pathfinder.
 type BreadthFirstFinder struct {
+	// DiagonalMovement determines whether diagonal moves are allowed and
+	// under what obstacle conditions. Defaults to DiagonalNever.
 	DiagonalMovement DiagonalMovement
 
 	searchSeq   int

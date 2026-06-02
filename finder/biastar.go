@@ -2,8 +2,15 @@ package finder
 
 // BiAStarFinder is a bidirectional A* pathfinder.
 type BiAStarFinder struct {
-	Heuristic        HeuristicFunc
-	Weight           float64
+	// Heuristic is the heuristic function used to estimate the cost from the
+	// current node to the goal. Defaults to Manhattan (or Octile when diagonal
+	// movement is enabled).
+	Heuristic HeuristicFunc
+	// Weight is the heuristic weight multiplier. Higher values make the
+	// pathfinder more greedy. Defaults to 1.
+	Weight float64
+	// DiagonalMovement specifies whether diagonal moves are allowed and under
+	// what conditions. Defaults to DiagonalNever.
 	DiagonalMovement DiagonalMovement
 
 	searchSeq      int

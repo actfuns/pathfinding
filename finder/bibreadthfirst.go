@@ -2,6 +2,9 @@ package finder
 
 // BiBreadthFirstFinder is a bidirectional BFS pathfinder.
 type BiBreadthFirstFinder struct {
+	// DiagonalMovement specifies whether diagonal moves are allowed and
+	// under what conditions (e.g., never, always, or only when obstacles
+	// do not block the way).
 	DiagonalMovement DiagonalMovement
 
 	searchSeq   int

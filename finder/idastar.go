@@ -4,11 +4,16 @@ import "time"
 
 // IDAStarFinder is an Iterative Deepening A* pathfinder.
 type IDAStarFinder struct {
-	Heuristic        HeuristicFunc
-	Weight           float64
+	// Heuristic is the heuristic function used to estimate the cost from a node to the goal.
+	Heuristic HeuristicFunc
+	// Weight is the multiplier applied to the heuristic estimate (g + h*Weight).
+	Weight float64
+	// DiagonalMovement specifies whether diagonal moves are allowed and under what conditions.
 	DiagonalMovement DiagonalMovement
-	TrackRecursion   bool
-	TimeLimit        float64
+	// TrackRecursion enables tracking of recursion depth for debugging or visualization purposes.
+	TrackRecursion bool
+	// TimeLimit is the maximum number of seconds to spend searching before giving up. A value <= 0 means no limit.
+	TimeLimit float64
 
 	searchSeq   int
 	neighborBuf []*Node
