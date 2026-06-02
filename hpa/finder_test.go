@@ -222,7 +222,7 @@ func TestHPARepeatable(t *testing.T) {
 	})
 
 	cases := []struct {
-		name               string
+		name           string
 		sx, sy, ex, ey int
 	}{
 		{"singleChunk", 1, 1, 6, 6},

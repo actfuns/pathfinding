@@ -103,7 +103,7 @@ func TestHPAPortalKeyEncoding(t *testing.T) {
 	if key != 277 {
 		t.Errorf("expected 277, got %d", key)
 	}
-	cid := portalKeyChunkID(key, cs)
+	cid := portalKeyChunkID(key)
 	if cid != 1 {
 		t.Errorf("expected chunk 1, got %d", cid)
 	}

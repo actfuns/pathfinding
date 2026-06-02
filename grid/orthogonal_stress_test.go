@@ -82,12 +82,12 @@ func TestOrthogonalStress_DenseGrid(t *testing.T) {
 // Run with: go test -bench=BenchmarkOrthogonalAlloc -benchmem ./grid/
 func BenchmarkOrthogonalAlloc(b *testing.B) {
 	sizes := []struct {
-		label    string
-		w, h     int
-		obs      float64
-		sx, sy   int
-		ex, ey   int
-		chunk    int
+		label  string
+		w, h   int
+		obs    float64
+		sx, sy int
+		ex, ey int
+		chunk  int
 	}{
 		{"100x100", 100, 100, 0.2, 0, 0, 99, 99, 16},
 		{"200x200", 200, 200, 0.1, 0, 0, 199, 199, 16},
