@@ -1,11 +1,5 @@
 package finder
 
-// globalSearchSeq is a monotonically increasing counter used to assign unique
-// search sequence IDs across all finder instances. This prevents sequence
-// collisions when multiple finders share the same grid, which would cause
-// ResetSearch to incorrectly skip state reset.
-var globalSearchSeq uint64
-
 // Node represents a single node on a grid.
 type Node struct {
 	X        int

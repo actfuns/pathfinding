@@ -1,9 +1,6 @@
 package finder
 
-import (
-	"sync/atomic"
-	"time"
-)
+import "time"
 
 // IDAStarFinder is an Iterative Deepening A* pathfinder.
 type IDAStarFinder struct {
@@ -53,7 +50,7 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 
 // FindPath finds a path using IDA*.
 func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq = int(atomic.AddUint64(&globalSearchSeq, 1))
+	f.searchSeq++
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
 	start.ResetSearch(f.searchSeq)
