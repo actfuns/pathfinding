@@ -22,6 +22,7 @@ type HPAFinder struct {
 	chunkSize      int
 	world          *HPAWorld
 	concreteFinder finder.Finder
+	stringPulling  bool // apply LOS smoothing to final path
 
 	// Reusable buffers for FindPath (zero-alloc after warm-up)
 	neighborBuf     []*finder.Node
@@ -33,9 +34,11 @@ type HPAFinder struct {
 	hpaNodePool     []*hpaNode       // free list for hpaNode reuse
 	portalPathBuf   []int            // reusable portal key accumulation
 	waypointsBuf    [][2]int         // reusable waypoint accumulation
+	waypointsResult [][2]int         // reusable result buffer (P2)
 	portalKeyBuf    []int            // reusable result in findReachablePortals (start)
 	portalKeyEndBuf []int            // reusable result in findReachablePortals (end)
 	endSetMap       map[int]struct{} // reusable end-portal set
+	pathCache       map[[2]int][]int // portal path cache (P3): key=[startChunk,endChunk]
 }
 
 // HPAOption configures an HPAFinder.
@@ -77,6 +80,12 @@ func WithAllowDiagonal(dontCrossCorners bool) HPAOption {
 	}
 }
 
+// WithStringPulling enables or disables path smoothing via LOS string pulling.
+// Enabled by default.
+func WithStringPulling(enabled bool) HPAOption {
+	return func(f *HPAFinder) { f.stringPulling = enabled }
+}
+
 // NewHPAFinder creates an HPA* finder.
 // Call Build(grid) to pre-build the hierarchical portal graph before
 // calling FindPath.
@@ -86,6 +95,7 @@ func NewHPAFinder(opts ...HPAOption) *HPAFinder {
 		Weight:           1,
 		DiagonalMovement: finder.DiagonalNever,
 		chunkSize:        16,
+		stringPulling:    true,
 	}
 	for _, opt := range opts {
 		opt(f)
@@ -107,14 +117,19 @@ func NewHPAFinder(opts ...HPAOption) *HPAFinder {
 	f.allNodes = make(map[int]*hpaNode, 64)
 	f.openSlice = make([]*hpaNode, 0, 64)
 	f.endSetMap = make(map[int]struct{})
+	f.pathCache = make(map[[2]int][]int, 64)
 	return f
 }
 
 // Build pre-builds the hierarchical portal graph (HPAWorld) from the
 // given grid. Must be called before FindPath. Can be called again to
-// rebuild after grid changes.
+// rebuild after grid changes. Clears the portal path cache on rebuild.
 func (f *HPAFinder) Build(grid finder.Grid) {
 	f.world = BuildWorld(grid, f.chunkSize)
+	// Invalidate path cache on rebuild
+	for k := range f.pathCache {
+		delete(f.pathCache, k)
+	}
 }
 
 // hpaNode is a node in the abstract portal graph.
@@ -186,81 +201,110 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [
 		f.endSetMap[k] = struct{}{}
 	}
 
-	f.openSlice = f.openSlice[:0]
-
-	for _, pk := range startPortalKeys {
-		p := world.Portals[pk]
-		if p == nil {
-			continue
+	// --- P3: Portal Path Cache ---
+	cacheKey := [2]int{startChunk, endChunk}
+	cachedPath, cacheHit := f.pathCache[cacheKey]
+	useCache := false
+	if cacheHit && len(cachedPath) > 0 {
+		firstInStart := false
+		for _, pk := range startPortalKeys {
+			if pk == cachedPath[0] {
+				firstInStart = true
+				break
+			}
 		}
-		n := f.getHPANode()
-		n.portalKey = pk
-		n.g = 0
-		n.h = f.heuristicCost(p.CenterX, p.CenterY, endX, endY)
-		n.f = n.h * f.Weight
-		n.parent = nil
-		n.closed = false
-		n.heapIdx = -1
-		f.allNodes[pk] = n
-		f.openSlice = f.push(f.openSlice, n)
+		_, lastInEnd := f.endSetMap[cachedPath[len(cachedPath)-1]]
+		if firstInStart && lastInEnd {
+			useCache = true
+		}
 	}
 
-	var found *hpaNode
-	for len(f.openSlice) > 0 {
-		var cur *hpaNode
-		f.openSlice, cur = f.pop(f.openSlice)
-		if cur.closed {
-			continue
-		}
-		cur.closed = true
+	if !useCache {
+		// Run abstract A* on portal graph
+		f.openSlice = f.openSlice[:0]
 
-		if _, ok := f.endSetMap[cur.portalKey]; ok {
-			found = cur
-			break
-		}
-
-		cp := world.Portals[cur.portalKey]
-		if cp == nil {
-			continue
-		}
-
-		for i := 0; i < cp.ExternalCount; i++ {
-			ek := cp.ExternalPortals[i]
-			ep := world.Portals[ek]
-			if ep == nil {
+		for _, pk := range startPortalKeys {
+			p := world.Portals[pk]
+			if p == nil {
 				continue
 			}
-			edgeG := cur.g + 10
-			f.openSlice = f.relaxEdge(ek, edgeG, ep, endX, endY, cur)
+			n := f.getHPANode()
+			n.portalKey = pk
+			n.g = 0
+			n.h = f.heuristicCost(p.CenterX, p.CenterY, endX, endY)
+			n.f = n.h * f.Weight
+			n.parent = nil
+			n.closed = false
+			n.heapIdx = -1
+			f.allNodes[pk] = n
+			f.openSlice = f.push(f.openSlice, n)
 		}
 
-		for i := 0; i < cp.InternalCount; i++ {
-			ik := cp.InternalPortals[i]
-			ip := world.Portals[ik]
-			if ip == nil {
+		var found *hpaNode
+		for len(f.openSlice) > 0 {
+			var cur *hpaNode
+			f.openSlice, cur = f.pop(f.openSlice)
+			if cur.closed {
 				continue
 			}
-			edgeG := cur.g + float64(cp.InternalCosts[i])
-			f.openSlice = f.relaxEdge(ik, edgeG, ip, endX, endY, cur)
+			cur.closed = true
+
+			if _, ok := f.endSetMap[cur.portalKey]; ok {
+				found = cur
+				break
+			}
+
+			cp := world.Portals[cur.portalKey]
+			if cp == nil {
+				continue
+			}
+
+			for i := 0; i < cp.ExternalCount; i++ {
+				ek := cp.ExternalPortals[i]
+				ep := world.Portals[ek]
+				if ep == nil {
+					continue
+				}
+				edgeG := cur.g + 10
+				f.openSlice = f.relaxEdge(ek, edgeG, ep, endX, endY, cur)
+			}
+
+			for i := 0; i < cp.InternalCount; i++ {
+				ik := cp.InternalPortals[i]
+				ip := world.Portals[ik]
+				if ip == nil {
+					continue
+				}
+				edgeG := cur.g + float64(cp.InternalCosts[i])
+				f.openSlice = f.relaxEdge(ik, edgeG, ip, endX, endY, cur)
+			}
 		}
+
+		if found == nil {
+			f.recycleNodes()
+			return nil
+		}
+
+		// Build portal path (reversed from found linked list)
+		f.portalPathBuf = f.portalPathBuf[:0]
+		for n := found; n != nil; n = n.parent {
+			f.portalPathBuf = append(f.portalPathBuf, n.portalKey)
+		}
+		// Reverse
+		for i, j := 0, len(f.portalPathBuf)-1; i < j; i, j = i+1, j-1 {
+			f.portalPathBuf[i], f.portalPathBuf[j] = f.portalPathBuf[j], f.portalPathBuf[i]
+		}
+
+		// Store in cache
+		cached := make([]int, len(f.portalPathBuf))
+		copy(cached, f.portalPathBuf)
+		f.pathCache[cacheKey] = cached
+	} else {
+		// Reuse cached portal path
+		f.portalPathBuf = append(f.portalPathBuf[:0], cachedPath...)
 	}
 
-	if found == nil {
-		f.recycleNodes()
-		return nil
-	}
-
-	// Build portal path (reversed from found linked list)
-	f.portalPathBuf = f.portalPathBuf[:0]
-	for n := found; n != nil; n = n.parent {
-		f.portalPathBuf = append(f.portalPathBuf, n.portalKey)
-	}
-	// Reverse
-	for i, j := 0, len(f.portalPathBuf)-1; i < j; i, j = i+1, j-1 {
-		f.portalPathBuf[i], f.portalPathBuf[j] = f.portalPathBuf[j], f.portalPathBuf[i]
-	}
-
-	// Build concrete waypoints
+	// Build concrete waypoints (shared by cache hit and miss)
 	f.waypointsBuf = f.waypointsBuf[:0]
 
 	firstPortal := world.Portals[f.portalPathBuf[0]]
@@ -290,12 +334,21 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [
 	}
 	f.waypointsBuf = append(f.waypointsBuf, seg[1:]...)
 
-	// Copy result — caller owns the returned slice
-	result := make([][2]int, len(f.waypointsBuf))
-	copy(result, f.waypointsBuf)
+	// P1: String pulling — smooth path
+	if f.stringPulling {
+		f.waypointsBuf = f.smoothPath(f.waypointsBuf, grid)
+	}
+
+	// P2: Reusable result buffer
+	if cap(f.waypointsResult) >= len(f.waypointsBuf) {
+		f.waypointsResult = f.waypointsResult[:len(f.waypointsBuf)]
+	} else {
+		f.waypointsResult = make([][2]int, len(f.waypointsBuf))
+	}
+	copy(f.waypointsResult, f.waypointsBuf)
 
 	f.recycleNodes()
-	return result
+	return f.waypointsResult
 }
 
 func (f *HPAFinder) relaxEdge(ik int, edgeG float64, portal *Portal, endX, endY int, parent *hpaNode) []*hpaNode {
@@ -370,6 +423,70 @@ func (f *HPAFinder) findReachablePortals(world *HPAWorld, sx, sy int, chunkID in
 
 func (f *HPAFinder) concreteFind(sx, sy, ex, ey int, grid finder.Grid) [][2]int {
 	return f.concreteFinder.FindPath(sx, sy, ex, ey, grid)
+}
+
+// smoothPath removes unnecessary waypoints from a path by checking
+// line-of-sight between each point. Only points where the direct line
+// is blocked by obstacles are kept. Result is written in-place over the
+// input buffer.
+func (f *HPAFinder) smoothPath(path [][2]int, grid finder.Grid) [][2]int {
+	if len(path) < 3 {
+		return path
+	}
+	writeIdx := 1
+	for i := 2; i < len(path); i++ {
+		if !tileLineOfSight(path[writeIdx-1], path[i], grid) {
+			path[writeIdx] = path[i-1]
+			writeIdx++
+		}
+	}
+	if path[writeIdx-1] != path[len(path)-1] {
+		path[writeIdx] = path[len(path)-1]
+		writeIdx++
+	}
+	return path[:writeIdx]
+}
+
+// tileLineOfSight checks walkability along a Bresenham line between two
+// tiles. Returns true if every cell on the line is walkable.
+func tileLineOfSight(a, b [2]int, grid finder.Grid) bool {
+	x0, y0 := a[0], a[1]
+	x1, y1 := b[0], b[1]
+	dx := x1 - x0
+	dy := y1 - y0
+	var sx, sy int
+	if dx < 0 {
+		dx = -dx
+		sx = -1
+	} else {
+		sx = 1
+	}
+	if dy < 0 {
+		dy = -dy
+		sy = -1
+	} else {
+		sy = 1
+	}
+	err := dx - dy
+
+	for {
+		if !grid.IsWalkableAt(x0, y0) {
+			return false
+		}
+		if x0 == x1 && y0 == y1 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x0 += sx
+		}
+		if e2 < dx {
+			err += dx
+			y0 += sy
+		}
+	}
+	return true
 }
 
 // --- Min-heap helpers ---

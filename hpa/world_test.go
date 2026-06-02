@@ -122,8 +122,8 @@ func TestHPAPortalPerCell(t *testing.T) {
 	})
 	world := BuildWorld(g, 8)
 	northCount := countPortalsInDir(world, 0, DirN)
-	if northCount != 6 {
-		t.Errorf("expected 6 north portals, got %d", northCount)
+	if northCount != 2 {
+		t.Errorf("expected 2 compressed north portals, got %d", northCount)
 	}
 }
 
@@ -193,8 +193,8 @@ func TestHPAPortalCount(t *testing.T) {
 			count++
 		}
 	}
-	if count != 32 {
-		t.Errorf("expected 32 portals, got %d", count)
+	if count != 6 {
+		t.Errorf("expected 6 compressed portals, got %d", count)
 	}
 }
 

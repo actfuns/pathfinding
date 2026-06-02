@@ -261,6 +261,111 @@ func TestHPARepeatable(t *testing.T) {
 	})
 }
 
+func TestPortalCompressionReducesCount(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int{
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	})
+	world := BuildWorld(g, 16)
+	count := 0
+	for _, p := range world.Portals {
+		if p != nil {
+			count++
+		}
+	}
+	if count > 8 {
+		t.Errorf("portal compression reduced too little: got %d portals, expected ≤ 8", count)
+	}
+	for _, p := range world.Portals {
+		if p != nil && p.Length <= 0 {
+			t.Errorf("compressed portal at (%d,%d) has invalid length %d", p.CenterX, p.CenterY, p.Length)
+		}
+	}
+}
+
+func TestStringPulling_smoothed(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int{
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	})
+	f := NewHPAFinder(WithChunkSize(8), WithStringPulling(true))
+	f.Build(g)
+	path := f.FindPath(0, 0, 15, 1, g)
+	if path == nil {
+		t.Fatal("expected path, got nil")
+	}
+	assertStartEnd(t, path, 0, 0, 15, 1)
+	verifyWalkable(t, g, path)
+}
+
+func TestStringPulling_shortPath(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int{
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	})
+	f := NewHPAFinder(WithChunkSize(8))
+	f.Build(g)
+	path := f.FindPath(0, 0, 7, 1, g)
+	if path == nil {
+		t.Fatal("expected path, got nil")
+	}
+	assertStartEnd(t, path, 0, 0, 7, 1)
+}
+
+func TestPathCache(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int{
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	})
+	f := NewHPAFinder(WithChunkSize(8))
+	f.Build(g)
+	first := f.FindPath(0, 0, 15, 1, g)
+	if first == nil {
+		t.Fatal("expected path")
+	}
+	second := f.FindPath(0, 0, 15, 1, g)
+	if second == nil {
+		t.Fatal("expected path on second call")
+	}
+	if !pathEqual(first, second) {
+		t.Error("cached result differs from first call")
+	}
+}
+
+func TestPathCacheInvalidation(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int{
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	})
+	f := NewHPAFinder(WithChunkSize(8))
+	f.Build(g)
+	f.FindPath(0, 0, 15, 1, g)
+	if len(f.pathCache) == 0 {
+		t.Fatal("expected cache to be populated after FindPath")
+	}
+	f.Build(g)
+	if len(f.pathCache) != 0 {
+		t.Error("expected cache to be empty after Build")
+	}
+	path := f.FindPath(0, 0, 15, 1, g)
+	if path == nil {
+		t.Fatal("expected path after rebuild")
+	}
+}
+
+func TestWithStringPullingOption(t *testing.T) {
+	f := NewHPAFinder(WithStringPulling(false))
+	if f.stringPulling {
+		t.Error("expected stringPulling=false")
+	}
+	f2 := NewHPAFinder()
+	if !f2.stringPulling {
+		t.Error("expected stringPulling=true by default")
+	}
+}
+
 // --- helpers ---
 
 func assertStartEnd(t *testing.T, path [][2]int, sx, sy, ex, ey int) {

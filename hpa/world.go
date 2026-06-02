@@ -74,8 +74,8 @@ const (
 )
 
 // BuildWorld constructs the HPA world: partition grid into chunks, detect edge
-// portals (one per walkable cell on each chunk edge), connect internal portals
-// (BFS within chunk), and connect external portals (adjacent chunk).
+// portals (compressed — one per run of consecutive walkable cells), connect
+// external portals (adjacent chunk), and connect internal portals (BFS within chunk).
 func BuildWorld(grid finder.Grid, chunkSize int) *HPAWorld {
 	cs := chunkSize
 	if cs < 2 {
@@ -97,11 +97,15 @@ func BuildWorld(grid finder.Grid, chunkSize int) *HPAWorld {
 	neighborBuf := make([]*finder.Node, 0, 8)
 	tmpNode := &finder.Node{}
 
+	// Phase 1: create compressed portals per chunk edge
 	for cy := 0; cy < cmy; cy++ {
 		for cx := 0; cx < cmx; cx++ {
-			buildChunkPortals(grid, w, cx, cy, neighborBuf)
+			buildChunkPortals(grid, w, cx, cy)
 		}
 	}
+	// Phase 1b: resolve external connections (after all portals exist)
+	connectExternals(grid, w, neighborBuf)
+	// Phase 2: connect portals within the same chunk via BFS
 	for cy := 0; cy < cmy; cy++ {
 		for cx := 0; cx < cmx; cx++ {
 			connectInternals(grid, w, cx, cy, neighborBuf, tmpNode)
@@ -122,20 +126,23 @@ func padSize(w, h, cs int) (int, int) {
 	return rw, rh
 }
 
-func buildChunkPortals(grid finder.Grid, w *HPAWorld, cx, cy int, nb []*finder.Node) {
+func buildChunkPortals(grid finder.Grid, w *HPAWorld, cx, cy int) {
 	cs := w.ChunkSize
 	chunkID := cy*w.ChunkMapX + cx
 	ox := cx * cs
 	oy := cy * cs
 
-	edgePortals(grid, w, chunkID, ox, oy, cs, DirN, DirS, false, nb)
-	edgePortals(grid, w, chunkID, ox, oy+cs-1, cs, DirS, DirN, false, nb)
-	edgePortals(grid, w, chunkID, ox, oy, cs, DirW, DirE, true, nb)
-	edgePortals(grid, w, chunkID, ox+cs-1, oy, cs, DirE, DirW, true, nb)
+	edgePortals(grid, w, chunkID, ox, oy, cs, DirN, DirS, false)
+	edgePortals(grid, w, chunkID, ox, oy+cs-1, cs, DirS, DirN, false)
+	edgePortals(grid, w, chunkID, ox, oy, cs, DirW, DirE, true)
+	edgePortals(grid, w, chunkID, ox+cs-1, oy, cs, DirE, DirW, true)
 }
 
-func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, oppDir int, vertical bool, nb []*finder.Node) {
-	for pos := 0; pos < cs; pos++ {
+// edgePortals creates compressed portals along a chunk edge.
+// Consecutive walkable cells are merged into a single portal.
+func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, oppDir int, vertical bool) {
+	pos := 0
+	for pos < cs {
 		var cx, cy int
 		if vertical {
 			cx, cy = ox, oy+pos
@@ -143,44 +150,129 @@ func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, oppDir
 			cx, cy = ox+pos, oy
 		}
 		if !grid.IsWalkableAt(cx, cy) {
+			pos++
 			continue
 		}
 
-		key := PortalKey(chunkID, pos, dir, cs)
-		p := newPortal(cx, cy)
-		p.Length = 1
-		p.Offset = pos
-		w.Portals[key] = p
-		w.NumPortals++
-
-		tmpNode := &finder.Node{X: cx, Y: cy, Walkable: true}
-		neighbors := grid.GetNeighbors(tmpNode, finder.DiagonalNever, nb)
-		for _, n := range neighbors {
-			nx, ny := n.X, n.Y
-			if nx < 0 || nx >= grid.Width() || ny < 0 || ny >= grid.Height() {
-				continue
-			}
-			nChunk := (ny/cs)*w.ChunkMapX + nx/cs
-			if nChunk == chunkID {
-				continue
+		runStart := pos
+		// Extend run while consecutive cells are walkable
+		for pos < cs {
+			var nx, ny int
+			if vertical {
+				nx, ny = ox, oy+pos
+			} else {
+				nx, ny = ox+pos, oy
 			}
 			if !grid.IsWalkableAt(nx, ny) {
-				continue
+				break
 			}
-			ekey := PortalKey(nChunk, pos, oppDir, cs)
-			dup := false
-			for ei := 0; ei < p.ExternalCount; ei++ {
-				if p.ExternalPortals[ei] == ekey {
-					dup = true
-					break
+			pos++
+		}
+		runEnd := pos - 1
+		runLength := runEnd - runStart + 1
+		centerPos := runStart + runLength/2
+
+		var centerX, centerY int
+		if vertical {
+			centerX, centerY = ox, oy+centerPos
+		} else {
+			centerX, centerY = ox+centerPos, oy
+		}
+
+		key := PortalKey(chunkID, runStart, dir, cs)
+		p := newPortal(centerX, centerY)
+		p.Length = runLength
+		p.Offset = runStart
+		w.Portals[key] = p
+		w.NumPortals++
+	}
+}
+
+// findPortalAtEdgeOffset finds the compressed portal key on the given chunk
+// edge whose offset range covers the specified offset. Returns -1 if not found.
+func findPortalAtEdgeOffset(w *HPAWorld, chunkID, offset, dir int) int {
+	cs := w.ChunkSize
+	for pos := 0; pos < cs; pos++ {
+		key := PortalKey(chunkID, pos, dir, cs)
+		p := w.Portals[key]
+		if p != nil && offset >= p.Offset && offset < p.Offset+p.Length {
+			return key
+		}
+	}
+	return -1
+}
+
+// connectExternals resolves all external (cross-chunk) connections for every
+// portal. Must be called after all portals have been created (Phase 1).
+func connectExternals(grid finder.Grid, w *HPAWorld, nb []*finder.Node) {
+	cs := w.ChunkSize
+	totalChunks := w.ChunkMapX * w.ChunkMapY
+	dirs := []int{DirN, DirE, DirS, DirW}
+	oppDirs := []int{DirS, DirW, DirN, DirE}
+
+	for chunkID := 0; chunkID < totalChunks; chunkID++ {
+		chunkCy := chunkID / w.ChunkMapX
+		chunkCx := chunkID - chunkCy*w.ChunkMapX
+		ox := chunkCx * cs
+		oy := chunkCy * cs
+
+		for di := 0; di < 4; di++ {
+			dir := dirs[di]
+			oppDir := oppDirs[di]
+
+			for pos := 0; pos < cs; pos++ {
+				key := PortalKey(chunkID, pos, dir, cs)
+				p := w.Portals[key]
+				if p == nil {
+					continue
 				}
-			}
-			if dup {
-				continue
-			}
-			if p.ExternalCount < len(p.ExternalPortals) {
-				p.ExternalPortals[p.ExternalCount] = ekey
-				p.ExternalCount++
+
+				// Check each cell in this compressed portal's range for cross-chunk neighbors
+				for cellPos := p.Offset; cellPos < p.Offset+p.Length; cellPos++ {
+					var cx, cy int
+					switch dir {
+					case DirN:
+						cx, cy = ox+cellPos, oy
+					case DirS:
+						cx, cy = ox+cellPos, oy+cs-1
+					case DirW:
+						cx, cy = ox, oy+cellPos
+					case DirE:
+						cx, cy = ox+cs-1, oy+cellPos
+					}
+
+					tmpNode := &finder.Node{X: cx, Y: cy, Walkable: true}
+					neighbors := grid.GetNeighbors(tmpNode, finder.DiagonalNever, nb)
+					for _, n := range neighbors {
+						nx, ny := n.X, n.Y
+						if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
+							continue
+						}
+						nChunk := (ny/cs)*w.ChunkMapX + nx/cs
+						if nChunk == chunkID {
+							continue
+						}
+
+						ekey := findPortalAtEdgeOffset(w, nChunk, cellPos, oppDir)
+						if ekey < 0 {
+							continue
+						}
+
+						// Deduplicate
+						dup := false
+						for ei := 0; ei < p.ExternalCount; ei++ {
+							if p.ExternalPortals[ei] == ekey {
+								dup = true
+								break
+							}
+						}
+						if dup || p.ExternalCount >= len(p.ExternalPortals) {
+							continue
+						}
+						p.ExternalPortals[p.ExternalCount] = ekey
+						p.ExternalCount++
+					}
+				}
 			}
 		}
 	}
