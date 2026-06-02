@@ -1,6 +1,10 @@
 package waypoint
 
-import "math"
+import (
+	"math"
+
+	"github.com/actfuns/pathfinding/finder"
+)
 
 // WaypointFinder implements A* search on a waypoint graph.
 //
@@ -14,6 +18,23 @@ type WaypointFinder struct {
 // NewWaypointFinder creates a finder for the given graph.
 func NewWaypointFinder(graph *WaypointGraph) *WaypointFinder {
 	return &WaypointFinder{graph: graph}
+}
+
+// FindPathOnGrid finds a path between two world positions on a tile grid,
+// using LOS-based node selection to only pick waypoints with a clear line
+// of sight from the start/end positions.
+func (f *WaypointFinder) FindPathOnGrid(startX, startY, endX, endY float64, g finder.Grid) [][2]float64 {
+	startNode := f.graph.FindClosestWithLOS(startX, startY, g)
+	endNode := f.graph.FindClosestWithLOS(endX, endY, g)
+	if startNode == nil || endNode == nil {
+		return nil
+	}
+	if startNode == endNode {
+		return [][2]float64{{startX, startY}, {endX, endY}}
+	}
+
+	// A* on the graph (shared with FindPathFloat)
+	return f.findPathInternal(startNode, endNode, startX, startY, endX, endY)
 }
 
 // FindPath finds a path on the waypoint graph from the closest node
@@ -34,8 +55,11 @@ func (f *WaypointFinder) FindPathFloat(startX, startY, endX, endY float64) [][2]
 	if startNode == endNode {
 		return [][2]float64{{startX, startY}, {endX, endY}}
 	}
+	return f.findPathInternal(startNode, endNode, startX, startY, endX, endY)
+}
 
-	// A* on the graph
+// findPathInternal runs A* between two graph nodes and returns the path.
+func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, startX, startY, endX, endY float64) [][2]float64 {
 	open := &nodeHeap{}
 	all := make(map[*WaypointNode]*aNode)
 	goal := endNode
@@ -54,16 +78,13 @@ func (f *WaypointFinder) FindPathFloat(startX, startY, endX, endY float64) [][2]
 		cur.closed = true
 
 		if cur.node == goal {
-			// Reconstruct path
 			var path []*WaypointNode
 			for c := cur; c != nil; c = c.parent {
 				path = append(path, c.node)
 			}
-			// Reverse
 			for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
 				path[i], path[j] = path[j], path[i]
 			}
-			// Convert to float64 path, deduplicating consecutive identical points
 			fpath := make([][2]float64, 0, len(path)+2)
 			fpath = appendPoint(fpath, startX, startY)
 			for _, n := range path {
@@ -74,6 +95,9 @@ func (f *WaypointFinder) FindPathFloat(startX, startY, endX, endY float64) [][2]
 		}
 
 		for _, edge := range cur.node.Edges {
+			if edge.State == EdgeStateNull {
+				continue
+			}
 			ng := cur.g + edge.Cost
 			existing, ok := all[edge.To]
 			if !ok {
