@@ -1,7 +1,9 @@
 package grid
 
 import (
+	"fmt"
 	"math"
+	"strings"
 
 	"github.com/actfuns/pathfinding/finder"
 )
@@ -19,6 +21,12 @@ type StaggeredGrid struct {
 	height       int    // tiles down
 	nodes        []*finder.Node
 	finder       finder.Finder
+	worldBuf     [][2]float32
+
+	// Precomputed cardinal and diagonal neighbor offsets
+	cardinalOffsets  [4][2]int
+	diagNormOffsets  [4][2]int // diagonal offsets for non-shifted rows/cols
+	diagShiftOffsets [4][2]int // diagonal offsets for shifted rows/cols
 }
 
 // Finder returns the pathfinder associated with this grid.
@@ -74,7 +82,44 @@ func NewStaggeredGrid(matrix [][]int, opts ...StaggerOption) *StaggeredGrid {
 	for _, opt := range opts {
 		opt(g)
 	}
+	g.initNeighbors()
 	return g
+}
+
+func (g *StaggeredGrid) initNeighbors() {
+	g.cardinalOffsets = [4][2]int{
+		{0, -1}, // N
+		{0, 1},  // S
+		{-1, 0}, // W
+		{1, 0},  // E
+	}
+	if g.isStaggerX() {
+		g.diagNormOffsets = [4][2]int{
+			{0, -1},  // NE
+			{-1, -1}, // NW
+			{0, 1},   // SE
+			{-1, 1},  // SW
+		}
+		g.diagShiftOffsets = [4][2]int{
+			{1, -1}, // NE
+			{0, -1}, // NW
+			{1, 1},  // SE
+			{0, 1},  // SW
+		}
+	} else {
+		g.diagNormOffsets = [4][2]int{
+			{1, -1},  // NE
+			{-1, -1}, // NW
+			{1, 1},   // SE
+			{-1, 1},  // SW
+		}
+		g.diagShiftOffsets = [4][2]int{
+			{1, 0},  // NE
+			{-1, 0}, // NW
+			{1, 0},  // SE
+			{-1, 0}, // SW
+		}
+	}
 }
 
 func (g *StaggeredGrid) isStaggerX() bool    { return g.staggerAxis == "x" }
@@ -110,13 +155,16 @@ func (g *StaggeredGrid) SetWalkableAt(x, y int, walkable bool) {
 
 func (g *StaggeredGrid) Clone() finder.Grid {
 	ng := &StaggeredGrid{
-		staggerAxis:  g.staggerAxis,
-		staggerIndex: g.staggerIndex,
-		tileW:        g.tileW,
-		tileH:        g.tileH,
-		width:        g.width,
-		height:       g.height,
-		finder:       g.finder,
+		cardinalOffsets:  g.cardinalOffsets,
+		diagNormOffsets:  g.diagNormOffsets,
+		diagShiftOffsets: g.diagShiftOffsets,
+		staggerAxis:      g.staggerAxis,
+		staggerIndex:     g.staggerIndex,
+		tileW:            g.tileW,
+		tileH:            g.tileH,
+		width:            g.width,
+		height:           g.height,
+		finder:           g.finder,
 	}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
 	for i, n := range g.nodes {
@@ -339,13 +387,17 @@ func (g *StaggeredGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if path == nil {
 		return nil
 	}
-	wp := make([][2]float32, len(path))
-	for i, p := range path {
-		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
+	if cap(g.worldBuf) >= len(path) {
+		g.worldBuf = g.worldBuf[:len(path)]
+	} else {
+		g.worldBuf = make([][2]float32, len(path))
 	}
-	wp[0][0], wp[0][1] = wx1, wy1
-	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
-	return wp
+	for i, p := range path {
+		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
+	}
+	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
+	return g.worldBuf
 }
 
 // FindSmoothPath finds a path between two world positions and smooths it.
@@ -363,37 +415,37 @@ func (g *StaggeredGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 
 		return nil
 	}
 	path = g.SmoothenTilePath(path)
-	wp := make([][2]float32, len(path))
-	for i, p := range path {
-		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
+	if cap(g.worldBuf) >= len(path) {
+		g.worldBuf = g.worldBuf[:len(path)]
+	} else {
+		g.worldBuf = make([][2]float32, len(path))
 	}
-	wp[0][0], wp[0][1] = wx1, wy1
-	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
-	return wp
+	for i, p := range path {
+		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
+	}
+	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
+	return g.worldBuf
 }
 
 // SmoothenTilePath smooths a tile-coordinate staggered path by removing unnecessary waypoints.
-// Uses a pixel-based ray cast along the line between tiles.
+// Writes the smoothed result in-place over the input (finder's cached pathBuf).
 func (g *StaggeredGrid) SmoothenTilePath(path [][2]int) [][2]int {
 	if len(path) < 2 {
 		return path
 	}
-	smooth := make([]int, 0, len(path))
-	smooth = append(smooth, 0)
-	last := len(path) - 1
+	writeIdx := 1
 	for i := 2; i < len(path); i++ {
-		if !g.staggeredLineOfSight(path[smooth[len(smooth)-1]], path[i]) {
-			smooth = append(smooth, i-1)
+		if !g.staggeredLineOfSight(path[writeIdx-1], path[i]) {
+			path[writeIdx] = path[i-1]
+			writeIdx++
 		}
 	}
-	if smooth[len(smooth)-1] != last {
-		smooth = append(smooth, last)
+	if path[writeIdx-1] != path[len(path)-1] {
+		path[writeIdx] = path[len(path)-1]
+		writeIdx++
 	}
-	result := make([][2]int, len(smooth))
-	for i, idx := range smooth {
-		result[i] = path[idx]
-	}
-	return result
+	return path[:writeIdx]
 }
 
 // staggeredLineOfSight checks if there is a straight pixel line between two staggered tiles with no obstacles.
@@ -417,47 +469,25 @@ func (g *StaggeredGrid) staggeredLineOfSight(a, b [2]int) bool {
 }
 
 // GetNeighbors returns neighbors for staggered isometric grids.
+
 func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
 	x, y := node.X, node.Y
 	neighbors := buffer[:0]
 	w := g.width
+	h := g.height
 	nodes := g.nodes
 
-	shifted := g.isShifted(y) // default stagger axis is "y"
-
-	// Cardinal neighbors
-	var cardinals [][2]int
+	shifted := g.isShifted(y)
 	if g.isStaggerX() {
 		shifted = g.isShifted(x)
-		// x-axis stagger
-		if shifted {
-			cardinals = [][2]int{
-				{x - 1, y}, // W
-				{x + 1, y}, // E
-				{x, y - 1}, // N (same x)
-				{x, y + 1}, // S (same x)
-			}
-		} else {
-			cardinals = [][2]int{
-				{x - 1, y}, // W
-				{x + 1, y}, // E
-				{x, y - 1}, // N (same x)
-				{x, y + 1}, // S (same x)
-			}
-		}
-	} else {
-		// y-axis stagger
-		cardinals = [][2]int{
-			{x, y - 1}, // N
-			{x, y + 1}, // S
-			{x - 1, y}, // W
-			{x + 1, y}, // E
-		}
 	}
 
-	for _, d := range cardinals {
-		if g.IsWalkableAt(d[0], d[1]) {
-			neighbors = append(neighbors, nodes[d[1]*w+d[0]])
+	// Cardinal neighbors (same 4 directions regardless of stagger)
+	for _, d := range g.cardinalOffsets {
+		nx := x + d[0]
+		ny := y + d[1]
+		if nx >= 0 && nx < w && ny >= 0 && ny < h && nodes[ny*w+nx].Walkable {
+			neighbors = append(neighbors, nodes[ny*w+nx])
 		}
 	}
 
@@ -465,40 +495,19 @@ func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagonal
 		return neighbors
 	}
 
-	// Diagonal neighbors — depends on stagger axis and shift
-	var diagonals [][2]int
-	if g.isStaggerX() {
-		if shifted {
-			diagonals = [][2]int{
-				{x, y - 1},     // NE (same x)
-				{x - 1, y - 1}, // NW
-				{x, y + 1},     // SE (same x)
-				{x - 1, y + 1}, // SW
-			}
-		} else {
-			diagonals = [][2]int{
-				{x + 1, y - 1}, // NE
-				{x, y - 1},     // NW (same x)
-				{x + 1, y + 1}, // SE
-				{x, y + 1},     // SW (same x)
-			}
-		}
+	// Diagonal neighbors using precomputed offsets
+	var diagOffsets [4][2]int
+	if shifted {
+		diagOffsets = g.diagShiftOffsets
 	} else {
-		if shifted {
-			diagonals = [][2]int{
-				{x, y - 1},     // NE (same x)
-				{x - 1, y - 1}, // NW
-				{x, y + 1},     // SE (same x)
-				{x - 1, y + 1}, // SW
-			}
-		} else {
-			diagonals = [][2]int{
-				{x + 1, y - 1}, // NE
-				{x, y - 1},     // NW (same x)
-				{x + 1, y + 1}, // SE
-				{x, y + 1},     // SW (same x)
-			}
-		}
+		diagOffsets = g.diagNormOffsets
+	}
+
+	// Build absolute diagonal positions
+	type diagPos struct{ nx, ny int }
+	var diags [4]diagPos
+	for i, d := range diagOffsets {
+		diags[i] = diagPos{x + d[0], y + d[1]}
 	}
 
 	// Apply diagonal obstacle rules
@@ -507,44 +516,114 @@ func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagonal
 	case finder.DiagonalAlways:
 		dFlags = [4]bool{true, true, true, true}
 	case finder.DiagonalOnlyWhenNoObstacles:
-		for i := 0; i < 4; i++ {
-			d := diagonals[i]
-			dx, dy := d[0]-x, d[1]-y
+		for i, d := range diagOffsets {
+			dx, dy := d[0], d[1]
 			ok := true
-			if dx != 0 && g.IsInside(x+dx, y) {
-				if !g.IsWalkableAt(x+dx, y) {
-					ok = false
-				}
+			if dx != 0 && x+dx >= 0 && x+dx < w && !nodes[y*w+x+dx].Walkable {
+				ok = false
 			}
-			if dy != 0 && g.IsInside(x, y+dy) {
-				if !g.IsWalkableAt(x, y+dy) {
-					ok = false
-				}
+			if dy != 0 && y+dy >= 0 && y+dy < h && !nodes[(y+dy)*w+x].Walkable {
+				ok = false
 			}
 			dFlags[i] = ok
 		}
 	case finder.DiagonalIfAtMostOneObstacle:
-		for i := 0; i < 4; i++ {
-			d := diagonals[i]
-			dx, dy := d[0]-x, d[1]-y
+		for i, d := range diagOffsets {
+			dx, dy := d[0], d[1]
 			blocked := 0
-			if dx != 0 && g.IsInside(x+dx, y) && !g.IsWalkableAt(x+dx, y) {
+			if dx != 0 && x+dx >= 0 && x+dx < w && !nodes[y*w+x+dx].Walkable {
 				blocked++
 			}
-			if dy != 0 && g.IsInside(x, y+dy) && !g.IsWalkableAt(x, y+dy) {
+			if dy != 0 && y+dy >= 0 && y+dy < h && !nodes[(y+dy)*w+x].Walkable {
 				blocked++
 			}
 			dFlags[i] = blocked <= 1
 		}
-	default:
-		return neighbors
 	}
 
-	for i, d := range diagonals {
-		if dFlags[i] && g.IsWalkableAt(d[0], d[1]) {
-			neighbors = append(neighbors, nodes[d[1]*w+d[0]])
+	for i, d := range diags {
+		if dFlags[i] && d.nx >= 0 && d.nx < w && d.ny >= 0 && d.ny < h && nodes[d.ny*w+d.nx].Walkable {
+			neighbors = append(neighbors, nodes[d.ny*w+d.nx])
 		}
 	}
 
 	return neighbors
 }
+
+// RenderSVG renders the staggered grid and an optional path as an SVG string.
+func (g *StaggeredGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) string {
+	padding := 20.0
+	tileW := float64(g.tileW)
+	tileH := float64(g.tileH)
+
+	// Diamond vertices relative to tile center
+	diamond := [][2]float64{
+		{tileW / 2, 0},
+		{tileW, tileH / 2},
+		{tileW / 2, tileH},
+		{0, tileH / 2},
+	}
+
+	// Find bounds of all diamond vertices
+	vxMin, vyMin := math.MaxFloat64, math.MaxFloat64
+	vxMax, vyMax := -math.MaxFloat64, -math.MaxFloat64
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			cx, cy := g.tileToScreenCoords(x, y)
+			for _, off := range diamond {
+				vx := cx + off[0]
+				vy := cy + off[1]
+				if vx < vxMin {
+					vxMin = vx
+				}
+				if vy < vyMin {
+					vyMin = vy
+				}
+				if vx > vxMax {
+					vxMax = vx
+				}
+				if vy > vyMax {
+					vyMax = vy
+				}
+			}
+		}
+	}
+
+	svgW := (vxMax - vxMin) + padding*2
+	svgH := (vyMax - vyMin) + padding*2
+	dx := padding - vxMin
+	dy := padding - vyMin
+
+	var b strings.Builder
+	b.WriteString(xmlHeader(int(math.Ceil(svgW)), int(math.Ceil(svgH))))
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			cx, cy := g.tileToScreenCoords(x, y)
+			fill := "#ffffff"
+			stroke := "#cccccc"
+			if !g.IsWalkableAt(x, y) {
+				fill = "#333333"
+				stroke = "#333333"
+			}
+			pts := make([]string, len(diamond))
+			for i, off := range diamond {
+				pts[i] = fmt.Sprintf("%.1f,%.1f", cx+off[0]+dx, cy+off[1]+dy)
+			}
+			fmt.Fprintf(&b, `<polygon points="%s" fill="%s" stroke="%s" stroke-width="1"/>`+"\n",
+				strings.Join(pts, " "), fill, stroke)
+		}
+	}
+
+	drawPathAndMarkers(&b, path, startX, startY, endX, endY,
+		func(tx, ty int) (float64, float64) {
+			cx, cy := g.tileToScreenCoords(tx, ty)
+			return cx + tileW/2 + dx, cy + tileH/2 + dy
+		})
+
+	b.WriteString("</svg>\n")
+	return b.String()
+}
+
+// drawPathAndMarkers draws the path polyline and start/end markers.
+// centerOf returns the SVG pixel coordinates for a tile.

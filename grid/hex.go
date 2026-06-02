@@ -1,7 +1,9 @@
 package grid
 
 import (
+	"fmt"
 	"math"
+	"strings"
 
 	"github.com/actfuns/pathfinding/finder"
 )
@@ -31,8 +33,13 @@ type HexGrid struct {
 	renW     int // colW + sideOffX  (= effective tileW for render)
 	renH     int // rowH + sideOffY  (= effective tileH for render)
 
-	nodes  []*finder.Node
-	finder finder.Finder
+	nodes    []*finder.Node
+	finder   finder.Finder
+	worldBuf [][2]float32
+
+	// Precomputed neighbor offsets (indexed by parity)
+	neighborsEven [6][2]int
+	neighborsOdd  [6][2]int
 }
 
 // Finder returns the pathfinder associated with this grid.
@@ -107,6 +114,47 @@ func (g *HexGrid) initParams() {
 	g.rowH = g.sideOffY + g.sideLenY
 	g.renW = g.colW + g.sideOffX
 	g.renH = g.rowH + g.sideOffY
+	g.initNeighbors()
+}
+
+func (g *HexGrid) initNeighbors() {
+	if g.staggerX {
+		// Flat-top hex: stagger on X axis
+		g.neighborsEven = [6][2]int{
+			{-1, -1}, // NW
+			{0, -1},  // NE
+			{1, 0},   // E
+			{0, 1},   // SE
+			{-1, 1},  // SW
+			{-1, 0},  // W
+		}
+		g.neighborsOdd = [6][2]int{
+			{0, -1}, // NW
+			{1, -1}, // NE
+			{1, 0},  // E
+			{1, 1},  // SE
+			{0, 1},  // SW
+			{-1, 0}, // W
+		}
+	} else {
+		// Pointy-top hex: stagger on Y axis
+		g.neighborsEven = [6][2]int{
+			{1, -1}, // NE
+			{0, -1}, // NW
+			{-1, 0}, // W
+			{-1, 1}, // SW
+			{0, 1},  // SE
+			{1, 0},  // E
+		}
+		g.neighborsOdd = [6][2]int{
+			{1, 0},   // NE
+			{0, -1},  // NW
+			{-1, -1}, // W
+			{-1, 0},  // SW
+			{0, 1},   // SE
+			{1, 1},   // E
+		}
+	}
 }
 
 func (g *HexGrid) doStaggerX(x int) bool {
@@ -138,22 +186,24 @@ func (g *HexGrid) SetWalkableAt(x, y int, walkable bool) {
 
 func (g *HexGrid) Clone() finder.Grid {
 	ng := &HexGrid{
-		width:       g.width,
-		height:      g.height,
-		staggerX:    g.staggerX,
-		staggerEven: g.staggerEven,
-		tileW:       g.tileW,
-		tileH:       g.tileH,
-		hexSide:     g.hexSide,
-		sideLenX:    g.sideLenX,
-		sideLenY:    g.sideLenY,
-		sideOffX:    g.sideOffX,
-		sideOffY:    g.sideOffY,
-		colW:        g.colW,
-		rowH:        g.rowH,
-		renW:        g.renW,
-		renH:        g.renH,
-		finder:      g.finder,
+		width:         g.width,
+		height:        g.height,
+		staggerX:      g.staggerX,
+		staggerEven:   g.staggerEven,
+		tileW:         g.tileW,
+		tileH:         g.tileH,
+		hexSide:       g.hexSide,
+		sideLenX:      g.sideLenX,
+		sideLenY:      g.sideLenY,
+		sideOffX:      g.sideOffX,
+		sideOffY:      g.sideOffY,
+		colW:          g.colW,
+		rowH:          g.rowH,
+		renW:          g.renW,
+		renH:          g.renH,
+		neighborsEven: g.neighborsEven,
+		neighborsOdd:  g.neighborsOdd,
+		finder:        g.finder,
 	}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
 	for i, n := range g.nodes {
@@ -318,13 +368,17 @@ func (g *HexGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if path == nil {
 		return nil
 	}
-	wp := make([][2]float32, len(path))
-	for i, p := range path {
-		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
+	if cap(g.worldBuf) >= len(path) {
+		g.worldBuf = g.worldBuf[:len(path)]
+	} else {
+		g.worldBuf = make([][2]float32, len(path))
 	}
-	wp[0][0], wp[0][1] = wx1, wy1
-	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
-	return wp
+	for i, p := range path {
+		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
+	}
+	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
+	return g.worldBuf
 }
 
 // FindSmoothPath finds a path between two world positions and smooths it.
@@ -342,37 +396,37 @@ func (g *HexGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 		return nil
 	}
 	path = g.SmoothenTilePath(path)
-	wp := make([][2]float32, len(path))
-	for i, p := range path {
-		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
+	if cap(g.worldBuf) >= len(path) {
+		g.worldBuf = g.worldBuf[:len(path)]
+	} else {
+		g.worldBuf = make([][2]float32, len(path))
 	}
-	wp[0][0], wp[0][1] = wx1, wy1
-	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
-	return wp
+	for i, p := range path {
+		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
+	}
+	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
+	return g.worldBuf
 }
 
 // SmoothenTilePath smooths a tile-coordinate hex path by removing unnecessary waypoints.
-// Uses a pixel-based ray cast along the line between tiles.
+// Writes the smoothed result in-place over the input (finder's cached pathBuf).
 func (g *HexGrid) SmoothenTilePath(path [][2]int) [][2]int {
 	if len(path) < 2 {
 		return path
 	}
-	smooth := make([]int, 0, len(path))
-	smooth = append(smooth, 0)
-	last := len(path) - 1
+	writeIdx := 1
 	for i := 2; i < len(path); i++ {
-		if !g.hexLineOfSight(path[smooth[len(smooth)-1]], path[i]) {
-			smooth = append(smooth, i-1)
+		if !g.hexLineOfSight(path[writeIdx-1], path[i]) {
+			path[writeIdx] = path[i-1]
+			writeIdx++
 		}
 	}
-	if smooth[len(smooth)-1] != last {
-		smooth = append(smooth, last)
+	if path[writeIdx-1] != path[len(path)-1] {
+		path[writeIdx] = path[len(path)-1]
+		writeIdx++
 	}
-	result := make([][2]int, len(smooth))
-	for i, idx := range smooth {
-		result[i] = path[idx]
-	}
-	return result
+	return path[:writeIdx]
 }
 
 // hexLineOfSight checks if there is a straight pixel line between two hex tiles with no obstacles.
@@ -404,57 +458,139 @@ func (g *HexGrid) GetNeighbors(node *finder.Node, _ finder.DiagonalMovement, buf
 	nodes := g.nodes
 
 	var dirs [6][2]int
-	if g.staggerX {
-		// Flat-top: odd column shifts down
-		if x%2 == 1 {
-			dirs = [6][2]int{
-				{0, -1}, // NW
-				{1, -1}, // NE
-				{1, 0},  // E
-				{1, 1},  // SE
-				{0, 1},  // SW
-				{-1, 0}, // W
-			}
-		} else {
-			dirs = [6][2]int{
-				{-1, -1}, // NW
-				{0, -1},  // NE
-				{1, 0},   // E
-				{0, 1},   // SE
-				{-1, 1},  // SW
-				{-1, 0},  // W
-			}
-		}
+	if (g.staggerX && x&1 == 1) || (!g.staggerX && y&1 == 1) {
+		dirs = g.neighborsOdd
 	} else {
-		// Pointy-top: odd row shifts right
-		if y%2 == 1 {
-			dirs = [6][2]int{
-				{1, 0},   // NE
-				{0, -1},  // NW
-				{-1, -1}, // W
-				{-1, 0},  // SW
-				{0, 1},   // SE
-				{1, 1},   // E
-			}
-		} else {
-			dirs = [6][2]int{
-				{1, -1}, // NE
-				{0, -1}, // NW
-				{-1, 0}, // W
-				{-1, 1}, // SW
-				{0, 1},  // SE
-				{1, 0},  // E
-			}
-		}
+		dirs = g.neighborsEven
 	}
 
 	for _, d := range dirs {
 		nx := x + d[0]
 		ny := y + d[1]
-		if g.IsWalkableAt(nx, ny) {
+		if nx >= 0 && nx < w && ny >= 0 && ny < g.height && nodes[ny*w+nx].Walkable {
 			neighbors = append(neighbors, nodes[ny*w+nx])
 		}
 	}
 
 	return neighbors
 }
+
+// RenderSVG renders the hex grid and an optional path as an SVG string.
+func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) string {
+	padding := 20.0
+
+	// Find bounds of all tile center points
+	minX, minY := math.MaxFloat64, math.MaxFloat64
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			cx, cy := g.tileToScreenCoords(x, y)
+			if cx < minX {
+				minX = cx
+			}
+			if cy < minY {
+				minY = cy
+			}
+		}
+	}
+
+	// Build hex polygon vertices relative to tile center
+	var hexOffsets [][2]float64
+	if g.staggerX {
+		// Flat-top: pointy top and bottom, flat top and bottom
+		h := float64(g.renH)
+		w := float64(g.tileW)
+		sideOff := float64(g.sideOffX)
+		hexOffsets = [][2]float64{
+			{sideOff, 0},
+			{w - sideOff, 0},
+			{w, h / 2},
+			{w - sideOff, h},
+			{sideOff, h},
+			{0, h / 2},
+		}
+	} else {
+		// Pointy-top: flat top and bottom, pointy left and right
+		w := float64(g.renW)
+		h := float64(g.tileH)
+		sideOff := float64(g.sideOffY)
+		hexOffsets = [][2]float64{
+			{w / 2, 0},
+			{w, sideOff},
+			{w, h - sideOff},
+			{w / 2, h},
+			{0, h - sideOff},
+			{0, sideOff},
+		}
+	}
+
+	// Find bounds of all hex vertices to compute SVG size
+	vxMin, vyMin := math.MaxFloat64, math.MaxFloat64
+	vxMax, vyMax := -math.MaxFloat64, -math.MaxFloat64
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			cx, cy := g.tileToScreenCoords(x, y)
+			for _, off := range hexOffsets {
+				vx := cx + off[0]
+				vy := cy + off[1]
+				if vx < vxMin {
+					vxMin = vx
+				}
+				if vy < vyMin {
+					vyMin = vy
+				}
+				if vx > vxMax {
+					vxMax = vx
+				}
+				if vy > vyMax {
+					vyMax = vy
+				}
+			}
+		}
+	}
+
+	svgW := (vxMax - vxMin) + padding*2
+	svgH := (vyMax - vyMin) + padding*2
+	dx := padding - vxMin
+	dy := padding - vyMin
+
+	var b strings.Builder
+	b.WriteString(xmlHeader(int(math.Ceil(svgW)), int(math.Ceil(svgH))))
+
+	// Draw tiles
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			cx, cy := g.tileToScreenCoords(x, y)
+			fill := "#ffffff"
+			stroke := "#cccccc"
+			if !g.IsWalkableAt(x, y) {
+				fill = "#333333"
+				stroke = "#333333"
+			}
+			pts := make([]string, len(hexOffsets))
+			for i, off := range hexOffsets {
+				pts[i] = fmt.Sprintf("%.1f,%.1f", cx+off[0]+dx, cy+off[1]+dy)
+			}
+			fmt.Fprintf(&b, `<polygon points="%s" fill="%s" stroke="%s" stroke-width="1"/>`+"\n",
+				strings.Join(pts, " "), fill, stroke)
+		}
+	}
+
+	drawPathAndMarkers(&b, path, startX, startY, endX, endY,
+		func(tx, ty int) (float64, float64) {
+			cx, cy := g.tileToScreenCoords(tx, ty)
+			var cxOff, cyOff float64
+			if g.staggerX {
+				cxOff = float64(g.tileW) / 2
+				cyOff = float64(g.renH) / 2
+			} else {
+				cxOff = float64(g.renW) / 2
+				cyOff = float64(g.tileH) / 2
+			}
+			return cx + cxOff + dx, cy + cyOff + dy
+		})
+
+	b.WriteString("</svg>\n")
+	return b.String()
+}
+
+// RenderSVG renders the staggered grid and an optional path as an SVG string.

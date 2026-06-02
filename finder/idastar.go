@@ -10,7 +10,8 @@ type IDAStarFinder struct {
 	TrackRecursion   bool
 	TimeLimit        float64
 
-	searchSeq int
+	searchSeq   int
+	neighborBuf []*Node
 }
 
 // NewIDAStarFinder creates a new IDAStarFinder.
@@ -22,6 +23,7 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 		DiagonalMovement: DiagonalNever,
 		TrackRecursion:   false,
 		TimeLimit:        -1,
+		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -68,7 +70,7 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 	startTime := time.Now()
 	hasTimeLimit := f.TimeLimit > 0
 
-	neighborBuf := make([]*Node, 0, 8)
+	neighborBuf := f.neighborBuf[:0]
 	var search func(node *Node, g, cutoff float64, route [][2]int, depth int) (float64, bool)
 
 	search = func(node *Node, g, cutoff float64, route [][2]int, depth int) (float64, bool) {

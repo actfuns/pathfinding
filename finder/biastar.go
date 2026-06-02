@@ -6,7 +6,11 @@ type BiAStarFinder struct {
 	Weight           float64
 	DiagonalMovement DiagonalMovement
 
-	searchSeq int
+	searchSeq      int
+	neighborBuf    []*Node
+	startHeapSlice []*Node
+	endHeapSlice   []*Node
+	pathBuf        [][2]int
 }
 
 // NewBiAStarFinder creates a new BiAStarFinder.
@@ -16,6 +20,7 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 		Heuristic:        Manhattan,
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
+		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -51,9 +56,9 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 		BY_END   = 2
 	)
 
-	cmp := func(a, b *Node) bool { return a.F < b.F }
-	startOpenList := NewMinHeap(cmp)
-	endOpenList := NewMinHeap(cmp)
+	startOpenList := &MinHeap{nodes: f.startHeapSlice[:0]}
+	endOpenList := &MinHeap{nodes: f.endHeapSlice[:0]}
+	defer func() { f.startHeapSlice = startOpenList.nodes[:0]; f.endHeapSlice = endOpenList.nodes[:0] }()
 
 	startNode.G = 0
 	startNode.F = 0
@@ -65,7 +70,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 	endOpenList.Push(endNode)
 	endNode.Opened = BY_END
 
-	neighborBuf := make([]*Node, 0, 8)
+	neighborBuf := f.neighborBuf[:0]
 
 	for !startOpenList.Empty() && !endOpenList.Empty() {
 		node := startOpenList.Pop()

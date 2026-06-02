@@ -1,15 +1,15 @@
 package finder
 
-// MinHeap is a binary heap matching the JS `heap` npm package behavior.
+// MinHeap is a binary heap for A* open list, ordered by F value.
+// The less function pointer is intentionally NOT used — the comparison is
+// hardcoded as a.F < b.F to enable compiler inlining of the hot path.
 type MinHeap struct {
 	nodes []*Node
-	less  func(a, b *Node) bool
 }
 
-func NewMinHeap(less func(a, b *Node) bool) *MinHeap {
+func NewMinHeap() *MinHeap {
 	return &MinHeap{
 		nodes: make([]*Node, 0, 64),
-		less:  less,
 	}
 }
 
@@ -50,7 +50,7 @@ func (h *MinHeap) UpdateItem(node *Node) {
 func (h *MinHeap) siftDownFrom(pos, start int) {
 	for pos > start {
 		parent := (pos - 1) >> 1
-		if !h.less(h.nodes[pos], h.nodes[parent]) {
+		if !(h.nodes[pos].F < h.nodes[parent].F) {
 			break
 		}
 		h.swap(pos, parent)
@@ -65,7 +65,7 @@ func (h *MinHeap) siftUpFrom(pos int) {
 	child := 2*pos + 1
 	for child < n {
 		right := child + 1
-		if right < n && !h.less(h.nodes[child], h.nodes[right]) {
+		if right < n && !(h.nodes[child].F < h.nodes[right].F) {
 			child = right
 		}
 		h.nodes[pos] = h.nodes[child]

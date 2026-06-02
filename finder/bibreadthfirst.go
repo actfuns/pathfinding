@@ -4,7 +4,9 @@ package finder
 type BiBreadthFirstFinder struct {
 	DiagonalMovement DiagonalMovement
 
-	searchSeq int
+	searchSeq   int
+	neighborBuf []*Node
+	pathBuf     [][2]int
 }
 
 // NewBiBreadthFirstFinder creates a new BiBreadthFirstFinder.
@@ -12,6 +14,7 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 	opt := ApplyOptions(opts)
 	f := &BiBreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
+		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -51,7 +54,7 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 	endNode.Parent = nil
 	endNode.By = BY_END
 
-	neighborBuf := make([]*Node, 0, 8)
+	neighborBuf := f.neighborBuf[:0]
 
 	for len(startOpenList) > 0 && len(endOpenList) > 0 {
 		node := startOpenList[0]

@@ -4,7 +4,9 @@ package finder
 type BreadthFirstFinder struct {
 	DiagonalMovement DiagonalMovement
 
-	searchSeq int
+	searchSeq   int
+	neighborBuf []*Node
+	pathBuf     [][2]int
 }
 
 // NewBreadthFirstFinder creates a new BreadthFirstFinder.
@@ -12,6 +14,7 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 	opt := ApplyOptions(opts)
 	f := &BreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
+		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -36,7 +39,7 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid)
 	openList = append(openList, startNode)
 	startNode.Opened = 1
 
-	neighborBuf := make([]*Node, 0, 8)
+	neighborBuf := f.neighborBuf[:0]
 
 	for len(openList) > 0 {
 		node := openList[0]
@@ -44,7 +47,14 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid)
 		node.Closed = true
 
 		if node == endNode {
-			return Backtrace(endNode)
+			f.pathBuf = f.pathBuf[:0]
+			for n := endNode; n != nil; n = n.Parent {
+				f.pathBuf = append(f.pathBuf, [2]int{n.X, n.Y})
+			}
+			for i, j := 0, len(f.pathBuf)-1; i < j; i, j = i+1, j-1 {
+				f.pathBuf[i], f.pathBuf[j] = f.pathBuf[j], f.pathBuf[i]
+			}
+			return f.pathBuf
 		}
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)

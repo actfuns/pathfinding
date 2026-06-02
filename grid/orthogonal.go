@@ -1,18 +1,22 @@
 package grid
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/actfuns/pathfinding/finder"
 )
 
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
 // World-space helpers convert using tileW/tileH.
 type OrthogonalGrid struct {
-	tileW  int // world units per tile horizontally
-	tileH  int // world units per tile vertically
-	width  int // tiles across
-	height int // tiles down
-	nodes  []*finder.Node
-	finder finder.Finder
+	tileW    int // world units per tile horizontally
+	tileH    int // world units per tile vertically
+	width    int // tiles across
+	height   int // tiles down
+	nodes    []*finder.Node
+	finder   finder.Finder
+	worldBuf [][2]float32
 }
 
 // Finder returns the pathfinder associated with this grid.
@@ -125,14 +129,18 @@ func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if path == nil {
 		return nil
 	}
-	wp := make([][2]float32, len(path))
+	if cap(g.worldBuf) >= len(path) {
+		g.worldBuf = g.worldBuf[:len(path)]
+	} else {
+		g.worldBuf = make([][2]float32, len(path))
+	}
 	for i, p := range path {
-		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
+		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
 	}
 	// Use original world coordinates for first and last points
-	wp[0][0], wp[0][1] = wx1, wy1
-	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
-	return wp
+	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
+	return g.worldBuf
 }
 
 // FindSmoothPath finds a path between two world positions and smooths it.
@@ -150,44 +158,79 @@ func (g *OrthogonalGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32
 		return nil
 	}
 	path = g.SmoothenTilePath(path)
-	wp := make([][2]float32, len(path))
-	for i, p := range path {
-		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
+	if cap(g.worldBuf) >= len(path) {
+		g.worldBuf = g.worldBuf[:len(path)]
+	} else {
+		g.worldBuf = make([][2]float32, len(path))
 	}
-	wp[0][0], wp[0][1] = wx1, wy1
-	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
-	return wp
+	for i, p := range path {
+		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
+	}
+	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
+	return g.worldBuf
 }
 
 // SmoothenTilePath smooths a tile-coordinate path by removing unnecessary waypoints.
+// Writes the result in-place over the input buffer (which is the finder's cached pathBuf),
+// so the smoothed path reuses the same allocation.
 func (g *OrthogonalGrid) SmoothenTilePath(path [][2]int) [][2]int {
 	if len(path) < 2 {
 		return path
 	}
-	smooth := make([]int, 0, len(path))
-	smooth = append(smooth, 0)
-	last := len(path) - 1
+	writeIdx := 1
 	for i := 2; i < len(path); i++ {
-		line := finder.Interpolate(path[smooth[len(smooth)-1]][0], path[smooth[len(smooth)-1]][1], path[i][0], path[i][1])
-		blocked := false
-		for j := 1; j < len(line); j++ {
-			if !g.IsWalkableAt(line[j][0], line[j][1]) {
-				blocked = true
-				break
-			}
-		}
-		if blocked {
-			smooth = append(smooth, i-1)
+		if !g.tileLineOfSight(path[writeIdx-1], path[i]) {
+			path[writeIdx] = path[i-1]
+			writeIdx++
 		}
 	}
-	if smooth[len(smooth)-1] != last {
-		smooth = append(smooth, last)
+	if path[writeIdx-1] != path[len(path)-1] {
+		path[writeIdx] = path[len(path)-1]
+		writeIdx++
 	}
-	result := make([][2]int, len(smooth))
-	for i, idx := range smooth {
-		result[i] = path[idx]
+	return path[:writeIdx]
+}
+
+// tileLineOfSight checks walkability along a Bresenham line between two tiles without allocating.
+func (g *OrthogonalGrid) tileLineOfSight(a, b [2]int) bool {
+	x0, y0 := a[0], a[1]
+	x1, y1 := b[0], b[1]
+	dx := x1 - x0
+	dy := y1 - y0
+	var sx, sy int
+	if dx < 0 {
+		dx = -dx
+		sx = -1
+	} else {
+		sx = 1
 	}
-	return result
+	if dy < 0 {
+		dy = -dy
+		sy = -1
+	} else {
+		sy = 1
+	}
+	err := dx - dy
+
+	for {
+		if !g.IsWalkableAt(x0, y0) {
+			return false
+		}
+		if x0 == x1 && y0 == y1 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x0 += sx
+		}
+		if e2 < dx {
+			err += dx
+			y0 += sy
+		}
+	}
+	return true
 }
 
 // --- neighbors ---
@@ -253,4 +296,68 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 	}
 
 	return neighbors
+}
+
+// RenderSVG renders the grid and an optional path as an SVG string.
+func (g *OrthogonalGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) string {
+	cellW := 40
+	cellH := 40
+	padding := 20
+	width := g.width*cellW + padding*2
+	height := g.height*cellH + padding*2
+
+	var b strings.Builder
+	b.WriteString(xmlHeader(width, height))
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			rx := padding + x*cellW
+			ry := padding + y*cellH
+			fill := "#ffffff"
+			stroke := "#cccccc"
+			if !g.IsWalkableAt(x, y) {
+				fill = "#333333"
+				stroke = "#333333"
+			}
+			fmt.Fprintf(&b, `<rect x="%d" y="%d" width="%d" height="%d" fill="%s" stroke="%s" stroke-width="1"/>`+"\n",
+				rx, ry, cellW, cellH, fill, stroke)
+		}
+	}
+
+	drawPathAndMarkers(&b, path, startX, startY, endX, endY,
+		func(tx, ty int) (float64, float64) {
+			return float64(padding + tx*cellW + cellW/2),
+				float64(padding + ty*cellH + cellH/2)
+		})
+
+	b.WriteString("</svg>\n")
+	return b.String()
+}
+
+// RenderSVG renders the hex grid and an optional path as an SVG string.
+
+func drawPathAndMarkers(b *strings.Builder, path [][2]int, startX, startY, endX, endY int,
+	centerOf func(tx, ty int) (float64, float64)) {
+
+	if len(path) > 0 {
+		pts := make([]string, len(path))
+		for i, p := range path {
+			cx, cy := centerOf(p[0], p[1])
+			pts[i] = fmt.Sprintf("%.1f,%.1f", cx, cy)
+		}
+		fmt.Fprintf(b, `<polyline points="%s" fill="none" stroke="#0066cc" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`+"\n",
+			strings.Join(pts, " "))
+	}
+
+	sx, sy := centerOf(startX, startY)
+	fmt.Fprintf(b, `<circle cx="%.1f" cy="%.1f" r="6" fill="#00cc44" stroke="#009933" stroke-width="2"/>`+"\n", sx, sy)
+
+	ex, ey := centerOf(endX, endY)
+	fmt.Fprintf(b, `<circle cx="%.1f" cy="%.1f" r="6" fill="#cc0000" stroke="#990000" stroke-width="2"/>`+"\n", ex, ey)
+}
+
+func xmlHeader(w, h int) string {
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">
+`, w, h, w, h)
 }

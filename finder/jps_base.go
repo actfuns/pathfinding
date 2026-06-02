@@ -10,6 +10,9 @@ type JumpPointFinderBase struct {
 	endNode          *Node
 	openList         *MinHeap
 	neighborBuf      []*Node
+	heapSlice        []*Node
+	pathBuf          [][2]int
+	expandBuf        [][2]int
 
 	searchSeq int
 
@@ -31,6 +34,7 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 		Heuristic:        Manhattan,
 		DiagonalMovement: opt.DiagonalMovement,
 		TrackRecursion:   false,
+		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic
@@ -42,13 +46,12 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 // FindPath finds a path using JPS.
 func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
 	b.searchSeq++
-	b.openList = NewMinHeap(func(a, bNode *Node) bool {
-		return a.F < bNode.F
-	})
+	b.openList = &MinHeap{nodes: b.heapSlice[:0]}
+	defer func() { b.heapSlice = b.openList.nodes[:0] }()
 	b.startNode = grid.GetNodeAt(startX, startY)
 	b.endNode = grid.GetNodeAt(endX, endY)
 	b.grid = grid
-	b.neighborBuf = make([]*Node, 0, 8)
+	b.neighborBuf = b.neighborBuf[:0]
 
 	b.startNode.ResetSearch(b.searchSeq)
 	b.endNode.ResetSearch(b.searchSeq)
@@ -62,7 +65,17 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 		node.Closed = true
 
 		if node == b.endNode {
-			return ExpandPath(Backtrace(b.endNode))
+			b.pathBuf = b.pathBuf[:0]
+			for n := b.endNode; n != nil; n = n.Parent {
+				b.pathBuf = append(b.pathBuf, [2]int{n.X, n.Y})
+			}
+			for i, j := 0, len(b.pathBuf)-1; i < j; i, j = i+1, j-1 {
+				b.pathBuf[i], b.pathBuf[j] = b.pathBuf[j], b.pathBuf[i]
+			}
+			// Jump point paths skip intermediate tiles, so ExpandPath fills them in.
+			// This still allocates the expanded result, which can't be cached
+			// because the expansion length varies per path.
+			return ExpandPath(b.pathBuf)
 		}
 
 		b.identifySuccessors(node)
@@ -99,7 +112,7 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node) {
 
 		jx, jy := jumpPoint[0], jumpPoint[1]
 		jumpNode := grid.GetNodeAt(jx, jy)
-			jumpNode.ResetSearch(b.searchSeq)
+		jumpNode.ResetSearch(b.searchSeq)
 
 		if jumpNode.Closed {
 			continue
@@ -138,5 +151,42 @@ func NewJumpPointFinder(opts ...Option) Finder {
 		return NewJPFMoveDiagonallyIfNoObstacles(opts...)
 	default:
 		return NewJPFMoveDiagonallyIfAtMostOneObstacle(opts...)
+	}
+}
+
+// appendLine appends Bresenham line tiles from (x0,y0) to (x1,y1),
+// excluding the start point (already in expandBuf), without allocating.
+func (b *JumpPointFinderBase) appendLine(x0, y0, x1, y1 int) {
+	dx := x1 - x0
+	dy := y1 - y0
+	var sx, sy int
+	if dx < 0 {
+		dx = -dx
+		sx = -1
+	} else {
+		sx = 1
+	}
+	if dy < 0 {
+		dy = -dy
+		sy = -1
+	} else {
+		sy = 1
+	}
+	err := dx - dy
+
+	for {
+		if x0 == x1 && y0 == y1 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x0 += sx
+		}
+		if e2 < dx {
+			err += dx
+			y0 += sy
+		}
+		b.expandBuf = append(b.expandBuf, [2]int{x0, y0})
 	}
 }
