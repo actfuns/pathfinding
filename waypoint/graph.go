@@ -188,3 +188,36 @@ func distSq(x1, y1, x2, y2 int) float64 {
 	dy := y1 - y2
 	return float64(dx*dx + dy*dy)
 }
+
+// ConnectNearby auto-connects all nodes that are within maxDistance of each
+// other and have a clear line of sight on the given grid. Nodes that already
+// have edges are not reconnected. This is useful after manually placing nodes.
+func (g *WaypointGraph) ConnectNearby(maxDistance int, grid GridLOS) {
+	maxDistSq := maxDistance * maxDistance
+	for i, a := range g.Nodes {
+		for _, b := range g.Nodes[i+1:] {
+			d := (a.X-b.X)*(a.X-b.X) + (a.Y-b.Y)*(a.Y-b.Y)
+			if d > maxDistSq {
+				continue
+			}
+			if !hasLineOfSight(a.X, a.Y, b.X, b.Y, grid) {
+				continue
+			}
+			// Only connect if not already connected
+			connected := false
+			for _, e := range a.Edges {
+				if e.To == b {
+					connected = true
+					break
+				}
+			}
+			if !connected {
+				dx := a.X - b.X
+				dy := a.Y - b.Y
+				cost := sqrt(float64(dx*dx + dy*dy))
+				a.Edges = append(a.Edges, &WaypointEdge{To: b, Cost: cost, State: EdgeStateStatic})
+				b.Edges = append(b.Edges, &WaypointEdge{To: a, Cost: cost, State: EdgeStateStatic})
+			}
+		}
+	}
+}
