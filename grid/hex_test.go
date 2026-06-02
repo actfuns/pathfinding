@@ -251,3 +251,48 @@ func TestHexPointySelfConsistent(t *testing.T) {
 		_ = math.Abs
 	}
 }
+
+// --- SVG rendering ---
+
+func TestHexSVG(t *testing.T) {
+	scenarios := []svgScenario{
+		{
+			name: "simple 3x3", startX: 0, startY: 0, endX: 2, endY: 2,
+			matrix: [][]int{
+				{0, 0, 0},
+				{0, 1, 0},
+				{0, 0, 0},
+			},
+		},
+		{
+			name: "4x3 with obstacles", startX: 0, startY: 0, endX: 3, endY: 2,
+			matrix: [][]int{
+				{0, 0, 0, 0},
+				{0, 1, 1, 0},
+				{0, 0, 0, 0},
+			},
+		},
+		{
+			name: "all open 8x6", startX: 0, startY: 0, endX: 7, endY: 5,
+			matrix: func() [][]int {
+				m := make([][]int, 6)
+				for i := range m {
+					m[i] = make([]int, 8)
+				}
+				return m
+			}(),
+		},
+	}
+
+	t.Run("pointy-top", func(t *testing.T) {
+		runSVGTest(t, "hex_pointy", scenarios, func(matrix [][]int) gridForSVG {
+			return NewHexGrid(matrix, WithHexTileSize(55, 64), WithHexSide(32))
+		})
+	})
+
+	t.Run("flat-top", func(t *testing.T) {
+		runSVGTest(t, "hex_flat", scenarios, func(matrix [][]int) gridForSVG {
+			return NewHexGrid(matrix, WithHexTileSize(64, 55), WithHexSide(32), WithHexFlatTop())
+		})
+	})
+}

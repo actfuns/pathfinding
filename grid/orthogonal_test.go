@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -80,5 +81,55 @@ func TestOrthogonalRoundTrip(t *testing.T) {
 			t.Errorf("WorldToTile(%v,%v) = (%d,%d), worldY %v not in [%v,%v)",
 				wp[0], wp[1], tx, ty, wp[1], tileTop, tileTop+float32(g.tileH))
 		}
+	}
+}
+
+// --- SVG rendering ---
+
+func TestOrthogonalSVG(t *testing.T) {
+	scenarios := []svgScenario{
+		{
+			name: "simple 2x2", startX: 0, startY: 0, endX: 1, endY: 1,
+			matrix: [][]int{{0, 0}, {1, 0}},
+		},
+		{
+			name: "5x6 maze", startX: 1, startY: 1, endX: 4, endY: 4,
+			matrix: [][]int{
+				{0, 0, 0, 0, 0},
+				{1, 0, 1, 1, 0},
+				{1, 0, 1, 0, 0},
+				{0, 1, 0, 0, 0},
+				{1, 0, 1, 1, 0},
+				{0, 0, 1, 0, 0},
+			},
+		},
+		{
+			name: "all open 10x10", startX: 0, startY: 0, endX: 9, endY: 9,
+			matrix: func() [][]int {
+				m := make([][]int, 10)
+				for i := range m {
+					m[i] = make([]int, 10)
+				}
+				return m
+			}(),
+		},
+	}
+	runSVGTest(t, "orthogonal", scenarios, func(matrix [][]int) gridForSVG {
+		return NewOrthogonalGrid(matrix)
+	})
+}
+
+func TestOrthogonalSVG_NoPath(t *testing.T) {
+	g := NewOrthogonalGrid([][]int{
+		{0, 1, 0},
+		{0, 1, 0},
+		{0, 1, 0},
+	})
+	svg := g.RenderSVG(nil, 0, 0, 2, 0)
+	if !strings.Contains(svg, "<svg") {
+		t.Error("SVG missing <svg tag")
+	}
+	if strings.Contains(svg, "#0066cc") {
+		t.Error("SVG should not contain path when nil path given")
 	}
 }

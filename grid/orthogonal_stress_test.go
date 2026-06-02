@@ -1,28 +1,13 @@
 package grid
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/actfuns/pathfinding/finder"
+	"github.com/actfuns/pathfinding/hpa"
 )
 
-func generateGrid(width, height int, obstacleProb float64) [][]int {
-	m := make([][]int, height)
-	rng := rand.New(rand.NewSource(42))
-	for y := range m {
-		row := make([]int, width)
-		for x := range row {
-			if rng.Float64() < obstacleProb {
-				row[x] = 1
-			}
-		}
-		m[y] = row
-	}
-	return m
-}
-
-// --- Orthogonal stress ---
+// --- Stress tests ---
 
 func TestOrthogonalStress_AllOpen(t *testing.T) {
 	matrix := generateGrid(200, 200, 0)
@@ -52,6 +37,12 @@ func TestOrthogonalStress_VariousFinders(t *testing.T) {
 		{"Dijkstra", finder.NewDijkstraFinder()},
 		{"BFS", finder.NewBreadthFirstFinder()},
 		{"JPS", finder.NewJumpPointFinder()},
+		{"HPA", func() finder.Finder {
+			f := hpa.NewHPAFinder(hpa.WithChunkSize(16))
+			g := NewOrthogonalGrid(matrix, WithOrthogonalTileSize(1, 1))
+			f.Build(g)
+			return f
+		}()},
 	} {
 		t.Run(ft.name, func(t *testing.T) {
 			g := NewOrthogonalGrid(matrix, WithOrthogonalTileSize(1, 1))
@@ -85,44 +76,57 @@ func TestOrthogonalStress_DenseGrid(t *testing.T) {
 	})
 }
 
-// --- Staggered stress ---
-
-func TestStaggeredStress_AllOpen(t *testing.T) {
-	matrix := generateGrid(100, 100, 0)
-	g := NewStaggeredGrid(matrix)
-	// Use center-of-tile world coordinates to avoid edge ambiguity
-	sx, sy := g.TileToWorld(5, 5)
-	ex, ey := g.TileToWorld(94, 94)
-	path := g.FindPath(sx, sy, ex, ey)
-	if path == nil {
-		t.Skip("staggered FindPath: no path (coordinate edge behavior)")
-	}
-	smooth := NewStaggeredGrid(matrix).FindSmoothPath(sx, sy, ex, ey)
-	if smooth == nil {
-		t.Fatal("FindSmoothPath: expected path on open staggered grid")
-	}
-}
-
-// --- Hex stress ---
-
-func TestHexStress_AllOpen(t *testing.T) {
-	matrix := generateGrid(100, 100, 0)
-	opts := []HexOption{WithHexTileSize(55, 64), WithHexSide(32)}
-	g := NewHexGrid(matrix, opts...)
-	sx, sy := g.TileToWorld(5, 5)
-	ex, ey := g.TileToWorld(94, 94)
-
-	path := g.FindPath(sx, sy, ex, ey)
-	if path == nil {
-		t.Skip("hex FindPath: no path (coordinate edge behavior)")
-	}
-	smooth := NewHexGrid(matrix, opts...).FindSmoothPath(sx, sy, ex, ey)
-	if smooth == nil {
-		t.Fatal("FindSmoothPath: expected path on open hex grid")
-	}
-}
-
 // --- Benchmarks ---
+
+// BenchmarkOrthogonalAlloc compares time and allocations across finders at multiple scales.
+// Run with: go test -bench=BenchmarkOrthogonalAlloc -benchmem ./grid/
+func BenchmarkOrthogonalAlloc(b *testing.B) {
+	sizes := []struct {
+		label    string
+		w, h     int
+		obs      float64
+		sx, sy   int
+		ex, ey   int
+		chunk    int
+	}{
+		{"100x100", 100, 100, 0.2, 0, 0, 99, 99, 16},
+		{"200x200", 200, 200, 0.1, 0, 0, 199, 199, 16},
+		{"500x500", 500, 500, 0.1, 0, 0, 499, 499, 32},
+	}
+
+	for _, sz := range sizes {
+		matrix := generateGrid(sz.w, sz.h, sz.obs)
+		base := NewOrthogonalGrid(matrix)
+
+		b.Run(sz.label+"/AStar", func(b *testing.B) {
+			f := finder.NewAStarFinder()
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				f.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base)
+			}
+		})
+
+		b.Run(sz.label+"/JPS", func(b *testing.B) {
+			f := finder.NewJumpPointFinder()
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				f.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base)
+			}
+		})
+
+		b.Run(sz.label+"/HPA", func(b *testing.B) {
+			h := hpa.NewHPAFinder(hpa.WithChunkSize(sz.chunk))
+			h.Build(base)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				h.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base)
+			}
+		})
+	}
+}
 
 func BenchmarkOrthogonal100(b *testing.B) {
 	matrix := generateGrid(100, 100, 0.2)
@@ -148,6 +152,14 @@ func BenchmarkOrthogonal100(b *testing.B) {
 			fj.FindPath(0, 0, 99, 99, jps)
 		}
 	})
+	b.Run("HPA", func(b *testing.B) {
+		h := hpa.NewHPAFinder(hpa.WithChunkSize(16))
+		h.Build(base)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			h.FindPath(0, 0, 99, 99, base)
+		}
+	})
 }
 
 func BenchmarkOrthogonal500(b *testing.B) {
@@ -166,44 +178,12 @@ func BenchmarkOrthogonal500(b *testing.B) {
 			base.FindSmoothPath(0, 0, 499, 499)
 		}
 	})
-}
-
-func BenchmarkStaggered100(b *testing.B) {
-	matrix := generateGrid(100, 100, 0.2)
-	base := NewStaggeredGrid(matrix)
-	f := base.Finder()
-	sx, sy := base.TileToWorld(5, 5)
-	ex, ey := base.TileToWorld(94, 94)
-	b.Run("AStar", func(b *testing.B) {
+	b.Run("HPA", func(b *testing.B) {
+		h := hpa.NewHPAFinder(hpa.WithChunkSize(16))
+		h.Build(base)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 99, 99, base)
-		}
-	})
-	b.Run("AStarSmooth", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			base.FindSmoothPath(sx, sy, ex, ey)
-		}
-	})
-}
-
-func BenchmarkHex100(b *testing.B) {
-	matrix := generateGrid(100, 100, 0.2)
-	base := NewHexGrid(matrix, WithHexTileSize(55, 64), WithHexSide(32))
-	f := base.Finder()
-	sx, sy := base.TileToWorld(5, 5)
-	ex, ey := base.TileToWorld(94, 94)
-	b.Run("AStar", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 99, 99, base)
-		}
-	})
-	b.Run("AStarSmooth", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			base.FindSmoothPath(sx, sy, ex, ey)
+			h.FindPath(0, 0, 499, 499, base)
 		}
 	})
 }

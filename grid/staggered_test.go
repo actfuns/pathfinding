@@ -123,12 +123,46 @@ func TestStaggeredRelativeCoords(t *testing.T) {
 		{1, 1, staggeredBottomRight, 2, 2},
 	}
 	for _, tt := range tests {
-		rx, ry := tt.fn(tt.x, tt.y, false, false) // staggerY=false, staggerEven=false → staggerX=false? No...
-		// Wait, staggeredTopLeft signature: (x, y, staggerX, staggerEven) → for staggerY odd:
-		// staggerX=false, staggerEven=false
-		rx, ry = tt.fn(tt.x, tt.y, false, false)
+		rx, ry := tt.fn(tt.x, tt.y, false, false)
 		if rx != tt.ex || ry != tt.ey {
 			t.Errorf("(%d,%d) → (%d,%d), want (%d,%d)", tt.x, tt.y, rx, ry, tt.ex, tt.ey)
 		}
 	}
+}
+
+// --- SVG rendering ---
+
+func TestStaggeredSVG(t *testing.T) {
+	scenarios := []svgScenario{
+		{
+			name: "simple 3x3", startX: 0, startY: 0, endX: 2, endY: 2,
+			matrix: [][]int{
+				{0, 0, 0},
+				{0, 1, 0},
+				{0, 0, 0},
+			},
+		},
+		{
+			name: "4x3 with obstacles", startX: 0, startY: 0, endX: 3, endY: 2,
+			matrix: [][]int{
+				{0, 0, 0, 0},
+				{0, 1, 1, 0},
+				{0, 0, 0, 0},
+			},
+		},
+		{
+			name: "all open 8x6", startX: 0, startY: 0, endX: 7, endY: 5,
+			matrix: func() [][]int {
+				m := make([][]int, 6)
+				for i := range m {
+					m[i] = make([]int, 8)
+				}
+				return m
+			}(),
+		},
+	}
+
+	runSVGTest(t, "staggered", scenarios, func(matrix [][]int) gridForSVG {
+		return NewStaggeredGrid(matrix)
+	})
 }
