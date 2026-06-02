@@ -46,15 +46,15 @@ func (h *MinHeap) Pop() *Node {
 	return root
 }
 
-// UpdateItem restores the heap invariant after a node's F value has changed.
-// It is a no-op if the node does not belong to this heap.
+// UpdateItem restores the heap invariant after a node's F value has decreased.
+// In the A* algorithm this is only called when G (and thus F) strictly decreases,
+// so the node can only move upward toward the root — the sift-down pass is unnecessary.
 func (h *MinHeap) UpdateItem(node *Node) {
 	pos := node.HeapIndex
 	if pos < 0 || pos >= len(h.nodes) || h.nodes[pos] != node {
 		return
 	}
 	h.siftDownFrom(pos, 0)
-	h.siftUpFrom(pos)
 }
 
 func (h *MinHeap) siftDownFrom(pos, start int) {
