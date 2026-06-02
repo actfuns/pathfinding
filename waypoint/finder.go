@@ -14,9 +14,42 @@ type WaypointFinder struct {
 	graph *WaypointGraph
 }
 
-// NewWaypointFinder creates a finder for the given graph.
-func NewWaypointFinder(graph *WaypointGraph) *WaypointFinder {
-	return &WaypointFinder{graph: graph}
+// WaypointOption configures a WaypointFinder.
+type WaypointOption func(*WaypointFinder)
+
+// WithGraph sets the waypoint graph. If not provided, a new empty graph
+// is created internally. Use this when sharing a graph between multiple finders
+// or when loading a pre-built graph.
+func WithGraph(g *WaypointGraph) WaypointOption {
+	return func(f *WaypointFinder) { f.graph = g }
+}
+
+// NewWaypointFinder creates a WaypointFinder with the given options.
+// By default it creates an internal WaypointGraph. Use WithGraph to
+// inject a pre-built graph.
+func NewWaypointFinder(opts ...WaypointOption) *WaypointFinder {
+	f := &WaypointFinder{
+		graph: NewWaypointGraph(),
+	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
+}
+
+// AddNode adds a waypoint node at tile coordinate (x, y) and returns it.
+func (f *WaypointFinder) AddNode(x, y int) *WaypointNode {
+	return f.graph.AddNode(x, y)
+}
+
+// Connect creates a bidirectional edge between two nodes.
+func (f *WaypointFinder) Connect(a, b *WaypointNode, states ...EdgeState) {
+	a.Connect(b, states...)
+}
+
+// ConnectOneWay creates a directed edge from node a to node b.
+func (f *WaypointFinder) ConnectOneWay(a, b *WaypointNode, states ...EdgeState) {
+	a.ConnectOneWay(b, states...)
 }
 
 // FindPath implements finder.Finder by searching the waypoint graph.
@@ -44,35 +77,7 @@ func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Gr
 	return result
 }
 
-// FindPathFloat finds a path in world-space coordinates. The coordinates are
-// truncated to tile coordinates for graph operations. Consider using FindPath
-// (which implements finder.Finder) for grid-integrated pathfinding.
-func (f *WaypointFinder) FindPathFloat(startX, startY, endX, endY float64) [][2]float64 {
-	sx, sy := int(startX), int(startY)
-	ex, ey := int(endX), int(endY)
-
-	startNode := f.graph.FindClosest(sx, sy)
-	endNode := f.graph.FindClosest(ex, ey)
-	if startNode == nil || endNode == nil {
-		return nil
-	}
-	if startNode == endNode {
-		return [][2]float64{{startX, startY}, {endX, endY}}
-	}
-
-	path := f.findPathInternal(startNode, endNode, sx, sy, ex, ey)
-	if path == nil {
-		return nil
-	}
-
-	fpath := make([][2]float64, 0, len(path))
-	for _, p := range path {
-		fpath = append(fpath, [2]float64{float64(p[0]), float64(p[1])})
-	}
-	return fpath
-}
-
-// findPathInternal runs A* between two graph nodes and returns the path as tile coordinates.
+// findPathInternal runs A* between two graph nodes.
 func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, startX, startY, endX, endY int) [][2]int {
 	open := &nodeHeap{}
 	all := make(map[*WaypointNode]*aNode)
