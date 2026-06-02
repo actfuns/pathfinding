@@ -178,3 +178,122 @@ func hasEdge(a, b *WaypointNode) bool {
 	}
 	return false
 }
+
+// connectNearbyLinear is the original O(n^2) reference implementation for comparison.
+func connectNearbyLinear(g *WaypointGraph, maxDistance int, grid GridLOS) {
+	maxDistSq := maxDistance * maxDistance
+	for i, a := range g.Nodes {
+		for _, b := range g.Nodes[i+1:] {
+			d := (a.X-b.X)*(a.X-b.X) + (a.Y-b.Y)*(a.Y-b.Y)
+			if d > maxDistSq {
+				continue
+			}
+			if !hasLineOfSight(a.X, a.Y, b.X, b.Y, grid) {
+				continue
+			}
+			connected := false
+			for _, e := range a.Edges {
+				if e.To == b {
+					connected = true
+					break
+				}
+			}
+			if !connected {
+				dx := a.X - b.X
+				dy := a.Y - b.Y
+				cost := sqrt(float64(dx*dx + dy*dy))
+				a.Edges = append(a.Edges, &WaypointEdge{To: b, Cost: cost, State: EdgeStateStatic})
+				b.Edges = append(b.Edges, &WaypointEdge{To: a, Cost: cost, State: EdgeStateStatic})
+			}
+		}
+	}
+}
+
+func TestFindClosestSpatial(t *testing.T) {
+	g := NewWaypointGraph()
+	// Add nodes across cell boundaries (cellSize=64)
+	g.AddNode(0, 0)
+	g.AddNode(63, 63)
+	g.AddNode(64, 64)
+	g.AddNode(128, 0)
+
+	tests := []struct {
+		px, py int
+		wx, wy int
+	}{
+		{0, 0, 0, 0},
+		{62, 62, 63, 63},
+		{63, 64, 63, 63}, // (63,63) and (64,64) both d²=1, (63,63) encountered first
+		{96, 32, 128, 0},
+		{200, 200, 64, 64}, // d²=36992 to (64,64) < 45184 to (128,0)
+	}
+	for _, tt := range tests {
+		n := g.FindClosest(tt.px, tt.py)
+		if n == nil {
+			t.Fatalf("FindClosest(%d,%d) = nil", tt.px, tt.py)
+		}
+		if n.X != tt.wx || n.Y != tt.wy {
+			t.Errorf("FindClosest(%d,%d) = (%d,%d), want (%d,%d)",
+				tt.px, tt.py, n.X, n.Y, tt.wx, tt.wy)
+		}
+	}
+}
+
+func TestConnectNearbySpatial(t *testing.T) {
+	g := NewWaypointGraph()
+	// Nodes across multiple cells
+	g.AddNode(0, 0)   // cell 0
+	g.AddNode(60, 0)  // cell 0
+	g.AddNode(70, 0)  // cell 1
+	g.AddNode(128, 0) // cell 2 (far)
+
+	grid := walkableGrid(200, 10)
+	g.ConnectNearby(65, grid)
+
+	if !hasEdge(g.Nodes[0], g.Nodes[1]) {
+		t.Error("Nodes 0-1 should be connected (dist=60)")
+	}
+	if !hasEdge(g.Nodes[1], g.Nodes[2]) {
+		t.Error("Nodes 1-2 should be connected (dist=10)")
+	}
+	if hasEdge(g.Nodes[0], g.Nodes[3]) {
+		t.Error("Nodes 0-3 should NOT be connected (dist=128)")
+	}
+}
+
+func TestConnectNearbySpatialConsistency(t *testing.T) {
+	// Verify spatial-index version produces same results as O(n^2) reference
+	g1 := NewWaypointGraph()
+	g2 := NewWaypointGraph()
+	for _, p := range []struct{ x, y int }{
+		{0, 0}, {10, 0}, {20, 5}, {5, 15}, {30, 30}, {100, 0}, {50, 50},
+	} {
+		g1.AddNode(p.x, p.y)
+		g2.AddNode(p.x, p.y)
+	}
+
+	grid := walkableGrid(150, 60)
+	g1.ConnectNearby(25, grid)
+	connectNearbyLinear(g2, 25, grid)
+
+	for i := range g1.Nodes {
+		if len(g1.Nodes[i].Edges) != len(g2.Nodes[i].Edges) {
+			t.Errorf("node %d edge count: spatial=%d, linear=%d",
+				i, len(g1.Nodes[i].Edges), len(g2.Nodes[i].Edges))
+		}
+	}
+}
+
+func BenchmarkConnectNearby(b *testing.B) {
+	grid := walkableGrid(500, 500)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		g := NewWaypointGraph()
+		for x := 0; x < 500; x += 20 {
+			for y := 0; y < 500; y += 20 {
+				g.AddNode(x, y)
+			}
+		}
+		g.ConnectNearby(30, grid)
+	}
+}

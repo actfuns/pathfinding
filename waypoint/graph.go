@@ -79,38 +79,95 @@ type WaypointEdge struct {
 
 // WaypointGraph holds all nodes in the waypoint graph.
 type WaypointGraph struct {
-	Nodes []*WaypointNode
+	Nodes    []*WaypointNode
+	cellSize int                        // spatial index cell size
+	cellIdx  map[[2]int][]*WaypointNode // cell key → nodes in cell
 }
 
-// NewWaypointGraph creates an empty waypoint graph.
+// NewWaypointGraph creates an empty waypoint graph with spatial indexing.
 func NewWaypointGraph() *WaypointGraph {
 	return &WaypointGraph{
-		Nodes: make([]*WaypointNode, 0),
+		Nodes:    make([]*WaypointNode, 0),
+		cellSize: 64,
+		cellIdx:  make(map[[2]int][]*WaypointNode),
 	}
 }
 
 // AddNode adds a node at tile coordinate (x, y) and returns it.
+// The node is automatically registered in the spatial index.
 func (g *WaypointGraph) AddNode(x, y int) *WaypointNode {
 	n := NewWaypointNode(len(g.Nodes), x, y)
 	g.Nodes = append(g.Nodes, n)
+	ck := [2]int{x / g.cellSize, y / g.cellSize}
+	g.cellIdx[ck] = append(g.cellIdx[ck], n)
 	return n
 }
 
 // FindClosest finds the closest node to tile coordinate (x, y).
+// Uses the spatial index for O(1)~O(k) lookup instead of O(n) scan.
 func (g *WaypointGraph) FindClosest(x, y int) *WaypointNode {
 	if len(g.Nodes) == 0 {
 		return nil
 	}
-	best := g.Nodes[0]
-	bestD := distSq(best.X, best.Y, x, y)
-	for _, n := range g.Nodes[1:] {
-		d := distSq(n.X, n.Y, x, y)
-		if d < bestD {
-			bestD = d
-			best = n
+	cx := x / g.cellSize
+	cy := y / g.cellSize
+	best := (*WaypointNode)(nil)
+	bestD := math.MaxFloat64
+
+	for radius := 0; ; radius++ {
+		minCellDist := radius * g.cellSize
+		if best != nil && float64(minCellDist) >= bestD {
+			break
+		}
+
+		found := false
+		for dy := -radius; dy <= radius; dy++ {
+			for dx := -radius; dx <= radius; dx++ {
+				if radius > 0 && abs(dx) < radius && abs(dy) < radius {
+					continue
+				}
+				ck := [2]int{cx + dx, cy + dy}
+				nodes, ok := g.cellIdx[ck]
+				if !ok {
+					continue
+				}
+				found = true
+				for _, n := range nodes {
+					d := distSq(n.X, n.Y, x, y)
+					if d < bestD {
+						bestD = d
+						best = n
+					}
+				}
+			}
+		}
+		if !found && best != nil {
+			break
+		}
+		if !found && radius > 16 {
+			break
+		}
+	}
+	if best == nil {
+		// Fallback: linear scan
+		best = g.Nodes[0]
+		bestD = distSq(best.X, best.Y, x, y)
+		for _, n := range g.Nodes[1:] {
+			d := distSq(n.X, n.Y, x, y)
+			if d < bestD {
+				bestD = d
+				best = n
+			}
 		}
 	}
 	return best
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 // GridLOS is the interface required for LOS-based node selection.
@@ -122,23 +179,58 @@ type GridLOS interface {
 // FindClosestWithLOS finds the closest node that has a clear line of sight
 // from the given position on the specified grid. If no node has LOS, falls
 // back to the closest node regardless of LOS.
+// Uses the spatial index for efficient lookup.
 func (g *WaypointGraph) FindClosestWithLOS(x, y int, grid GridLOS) *WaypointNode {
 	if len(g.Nodes) == 0 {
 		return nil
 	}
+	cx := x / g.cellSize
+	cy := y / g.cellSize
 	var best *WaypointNode
 	bestD := math.MaxFloat64
-	for _, n := range g.Nodes {
-		if hasLineOfSight(x, y, n.X, n.Y, grid) {
-			d := distSq(n.X, n.Y, x, y)
-			if d < bestD {
-				bestD = d
-				best = n
+	var anyBest *WaypointNode
+	anyBestD := math.MaxFloat64
+
+	for radius := 0; ; radius++ {
+		minCellDist := radius * g.cellSize
+		if best != nil && float64(minCellDist) >= bestD {
+			break
+		}
+
+		found := false
+		for dy := -radius; dy <= radius; dy++ {
+			for dx := -radius; dx <= radius; dx++ {
+				if radius > 0 && abs(dx) < radius && abs(dy) < radius {
+					continue
+				}
+				ck := [2]int{cx + dx, cy + dy}
+				nodes, ok := g.cellIdx[ck]
+				if !ok {
+					continue
+				}
+				found = true
+				for _, n := range nodes {
+					d := distSq(n.X, n.Y, x, y)
+					if d < anyBestD {
+						anyBestD = d
+						anyBest = n
+					}
+					if hasLineOfSight(x, y, n.X, n.Y, grid) && d < bestD {
+						bestD = d
+						best = n
+					}
+				}
 			}
+		}
+		if !found && best != nil {
+			break
+		}
+		if !found && radius > 16 {
+			break
 		}
 	}
 	if best == nil {
-		return g.FindClosest(x, y)
+		return anyBest
 	}
 	return best
 }
@@ -191,32 +283,44 @@ func distSq(x1, y1, x2, y2 int) float64 {
 
 // ConnectNearby auto-connects all nodes that are within maxDistance of each
 // other and have a clear line of sight on the given grid. Nodes that already
-// have edges are not reconnected. This is useful after manually placing nodes.
+// have edges are not reconnected. Uses the spatial index for O(n*k) complexity
+// (k = average nodes in neighboring cells) instead of O(n^2).
 func (g *WaypointGraph) ConnectNearby(maxDistance int, grid GridLOS) {
 	maxDistSq := maxDistance * maxDistance
-	for i, a := range g.Nodes {
-		for _, b := range g.Nodes[i+1:] {
-			d := (a.X-b.X)*(a.X-b.X) + (a.Y-b.Y)*(a.Y-b.Y)
-			if d > maxDistSq {
-				continue
-			}
-			if !hasLineOfSight(a.X, a.Y, b.X, b.Y, grid) {
-				continue
-			}
-			// Only connect if not already connected
-			connected := false
-			for _, e := range a.Edges {
-				if e.To == b {
-					connected = true
-					break
+	for _, a := range g.Nodes {
+		ck := [2]int{a.X / g.cellSize, a.Y / g.cellSize}
+		for dy := -1; dy <= 1; dy++ {
+			for dx := -1; dx <= 1; dx++ {
+				nk := [2]int{ck[0] + dx, ck[1] + dy}
+				others, ok := g.cellIdx[nk]
+				if !ok {
+					continue
 				}
-			}
-			if !connected {
-				dx := a.X - b.X
-				dy := a.Y - b.Y
-				cost := sqrt(float64(dx*dx + dy*dy))
-				a.Edges = append(a.Edges, &WaypointEdge{To: b, Cost: cost, State: EdgeStateStatic})
-				b.Edges = append(b.Edges, &WaypointEdge{To: a, Cost: cost, State: EdgeStateStatic})
+				for _, b := range others {
+					if a.ID >= b.ID {
+						continue
+					}
+					d := (a.X-b.X)*(a.X-b.X) + (a.Y-b.Y)*(a.Y-b.Y)
+					if d > maxDistSq {
+						continue
+					}
+					if !hasLineOfSight(a.X, a.Y, b.X, b.Y, grid) {
+						continue
+					}
+					// Only connect if not already connected
+					connected := false
+					for _, e := range a.Edges {
+						if e.To == b {
+							connected = true
+							break
+						}
+					}
+					if !connected {
+						cost := sqrt(float64(d))
+						a.Edges = append(a.Edges, &WaypointEdge{To: b, Cost: cost, State: EdgeStateStatic})
+						b.Edges = append(b.Edges, &WaypointEdge{To: a, Cost: cost, State: EdgeStateStatic})
+					}
+				}
 			}
 		}
 	}
