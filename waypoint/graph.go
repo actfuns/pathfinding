@@ -21,9 +21,9 @@ func sqrt(x float64) float64 {
 type EdgeState int
 
 const (
-	EdgeStateStatic  EdgeState = 0
-	EdgeStateDynamic EdgeState = 1
-	EdgeStateNull    EdgeState = 2
+	EdgeStateStatic  EdgeState = 0 // always traversable
+	EdgeStateDynamic EdgeState = 1 // can be blocked dynamically
+	EdgeStateNull    EdgeState = 2 // not traversable
 )
 
 // WaypointNode represents a node in the waypoint graph.
