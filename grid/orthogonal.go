@@ -275,7 +275,6 @@ func (g *OrthogonalGrid) tileLineOfSight(a, b [2]int) bool {
 // caller must not hold references past the next call.
 func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
 	x, y := node.X, node.Y
-	w := g.width
 	nodes := g.nodes
 	neighbors := buffer[:0]
 
@@ -284,21 +283,44 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 	s2, d2 := false, false
 	s3, d3 := false, false
 
-	if g.IsWalkableAt(x, y-1) {
-		neighbors = append(neighbors, nodes[(y-1)*w+x])
-		s0 = true
-	}
-	if g.IsWalkableAt(x+1, y) {
-		neighbors = append(neighbors, nodes[y*w+x+1])
-		s1 = true
-	}
-	if g.IsWalkableAt(x, y+1) {
-		neighbors = append(neighbors, nodes[(y+1)*w+x])
-		s2 = true
-	}
-	if g.IsWalkableAt(x-1, y) {
-		neighbors = append(neighbors, nodes[y*w+x-1])
-		s3 = true
+	// Interior nodes (not on any edge) have all 4 orthogonal neighbors in bounds
+	// — skip the IsInside check for those.
+	if x > 0 && x < g.width-1 && y > 0 && y < g.height-1 {
+		w := g.width
+		if nodes[(y-1)*w+x].Walkable {
+			neighbors = append(neighbors, nodes[(y-1)*w+x])
+			s0 = true
+		}
+		if nodes[y*w+x+1].Walkable {
+			neighbors = append(neighbors, nodes[y*w+x+1])
+			s1 = true
+		}
+		if nodes[(y+1)*w+x].Walkable {
+			neighbors = append(neighbors, nodes[(y+1)*w+x])
+			s2 = true
+		}
+		if nodes[y*w+x-1].Walkable {
+			neighbors = append(neighbors, nodes[y*w+x-1])
+			s3 = true
+		}
+	} else {
+		w := g.width
+		if g.IsWalkableAt(x, y-1) {
+			neighbors = append(neighbors, nodes[(y-1)*w+x])
+			s0 = true
+		}
+		if g.IsWalkableAt(x+1, y) {
+			neighbors = append(neighbors, nodes[y*w+x+1])
+			s1 = true
+		}
+		if g.IsWalkableAt(x, y+1) {
+			neighbors = append(neighbors, nodes[(y+1)*w+x])
+			s2 = true
+		}
+		if g.IsWalkableAt(x-1, y) {
+			neighbors = append(neighbors, nodes[y*w+x-1])
+			s3 = true
+		}
 	}
 
 	if diagonal == finder.DiagonalNever {
@@ -321,16 +343,16 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 	}
 
 	if d0 && g.IsWalkableAt(x-1, y-1) {
-		neighbors = append(neighbors, nodes[(y-1)*w+x-1])
+		neighbors = append(neighbors, nodes[(y-1)*g.width+x-1])
 	}
 	if d1 && g.IsWalkableAt(x+1, y-1) {
-		neighbors = append(neighbors, nodes[(y-1)*w+x+1])
+		neighbors = append(neighbors, nodes[(y-1)*g.width+x+1])
 	}
 	if d2 && g.IsWalkableAt(x+1, y+1) {
-		neighbors = append(neighbors, nodes[(y+1)*w+x+1])
+		neighbors = append(neighbors, nodes[(y+1)*g.width+x+1])
 	}
 	if d3 && g.IsWalkableAt(x-1, y+1) {
-		neighbors = append(neighbors, nodes[(y+1)*w+x-1])
+		neighbors = append(neighbors, nodes[(y+1)*g.width+x-1])
 	}
 
 	return neighbors
