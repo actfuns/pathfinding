@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/pathfinding/finder"
 )
 
 // Pointy-top hex (staggerX=false, staggerEven=false)
@@ -20,7 +20,7 @@ import (
 //   py = tileY * rowH = tileY * 48
 
 func TestHexPointyTileToWorld(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, 64, 64, 32, false, false)
+	g := NewHexGrid([][]int{{0}}, WithHexTileSize(64, 64), WithHexSide(32))
 
 	tests := []struct {
 		tx, ty int
@@ -42,7 +42,7 @@ func TestHexPointyTileToWorld(t *testing.T) {
 }
 
 func TestHexPointyWorldToTile(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, 64, 64, 32, false, false)
+	g := NewHexGrid([][]int{{0}}, WithHexTileSize(64, 64), WithHexSide(32))
 
 	// Test known pixel-to-tile mappings (derived from screenToTileCoords algorithm)
 	tests := []struct {
@@ -63,7 +63,7 @@ func TestHexPointyWorldToTile(t *testing.T) {
 }
 
 func TestHexPointyConsistent(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, 64, 64, 32, false, false)
+	g := NewHexGrid([][]int{{0}}, WithHexTileSize(64, 64), WithHexSide(32))
 
 	// Sampling points that should map to specific tiles (verified through
 	// the 4-candidate-center algorithm distances)
@@ -96,7 +96,7 @@ func TestHexPointyConsistent(t *testing.T) {
 //   if doStaggerX(tileX): py += rowH = 32
 
 func TestHexFlatTileToWorld(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, 64, 64, 32, true, false)
+	g := NewHexGrid([][]int{{0}}, WithHexTileSize(64, 64), WithHexSide(32), WithHexFlatTop())
 
 	tests := []struct {
 		tx, ty int
@@ -117,7 +117,7 @@ func TestHexFlatTileToWorld(t *testing.T) {
 }
 
 func TestHexFlatWorldToTile(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, 64, 64, 32, true, false)
+	g := NewHexGrid([][]int{{0}}, WithHexTileSize(64, 64), WithHexSide(32), WithHexFlatTop())
 
 	pointToTile := map[[2]float32][2]int{
 		{10, 20}:  {0, 0},
@@ -141,7 +141,7 @@ func TestHexGetNeighborsPointyEvenRow(t *testing.T) {
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
-	}, 64, 64, 32, false, false)
+	}, WithHexTileSize(64, 64), WithHexSide(32))
 
 	nb := make([]*finder.Node, 0, 8)
 	node := &finder.Node{X: 2, Y: 2} // even row (y=2)
@@ -173,7 +173,7 @@ func TestHexGetNeighborsPointyOddRow(t *testing.T) {
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
-	}, 64, 64, 32, false, false)
+	}, WithHexTileSize(64, 64), WithHexSide(32))
 
 	nb := make([]*finder.Node, 0, 8)
 	node := &finder.Node{X: 2, Y: 1} // odd row (y=1)
@@ -208,7 +208,7 @@ func TestHexGetNeighborsFlatEvenCol(t *testing.T) {
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
-	}, 64, 64, 32, true, false)
+	}, WithHexTileSize(64, 64), WithHexSide(32), WithHexFlatTop())
 
 	nb := make([]*finder.Node, 0, 8)
 	// Even col (x=2)
@@ -237,7 +237,7 @@ func TestHexGetNeighborsFlatEvenCol(t *testing.T) {
 // Round-trip consistency: TileToWorld then WorldToTile should return same tile
 // for any point at the tile's screen position from TileToWorld.
 func TestHexPointySelfConsistent(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, 64, 64, 32, false, false)
+	g := NewHexGrid([][]int{{0}}, WithHexTileSize(64, 64), WithHexSide(32))
 
 	tiles := [][2]int{{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}}
 	for _, tile := range tiles {

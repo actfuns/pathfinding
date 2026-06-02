@@ -16,7 +16,7 @@ func TestStaggeredTileToWorld(t *testing.T) {
 		{0, 0, 0},
 		{0, 0, 0},
 		{0, 0, 0},
-	}, 64, 32, "y", "odd")
+	}, WithStaggerTileSize(64, 32))
 
 	// tileToScreenCoords from Tiled test
 	tests := []struct {
@@ -42,7 +42,7 @@ func TestStaggeredWorldToTile(t *testing.T) {
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
-	}, 64, 32, "y", "odd")
+	}, WithStaggerTileSize(64, 32))
 
 	// screenToTileCoords from Tiled test
 	// Tiled test: QCOMPARE(floor(x), floor(expected_x)), floor(y), floor(expected_y)
@@ -68,7 +68,7 @@ func TestStaggeredWorldToTileTiledSuite(t *testing.T) {
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
-	}, 64, 32, "y", "odd")
+	}, WithStaggerTileSize(64, 32))
 
 	// Tiled screenToTileCoords test data:
 	// Tiled test compares floor(x), floor(y) — so the expected tile coords are the floored values.
@@ -99,8 +99,9 @@ func TestStaggeredWorldToTileTiledSuite(t *testing.T) {
 }
 
 // Staggered relative coordinates (topLeft, topRight, etc.) from Tiled test:
-//   topLeft(0,0) = (-1,-1), topRight(0,0) = (0,-1), bottomLeft(0,0) = (-1,1), bottomRight(0,0) = (0,1)
-//   topLeft(1,1) = (1,0),   topRight(1,1) = (2,0),  bottomLeft(1,1) = (1,2),  bottomRight(1,1) = (2,2)
+//
+//	topLeft(0,0) = (-1,-1), topRight(0,0) = (0,-1), bottomLeft(0,0) = (-1,1), bottomRight(0,0) = (0,1)
+//	topLeft(1,1) = (1,0),   topRight(1,1) = (2,0),  bottomLeft(1,1) = (1,2),  bottomRight(1,1) = (2,2)
 func TestStaggeredRelativeCoords(t *testing.T) {
 	// staggerY, odd
 	tests := []struct {

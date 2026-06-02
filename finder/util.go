@@ -97,35 +97,6 @@ func ExpandPath(path [][2]int) [][2]int {
 	return expanded
 }
 
-// SmoothenPath smooths a path by removing unnecessary waypoints.
-func SmoothenPath(grid Grid, path [][2]int) [][2]int {
-	if len(path) < 2 {
-		return path
-	}
-	sx, sy := path[0][0], path[0][1]
-	x1, y1 := path[len(path)-1][0], path[len(path)-1][1]
-	newPath := [][2]int{{sx, sy}}
-
-	for i := 2; i < len(path); i++ {
-		ex, ey := path[i][0], path[i][1]
-		line := Interpolate(sx, sy, ex, ey)
-		blocked := false
-		for j := 1; j < len(line); j++ {
-			if !grid.IsWalkableAt(line[j][0], line[j][1]) {
-				blocked = true
-				break
-			}
-		}
-		if blocked {
-			lastValid := path[i-1]
-			newPath = append(newPath, lastValid)
-			sx, sy = lastValid[0], lastValid[1]
-		}
-	}
-	newPath = append(newPath, [2]int{x1, y1})
-	return newPath
-}
-
 // CompressPath removes redundant collinear nodes from a path.
 func CompressPath(path [][2]int) [][2]int {
 	if len(path) < 3 {

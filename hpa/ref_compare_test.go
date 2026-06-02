@@ -3,7 +3,7 @@ package hpa
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/grid"
+	"github.com/actfuns/pathfinding/grid"
 )
 
 // ref: hpastar (C#) — https://github.com/ByteExceptions/hpastar

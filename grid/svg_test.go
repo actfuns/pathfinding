@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/pathfinding/finder"
 )
 
 // TestRenderSVG_Orthogonal generates SVG renders for each test scenario
@@ -86,13 +86,13 @@ func TestRenderSVG_Hex(t *testing.T) {
 
 	t.Run("pointy-top", func(t *testing.T) {
 		runSVGTest(t, "hex_pointy", scenarios, func(matrix [][]int) gridForSVG {
-			return NewHexGrid(matrix, 64, 64, 32, false, false)
+			return NewHexGrid(matrix, WithHexTileSize(55, 64), WithHexSide(32))
 		})
 	})
 
 	t.Run("flat-top", func(t *testing.T) {
 		runSVGTest(t, "hex_flat", scenarios, func(matrix [][]int) gridForSVG {
-			return NewHexGrid(matrix, 64, 64, 32, true, false)
+			return NewHexGrid(matrix, WithHexTileSize(64, 55), WithHexSide(32), WithHexFlatTop())
 		})
 	})
 }
@@ -133,7 +133,7 @@ func TestRenderSVG_Staggered(t *testing.T) {
 	}
 
 	runSVGTest(t, "staggered", scenarios, func(matrix [][]int) gridForSVG {
-		return NewStaggeredGrid(matrix, 64, 32, "y", "odd")
+		return NewStaggeredGrid(matrix)
 	})
 }
 
@@ -178,10 +178,10 @@ func runSVGTest(t *testing.T, gridType string, scenarios []struct {
 		{"BiBFS", finder.NewBiBreadthFirstFinder()},
 		{"BiBestFirst", finder.NewBiBestFirstFinder()},
 		{"IDAStar", finder.NewIDAStarFinder()},
-		{"JPFNever", finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalNever))},
-		{"JPFAlways", finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalAlways))},
-		{"JPFNoObstacles", finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalOnlyWhenNoObstacles))},
-		{"JPFAtMostOne", finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalIfAtMostOneObstacle))},
+		{"JPFNever", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalNever))},
+		{"JPFAlways", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalAlways))},
+		{"JPFNoObstacles", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalOnlyWhenNoObstacles))},
+		{"JPFAtMostOne", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalIfAtMostOneObstacle))},
 	}
 
 	dump := os.Getenv("NAVPATH_DUMP_SVG")

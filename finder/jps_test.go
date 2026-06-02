@@ -3,12 +3,12 @@ package finder_test
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/pathfinding/finder"
 )
 
 func TestJPFNeverAgainstJS(t *testing.T) {
 	testFinderAgainstJS(t, "JPFNever", func() finder.Finder {
-		return finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalNever))
+		return finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalNever))
 	}, [][][2]int{
 		{{0, 0}, {1, 0}, {1, 1}},
 		{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -19,7 +19,7 @@ func TestJPFNeverAgainstJS(t *testing.T) {
 
 func TestJPFAlwaysAgainstJS(t *testing.T) {
 	testFinderAgainstJS(t, "JPFAlways", func() finder.Finder {
-		return finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalAlways))
+		return finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalAlways))
 	}, [][][2]int{
 		{{0, 0}, {1, 1}},
 		{{1, 1}, {1, 2}, {2, 3}, {3, 3}, {4, 4}},
@@ -30,7 +30,7 @@ func TestJPFAlwaysAgainstJS(t *testing.T) {
 
 func TestJPFOnlyWhenNoObstaclesAgainstJS(t *testing.T) {
 	testFinderAgainstJS(t, "JPFOnlyWhenNoObstacles", func() finder.Finder {
-		return finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalOnlyWhenNoObstacles))
+		return finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalOnlyWhenNoObstacles))
 	}, [][][2]int{
 		{{0, 0}, {1, 0}, {1, 1}},
 		{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
@@ -41,7 +41,7 @@ func TestJPFOnlyWhenNoObstaclesAgainstJS(t *testing.T) {
 
 func TestJPFAtMostOneAgainstJS(t *testing.T) {
 	testFinderAgainstJS(t, "JPFAtMostOne", func() finder.Finder {
-		return finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalIfAtMostOneObstacle))
+		return finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalIfAtMostOneObstacle))
 	}, [][][2]int{
 		{{0, 0}, {1, 1}},
 		{{1, 1}, {2, 0}, {3, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},

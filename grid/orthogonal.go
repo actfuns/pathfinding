@@ -1,7 +1,7 @@
 package grid
 
 import (
-	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/pathfinding/finder"
 )
 
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
@@ -15,14 +15,25 @@ type OrthogonalGrid struct {
 	finder finder.Finder
 }
 
-// NewOrthogonalGrid creates an OrthogonalGrid from a matrix (0=walkable, non-zero=obstacle).
-// Tile size defaults to 1×1 world unit.
-func NewOrthogonalGrid(matrix [][]int) *OrthogonalGrid {
-	return NewOrthogonalGridWH(matrix, 1, 1)
+// Finder returns the pathfinder associated with this grid.
+func (g *OrthogonalGrid) Finder() finder.Finder { return g.finder }
+
+// OrthogonalOption configures an OrthogonalGrid.
+type OrthogonalOption func(*OrthogonalGrid)
+
+// WithOrthogonalTileSize sets the tile dimensions for world coordinate conversion.
+func WithOrthogonalTileSize(w, h int) OrthogonalOption {
+	return func(g *OrthogonalGrid) { g.tileW = w; g.tileH = h }
 }
 
-// NewOrthogonalGridWH creates an OrthogonalGrid with explicit tile dimensions.
-func NewOrthogonalGridWH(matrix [][]int, tileW, tileH int) *OrthogonalGrid {
+// WithOrthogonalFinder sets the pathfinder associated with this grid.
+func WithOrthogonalFinder(f finder.Finder) OrthogonalOption {
+	return func(g *OrthogonalGrid) { g.finder = f }
+}
+
+// NewOrthogonalGrid creates an OrthogonalGrid from a matrix (0=walkable, non-zero=obstacle).
+// Default tile size is 1×1 world unit. Default finder is AStarFinder.
+func NewOrthogonalGrid(matrix [][]int, opts ...OrthogonalOption) *OrthogonalGrid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]*finder.Node, 0, w*h)
@@ -33,12 +44,10 @@ func NewOrthogonalGridWH(matrix [][]int, tileW, tileH int) *OrthogonalGrid {
 			nodes = append(nodes, n)
 		}
 	}
-	return &OrthogonalGrid{width: w, height: h, tileW: tileW, tileH: tileH, nodes: nodes}
-}
-
-// WithFinder sets the pathfinder and returns the grid.
-func (g *OrthogonalGrid) WithFinder(f finder.Finder) *OrthogonalGrid {
-	g.finder = f
+	g := &OrthogonalGrid{width: w, height: h, tileW: 1, tileH: 1, nodes: nodes, finder: finder.NewAStarFinder()}
+	for _, opt := range opts {
+		opt(g)
+	}
 	return g
 }
 
@@ -66,7 +75,7 @@ func (g *OrthogonalGrid) SetWalkableAt(x, y int, walkable bool) {
 }
 
 func (g *OrthogonalGrid) Clone() finder.Grid {
-	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH}
+	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, finder: g.finder}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
 	for i, n := range g.nodes {
 		cp := *n
@@ -75,6 +84,10 @@ func (g *OrthogonalGrid) Clone() finder.Grid {
 	}
 	return ng
 }
+
+// SupportsJPSCanonicalPruning returns true — orthogonal grids have axis-aligned topology
+// and support the standard JPS pruning rules.
+func (g *OrthogonalGrid) SupportsJPSCanonicalPruning() bool { return true }
 
 // --- world coordinate helpers ---
 
@@ -116,7 +129,65 @@ func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	for i, p := range path {
 		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
 	}
+	// Use original world coordinates for first and last points
+	wp[0][0], wp[0][1] = wx1, wy1
+	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
 	return wp
+}
+
+// FindSmoothPath finds a path between two world positions and smooths it.
+func (g *OrthogonalGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
+	if g.finder == nil {
+		return nil
+	}
+	sx, sy := g.WorldToTile(wx1, wy1)
+	ex, ey := g.WorldToTile(wx2, wy2)
+	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
+		return nil
+	}
+	path := g.finder.FindPath(sx, sy, ex, ey, g)
+	if path == nil {
+		return nil
+	}
+	path = g.SmoothenTilePath(path)
+	wp := make([][2]float32, len(path))
+	for i, p := range path {
+		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
+	}
+	wp[0][0], wp[0][1] = wx1, wy1
+	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
+	return wp
+}
+
+// SmoothenTilePath smooths a tile-coordinate path by removing unnecessary waypoints.
+func (g *OrthogonalGrid) SmoothenTilePath(path [][2]int) [][2]int {
+	if len(path) < 2 {
+		return path
+	}
+	smooth := make([]int, 0, len(path))
+	smooth = append(smooth, 0)
+	last := len(path) - 1
+	for i := 2; i < len(path); i++ {
+		line := finder.Interpolate(path[smooth[len(smooth)-1]][0], path[smooth[len(smooth)-1]][1], path[i][0], path[i][1])
+		blocked := false
+		for j := 1; j < len(line); j++ {
+			if !g.IsWalkableAt(line[j][0], line[j][1]) {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			smooth = append(smooth, i-1)
+		}
+	}
+	if smooth[len(smooth)-1] != last {
+		smooth = append(smooth, last)
+	}
+	result := make([][2]int, len(smooth))
+	for i, idx := range smooth {
+		result[i] = path[idx]
+	}
+	return result
 }
 
 // --- neighbors ---

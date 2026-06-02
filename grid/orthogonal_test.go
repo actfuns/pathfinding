@@ -5,10 +5,10 @@ import (
 )
 
 func TestOrthogonalWorldToTile(t *testing.T) {
-	g := NewOrthogonalGridWH([][]int{
+	g := NewOrthogonalGrid([][]int{
 		{0, 0, 0},
 		{0, 0, 0},
-	}, 32, 32)
+	}, WithOrthogonalTileSize(32, 32))
 
 	tests := []struct {
 		wx, wy float32
@@ -29,10 +29,10 @@ func TestOrthogonalWorldToTile(t *testing.T) {
 }
 
 func TestOrthogonalTileToWorld(t *testing.T) {
-	g := NewOrthogonalGridWH([][]int{
+	g := NewOrthogonalGrid([][]int{
 		{0, 0, 0},
 		{0, 0, 0},
-	}, 32, 32)
+	}, WithOrthogonalTileSize(32, 32))
 
 	tests := []struct {
 		tx, ty int
@@ -51,11 +51,11 @@ func TestOrthogonalTileToWorld(t *testing.T) {
 }
 
 func TestOrthogonalRoundTrip(t *testing.T) {
-	g := NewOrthogonalGridWH([][]int{
+	g := NewOrthogonalGrid([][]int{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
-	}, 16, 16)
+	}, WithOrthogonalTileSize(16, 16))
 
 	worldPositions := [][2]float32{
 		{0, 0},

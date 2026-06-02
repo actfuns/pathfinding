@@ -1,7 +1,7 @@
 package hpa
 
 import (
-	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/pathfinding/finder"
 )
 
 // HPABuilder builds the hierarchical portal graph from a Grid.

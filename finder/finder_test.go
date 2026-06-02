@@ -3,8 +3,8 @@ package finder_test
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/finder"
-	"github.com/actfuns/navpath/grid"
+	"github.com/actfuns/pathfinding/finder"
+	"github.com/actfuns/pathfinding/grid"
 )
 
 // testScenarios are shared across all finder tests.
@@ -95,7 +95,7 @@ func TestFinderUnreachablePath(t *testing.T) {
 		{"BiDijkstra", finder.NewBiDijkstraFinder()},
 		{"BiBreadthFirst", finder.NewBiBreadthFirstFinder()},
 		{"BiBestFirst", finder.NewBiBestFirstFinder()},
-		{"JPFNever", finder.JumpPointFinder(finder.WithDiagonal(finder.DiagonalNever))},
+		{"JPFNever", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalNever))},
 	}
 	for _, ft := range finders {
 		t.Run(ft.name, func(t *testing.T) {

@@ -3,7 +3,7 @@ package finder_test
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/pathfinding/finder"
 )
 
 func TestDijkstraAgainstJS(t *testing.T) {

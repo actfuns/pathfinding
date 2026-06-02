@@ -3,7 +3,7 @@ package grid
 import (
 	"math"
 
-	"github.com/actfuns/navpath/finder"
+	"github.com/actfuns/pathfinding/finder"
 )
 
 // HexGrid is a hexagonal grid using axial coordinates (X, Y).
@@ -35,13 +35,40 @@ type HexGrid struct {
 	finder finder.Finder
 }
 
+// Finder returns the pathfinder associated with this grid.
+func (g *HexGrid) Finder() finder.Finder { return g.finder }
+
+// HexOption configures a HexGrid.
+type HexOption func(*HexGrid)
+
+// WithHexTileSize sets the pixel dimensions of the hex tile.
+func WithHexTileSize(w, h int) HexOption {
+	return func(g *HexGrid) { g.tileW = w; g.tileH = h }
+}
+
+// WithHexSide sets the hex side length in pixels.
+func WithHexSide(side int) HexOption {
+	return func(g *HexGrid) { g.hexSide = side }
+}
+
+// WithHexFlatTop configures flat-top hexagons (stagger on X axis). Default is pointy-top.
+func WithHexFlatTop() HexOption {
+	return func(g *HexGrid) { g.staggerX = true }
+}
+
+// WithHexEvenStagger configures even-index stagger offset. Default is odd-index.
+func WithHexEvenStagger() HexOption {
+	return func(g *HexGrid) { g.staggerEven = true }
+}
+
+// WithHexFinder sets the pathfinder and returns the grid.
+func WithHexFinder(f finder.Finder) HexOption {
+	return func(g *HexGrid) { g.finder = f }
+}
+
 // NewHexGrid creates a HexGrid from a walkability matrix (0=walkable, non-zero=obstacle).
-//   tileW, tileH: pixel dimensions of the tile (see Tiled map properties).
-//   hexSide: length of the hex side in pixels (0 means sideLengthX/Y = 0, giving a rhombus).
-//   staggerX: true = flat-top hexagons (stagger on X axis; odd columns shift down),
-//             false = pointy-top hexagons (stagger on Y axis; odd rows shift right).
-//   staggerEven: true = even rows/columns are the shifted ones; false = odd ones.
-func NewHexGrid(matrix [][]int, tileW, tileH, hexSide int, staggerX, staggerEven bool) *HexGrid {
+// Default tile size is 64×64 pixels. Default finder is AStarFinder.
+func NewHexGrid(matrix [][]int, opts ...HexOption) *HexGrid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]*finder.Node, 0, w*h)
@@ -54,14 +81,15 @@ func NewHexGrid(matrix [][]int, tileW, tileH, hexSide int, staggerX, staggerEven
 	}
 
 	g := &HexGrid{
-		width:       w,
-		height:      h,
-		staggerX:    staggerX,
-		staggerEven: staggerEven,
-		tileW:       tileW,
-		tileH:       tileH,
-		hexSide:     hexSide,
-		nodes:       nodes,
+		width:  w,
+		height: h,
+		tileW:  64,
+		tileH:  64,
+		nodes:  nodes,
+		finder: finder.NewAStarFinder(),
+	}
+	for _, opt := range opts {
+		opt(g)
 	}
 	g.initParams()
 	return g
@@ -87,12 +115,6 @@ func (g *HexGrid) doStaggerX(x int) bool {
 
 func (g *HexGrid) doStaggerY(y int) bool {
 	return !g.staggerX && ((y&1) != 0) != g.staggerEven
-}
-
-// WithFinder sets the pathfinder and returns the grid.
-func (g *HexGrid) WithFinder(f finder.Finder) *HexGrid {
-	g.finder = f
-	return g
 }
 
 // --- tile coordinate implementations of finder.Grid ---
@@ -131,6 +153,7 @@ func (g *HexGrid) Clone() finder.Grid {
 		rowH:        g.rowH,
 		renW:        g.renW,
 		renH:        g.renH,
+		finder:      g.finder,
 	}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
 	for i, n := range g.nodes {
@@ -299,7 +322,77 @@ func (g *HexGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	for i, p := range path {
 		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
 	}
+	wp[0][0], wp[0][1] = wx1, wy1
+	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
 	return wp
+}
+
+// FindSmoothPath finds a path between two world positions and smooths it.
+func (g *HexGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
+	if g.finder == nil {
+		return nil
+	}
+	sx, sy := g.WorldToTile(wx1, wy1)
+	ex, ey := g.WorldToTile(wx2, wy2)
+	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
+		return nil
+	}
+	path := g.finder.FindPath(sx, sy, ex, ey, g)
+	if path == nil {
+		return nil
+	}
+	path = g.SmoothenTilePath(path)
+	wp := make([][2]float32, len(path))
+	for i, p := range path {
+		wp[i][0], wp[i][1] = g.TileToWorld(p[0], p[1])
+	}
+	wp[0][0], wp[0][1] = wx1, wy1
+	wp[len(wp)-1][0], wp[len(wp)-1][1] = wx2, wy2
+	return wp
+}
+
+// SmoothenTilePath smooths a tile-coordinate hex path by removing unnecessary waypoints.
+// Uses a pixel-based ray cast along the line between tiles.
+func (g *HexGrid) SmoothenTilePath(path [][2]int) [][2]int {
+	if len(path) < 2 {
+		return path
+	}
+	smooth := make([]int, 0, len(path))
+	smooth = append(smooth, 0)
+	last := len(path) - 1
+	for i := 2; i < len(path); i++ {
+		if !g.hexLineOfSight(path[smooth[len(smooth)-1]], path[i]) {
+			smooth = append(smooth, i-1)
+		}
+	}
+	if smooth[len(smooth)-1] != last {
+		smooth = append(smooth, last)
+	}
+	result := make([][2]int, len(smooth))
+	for i, idx := range smooth {
+		result[i] = path[idx]
+	}
+	return result
+}
+
+// hexLineOfSight checks if there is a straight pixel line between two hex tiles with no obstacles.
+func (g *HexGrid) hexLineOfSight(a, b [2]int) bool {
+	ax, ay := g.TileToWorld(a[0], a[1])
+	bx, by := g.TileToWorld(b[0], b[1])
+	steps := math.Sqrt(float64((bx-ax)*(bx-ax)+(by-ay)*(by-ay))) / float64(min(g.tileW, g.tileH)) * 2
+	if steps < 1 {
+		steps = 1
+	}
+	for t := 0; t < int(steps); t++ {
+		f := float64(t) / steps
+		wx := float64(ax) + float64(bx-ax)*f
+		wy := float64(ay) + float64(by-ay)*f
+		tx, ty := g.screenToTileCoords(wx, wy)
+		if !g.IsWalkableAt(tx, ty) {
+			return false
+		}
+	}
+	return true
 }
 
 // GetNeighbors returns the 6 hex neighbors. Diagonal parameter is ignored

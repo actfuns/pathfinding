@@ -67,27 +67,27 @@ func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) strin
 		// Flat-top: pointy top and bottom, flat top and bottom
 		h := float64(g.renH)
 		w := float64(g.tileW)
-		side := float64(g.hexSide) / 2
+		sideOff := float64(g.sideOffX)
 		hexOffsets = [][2]float64{
-			{side, 0},
-			{w - side, 0},
+			{sideOff, 0},
+			{w - sideOff, 0},
 			{w, h / 2},
-			{w - side, h},
-			{side, h},
+			{w - sideOff, h},
+			{sideOff, h},
 			{0, h / 2},
 		}
 	} else {
 		// Pointy-top: flat top and bottom, pointy left and right
 		w := float64(g.renW)
 		h := float64(g.tileH)
-		side := float64(g.hexSide) / 2
+		sideOff := float64(g.sideOffY)
 		hexOffsets = [][2]float64{
 			{w / 2, 0},
-			{w, side},
-			{w, h - side},
+			{w, sideOff},
+			{w, h - sideOff},
 			{w / 2, h},
-			{0, h - side},
-			{0, side},
+			{0, h - sideOff},
+			{0, sideOff},
 		}
 	}
 
@@ -146,7 +146,15 @@ func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) strin
 	drawPathAndMarkers(&b, path, startX, startY, endX, endY,
 		func(tx, ty int) (float64, float64) {
 			cx, cy := g.tileToScreenCoords(tx, ty)
-			return cx + dx, cy + dy
+			var cxOff, cyOff float64
+			if g.staggerX {
+				cxOff = float64(g.tileW) / 2
+				cyOff = float64(g.renH) / 2
+			} else {
+				cxOff = float64(g.renW) / 2
+				cyOff = float64(g.tileH) / 2
+			}
+			return cx + cxOff + dx, cy + cyOff + dy
 		})
 
 	b.WriteString("</svg>\n")
@@ -221,7 +229,7 @@ func (g *StaggeredGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int)
 	drawPathAndMarkers(&b, path, startX, startY, endX, endY,
 		func(tx, ty int) (float64, float64) {
 			cx, cy := g.tileToScreenCoords(tx, ty)
-			return cx + dx, cy + dy
+			return cx + tileW/2 + dx, cy + tileH/2 + dy
 		})
 
 	b.WriteString("</svg>\n")

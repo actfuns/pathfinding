@@ -3,8 +3,8 @@ package finder_test
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/finder"
-	"github.com/actfuns/navpath/grid"
+	"github.com/actfuns/pathfinding/finder"
+	"github.com/actfuns/pathfinding/grid"
 )
 
 func TestAStarAgainstJS(t *testing.T) {

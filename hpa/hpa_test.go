@@ -3,8 +3,8 @@ package hpa
 import (
 	"testing"
 
-	"github.com/actfuns/navpath/finder"
-	"github.com/actfuns/navpath/grid"
+	"github.com/actfuns/pathfinding/finder"
+	"github.com/actfuns/pathfinding/grid"
 )
 
 // TestHPASingleChunk verifies HPA* falls back to A* when start and end are in the same chunk.

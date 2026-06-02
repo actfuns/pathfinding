@@ -2,24 +2,33 @@ package finder
 
 // JumpPointFinderBase is the base implementation for Jump Point Search.
 type JumpPointFinderBase struct {
-	Heuristic      HeuristicFunc
-	TrackRecursion bool
-	grid           Grid
-	startNode      *Node
-	endNode        *Node
-	openList       *MinHeap
-	neighborBuf    []*Node
+	Heuristic        HeuristicFunc
+	DiagonalMovement DiagonalMovement
+	TrackRecursion   bool
+	grid             Grid
+	startNode        *Node
+	endNode          *Node
+	openList         *MinHeap
+	neighborBuf      []*Node
 
 	jumpFn          func(b *JumpPointFinderBase, x, y, px, py int) *[2]int
 	findNeighborsFn func(b *JumpPointFinderBase, node *Node) [][2]int
+}
+
+// GridWithJPSSupport is optionally implemented by Grid types that support
+// canonical JPS neighbor pruning (standard orthogonal grids with axis-aligned topology).
+type GridWithJPSSupport interface {
+	Grid
+	SupportsJPSCanonicalPruning() bool
 }
 
 // NewJumpPointFinderBase creates a new JumpPointFinderBase.
 func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 	opt := ApplyOptions(opts)
 	f := &JumpPointFinderBase{
-		Heuristic:      Manhattan,
-		TrackRecursion: false,
+		Heuristic:        Manhattan,
+		DiagonalMovement: opt.DiagonalMovement,
+		TrackRecursion:   false,
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic
@@ -65,7 +74,18 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node) {
 	endY := b.endNode.Y
 	x, y := node.X, node.Y
 
-	neighbors := b.findNeighborsFn(b, node)
+	// Non-orthogonal grids (staggered) need grid.GetNeighbors for correct neighbor topology.
+	// JPS pruning makes axis-aligned assumptions that don't hold on staggered/hex grids.
+	var neighbors [][2]int
+	if gs, ok := grid.(GridWithJPSSupport); ok && gs.SupportsJPSCanonicalPruning() {
+		neighbors = b.findNeighborsFn(b, node)
+	} else {
+		nodes := grid.GetNeighbors(node, b.DiagonalMovement, b.neighborBuf)
+		neighbors = make([][2]int, len(nodes))
+		for i, n := range nodes {
+			neighbors[i] = [2]int{n.X, n.Y}
+		}
+	}
 	for _, neighbor := range neighbors {
 		jumpPoint := b.jumpFn(b, neighbor[0], neighbor[1], x, y)
 		if jumpPoint == nil {
@@ -100,8 +120,8 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node) {
 	}
 }
 
-// JumpPointFinder creates a JPS finder based on the diagonal movement setting.
-func JumpPointFinder(opts ...Option) Finder {
+// NewJumpPointFinder creates a JPS finder based on the diagonal movement setting.
+func NewJumpPointFinder(opts ...Option) Finder {
 	opt := ApplyOptions(opts)
 	switch opt.DiagonalMovement {
 	case DiagonalNever:

@@ -1,3 +1,3 @@
-module github.com/actfuns/navpath
+module github.com/actfuns/pathfinding
 
 go 1.21
