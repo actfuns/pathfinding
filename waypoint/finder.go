@@ -50,6 +50,7 @@ func (f *WaypointFinder) Graph() *WaypointGraph { return f.graph }
 // FindPath implements finder.Finder by searching the waypoint graph.
 // The grid is used for LOS-based node selection — only nodes with a clear
 // line of sight from the start/end position are considered.
+// Path is automatically smoothed via string pulling to remove redundant waypoints.
 func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [][2]int {
 	f.searchSeq++
 
@@ -62,7 +63,8 @@ func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Gr
 		return [][2]int{{startX, startY}, {endX, endY}}
 	}
 
-	return f.findPathInternal(startNode, endNode, startX, startY, endX, endY)
+	path := f.findPathInternal(startNode, endNode, startX, startY, endX, endY)
+	return f.SmoothPath(path, grid)
 }
 
 // SmoothPath removes unnecessary waypoints from a path by checking
