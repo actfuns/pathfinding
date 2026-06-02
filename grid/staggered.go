@@ -135,14 +135,18 @@ func (g *StaggeredGrid) isShifted(index int) bool {
 // --- tile coordinate implementations of finder.Grid ---
 
 func (g *StaggeredGrid) index(x, y int) int { return y*g.width + x }
+
 // Width returns the number of tiles horizontally in the staggered grid.
-func (g *StaggeredGrid) Width() int         { return g.width }
+func (g *StaggeredGrid) Width() int { return g.width }
+
 // Height returns the number of tiles vertically in the staggered grid.
-func (g *StaggeredGrid) Height() int        { return g.height }
+func (g *StaggeredGrid) Height() int { return g.height }
+
 // IsInside checks whether the tile coordinates (x, y) are within the grid bounds.
 func (g *StaggeredGrid) IsInside(x, y int) bool {
 	return x >= 0 && x < g.width && y >= 0 && y < g.height
 }
+
 // GetNodeAt returns the node at the given tile coordinates.
 func (g *StaggeredGrid) GetNodeAt(x, y int) *finder.Node { return g.nodes[g.index(x, y)] }
 

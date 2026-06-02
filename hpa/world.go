@@ -50,19 +50,19 @@ const MaxPortalsPerChunk = 256
 type HPAWorld struct {
 	// Portals is the flat array of all portals indexed by PortalKey.
 	// Unused slots remain nil.
-	Portals      []*Portal
+	Portals []*Portal
 	// NumPortals is the total number of allocated portals.
-	NumPortals   int
+	NumPortals int
 	// ChunkMapX is the number of chunks along the X axis.
-	ChunkMapX    int
+	ChunkMapX int
 	// ChunkMapY is the number of chunks along the Y axis.
-	ChunkMapY    int
+	ChunkMapY int
 	// PaddedWidth is the grid width rounded up to a multiple of ChunkSize.
-	PaddedWidth  int
+	PaddedWidth int
 	// PaddedHeight is the grid height rounded up to a multiple of ChunkSize.
 	PaddedHeight int
 	// ChunkSize is the edge length of a single chunk in cells.
-	ChunkSize    int
+	ChunkSize int
 }
 
 // Cardinal direction constants used for portal orientation.

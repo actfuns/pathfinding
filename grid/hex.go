@@ -609,4 +609,3 @@ func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) strin
 	b.WriteString("</svg>\n")
 	return b.String()
 }
-
