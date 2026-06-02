@@ -5,6 +5,8 @@ type BiAStarFinder struct {
 	Heuristic        HeuristicFunc
 	Weight           float64
 	DiagonalMovement DiagonalMovement
+
+	searchSeq int
 }
 
 // NewBiAStarFinder creates a new BiAStarFinder.
@@ -38,8 +40,11 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 
 // FindPath finds a path using bidirectional A*.
 func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+	f.searchSeq++
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
+	startNode.ResetSearch(f.searchSeq)
+	endNode.ResetSearch(f.searchSeq)
 
 	const (
 		BY_START = 1
@@ -68,6 +73,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
+			neighbor.ResetSearch(f.searchSeq)
 			if neighbor.Closed {
 				continue
 			}
@@ -105,6 +111,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
+			neighbor.ResetSearch(f.searchSeq)
 			if neighbor.Closed {
 				continue
 			}

@@ -11,6 +11,8 @@ type JumpPointFinderBase struct {
 	openList         *MinHeap
 	neighborBuf      []*Node
 
+	searchSeq int
+
 	jumpFn          func(b *JumpPointFinderBase, x, y, px, py int) *[2]int
 	findNeighborsFn func(b *JumpPointFinderBase, node *Node) [][2]int
 }
@@ -39,6 +41,7 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 
 // FindPath finds a path using JPS.
 func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+	b.searchSeq++
 	b.openList = NewMinHeap(func(a, bNode *Node) bool {
 		return a.F < bNode.F
 	})
@@ -47,6 +50,8 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 	b.grid = grid
 	b.neighborBuf = make([]*Node, 0, 8)
 
+	b.startNode.ResetSearch(b.searchSeq)
+	b.endNode.ResetSearch(b.searchSeq)
 	b.startNode.G = 0
 	b.startNode.F = 0
 	b.openList.Push(b.startNode)
@@ -94,6 +99,7 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node) {
 
 		jx, jy := jumpPoint[0], jumpPoint[1]
 		jumpNode := grid.GetNodeAt(jx, jy)
+			jumpNode.ResetSearch(b.searchSeq)
 
 		if jumpNode.Closed {
 			continue

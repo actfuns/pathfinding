@@ -3,6 +3,8 @@ package finder
 // BreadthFirstFinder is a Breadth-First-Search pathfinder.
 type BreadthFirstFinder struct {
 	DiagonalMovement DiagonalMovement
+
+	searchSeq int
 }
 
 // NewBreadthFirstFinder creates a new BreadthFirstFinder.
@@ -25,8 +27,11 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 
 // FindPath finds a path using BFS.
 func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+	f.searchSeq++
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
+	startNode.ResetSearch(f.searchSeq)
+	endNode.ResetSearch(f.searchSeq)
 	openList := make([]*Node, 0, 64)
 	openList = append(openList, startNode)
 	startNode.Opened = 1
@@ -44,6 +49,7 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid)
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
+			neighbor.ResetSearch(f.searchSeq)
 			if neighbor.Closed || neighbor.Opened != 0 {
 				continue
 			}

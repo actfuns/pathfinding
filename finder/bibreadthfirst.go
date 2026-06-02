@@ -3,6 +3,8 @@ package finder
 // BiBreadthFirstFinder is a bidirectional BFS pathfinder.
 type BiBreadthFirstFinder struct {
 	DiagonalMovement DiagonalMovement
+
+	searchSeq int
 }
 
 // NewBiBreadthFirstFinder creates a new BiBreadthFirstFinder.
@@ -25,8 +27,11 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 
 // FindPath finds a path using bidirectional BFS.
 func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+	f.searchSeq++
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
+	startNode.ResetSearch(f.searchSeq)
+	endNode.ResetSearch(f.searchSeq)
 
 	const (
 		BY_START = 1
@@ -55,6 +60,7 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
+			neighbor.ResetSearch(f.searchSeq)
 			if neighbor.Closed {
 				continue
 			}
@@ -76,6 +82,7 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
+			neighbor.ResetSearch(f.searchSeq)
 			if neighbor.Closed {
 				continue
 			}

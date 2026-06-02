@@ -131,13 +131,13 @@ func BenchmarkOrthogonal100(b *testing.B) {
 	b.Run("AStar", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 99, 99, base.Clone())
+			f.FindPath(0, 0, 99, 99, base)
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.Clone().(*OrthogonalGrid).FindSmoothPath(0, 0, 99, 99)
+			base.FindSmoothPath(0, 0, 99, 99)
 		}
 	})
 	b.Run("JPS", func(b *testing.B) {
@@ -145,7 +145,7 @@ func BenchmarkOrthogonal100(b *testing.B) {
 		fj := jps.Finder()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			fj.FindPath(0, 0, 99, 99, jps.Clone())
+			fj.FindPath(0, 0, 99, 99, jps)
 		}
 	})
 }
@@ -157,13 +157,13 @@ func BenchmarkOrthogonal500(b *testing.B) {
 	b.Run("AStar", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 499, 499, base.Clone())
+			f.FindPath(0, 0, 499, 499, base)
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.Clone().(*OrthogonalGrid).FindSmoothPath(0, 0, 499, 499)
+			base.FindSmoothPath(0, 0, 499, 499)
 		}
 	})
 }
@@ -172,16 +172,18 @@ func BenchmarkStaggered100(b *testing.B) {
 	matrix := generateGrid(100, 100, 0.2)
 	base := NewStaggeredGrid(matrix)
 	f := base.Finder()
+	sx, sy := base.TileToWorld(5, 5)
+	ex, ey := base.TileToWorld(94, 94)
 	b.Run("AStar", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 99, 99, base.Clone())
+			f.FindPath(0, 0, 99, 99, base)
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.Clone().(*StaggeredGrid).FindSmoothPath(0, 0, 99, 99)
+			base.FindSmoothPath(sx, sy, ex, ey)
 		}
 	})
 }
@@ -190,16 +192,18 @@ func BenchmarkHex100(b *testing.B) {
 	matrix := generateGrid(100, 100, 0.2)
 	base := NewHexGrid(matrix, WithHexTileSize(55, 64), WithHexSide(32))
 	f := base.Finder()
+	sx, sy := base.TileToWorld(5, 5)
+	ex, ey := base.TileToWorld(94, 94)
 	b.Run("AStar", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 99, 99, base.Clone())
+			f.FindPath(0, 0, 99, 99, base)
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.Clone().(*HexGrid).FindSmoothPath(0, 0, 99, 99)
+			base.FindSmoothPath(sx, sy, ex, ey)
 		}
 	})
 }

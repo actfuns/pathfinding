@@ -5,6 +5,8 @@ type AStarFinder struct {
 	Heuristic        HeuristicFunc
 	Weight           float64
 	DiagonalMovement DiagonalMovement
+
+	searchSeq int // incremented each FindPath call for node state reset
 }
 
 // NewAStarFinder creates a new AStarFinder with default options.
@@ -38,12 +40,15 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.
 func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+	f.searchSeq++
 	openList := NewMinHeap(func(a, b *Node) bool {
 		return a.F < b.F
 	})
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 
+	startNode.ResetSearch(f.searchSeq)
+	endNode.ResetSearch(f.searchSeq)
 	startNode.G = 0
 	startNode.F = 0
 	openList.Push(startNode)
@@ -61,6 +66,7 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]i
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
+			neighbor.ResetSearch(f.searchSeq)
 			if neighbor.Closed {
 				continue
 			}
