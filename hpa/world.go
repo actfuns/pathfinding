@@ -31,7 +31,7 @@ func PortalKey(chunkID, pos, dir, chunkSize int) int {
 	return pos + dir*chunkSize + chunkID*MaxPortalsPerChunk
 }
 
-func portalKeyChunkID(key, chunkSize int) int {
+func portalKeyChunkID(key int) int {
 	return key / MaxPortalsPerChunk
 }
 
@@ -48,20 +48,29 @@ const MaxPortalsPerChunk = 256
 
 // HPAWorld holds the hierarchical portal graph for a Grid.
 type HPAWorld struct {
+	// Portals is the flat array of all portals indexed by PortalKey.
+	// Unused slots remain nil.
 	Portals      []*Portal
+	// NumPortals is the total number of allocated portals.
 	NumPortals   int
+	// ChunkMapX is the number of chunks along the X axis.
 	ChunkMapX    int
+	// ChunkMapY is the number of chunks along the Y axis.
 	ChunkMapY    int
+	// PaddedWidth is the grid width rounded up to a multiple of ChunkSize.
 	PaddedWidth  int
+	// PaddedHeight is the grid height rounded up to a multiple of ChunkSize.
 	PaddedHeight int
+	// ChunkSize is the edge length of a single chunk in cells.
 	ChunkSize    int
 }
 
+// Cardinal direction constants used for portal orientation.
 const (
-	DirN = 0
-	DirE = 1
-	DirS = 2
-	DirW = 3
+	DirN = 0 // north (top edge)
+	DirE = 1 // east (right edge)
+	DirS = 2 // south (bottom edge)
+	DirW = 3 // west (left edge)
 )
 
 // BuildWorld constructs the HPA world: partition grid into chunks, detect edge

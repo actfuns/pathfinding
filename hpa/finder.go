@@ -10,8 +10,13 @@ import (
 // Finder is expected. Call Build(grid) to pre-build the
 // hierarchical portal graph before FindPath.
 type HPAFinder struct {
-	Heuristic        finder.HeuristicFunc
-	Weight           float64
+	// Heuristic is the heuristic function used for estimating path cost.
+	Heuristic finder.HeuristicFunc
+	// Weight is the heuristic weight (higher values bias toward faster
+	// but potentially suboptimal paths).
+	Weight float64
+	// DiagonalMovement controls whether diagonal moves are permitted
+	// and under what conditions.
 	DiagonalMovement finder.DiagonalMovement
 
 	chunkSize      int
@@ -19,18 +24,18 @@ type HPAFinder struct {
 	concreteFinder finder.Finder
 
 	// Reusable buffers for FindPath (zero-alloc after warm-up)
-	neighborBuf  []*finder.Node
-	bfsCostsBuf  []int
-	bfsQueueBuf  [][2]int
-	tmpNode      *finder.Node
-	allNodes     map[int]*hpaNode
-	openSlice    []*hpaNode
-	hpaNodePool   []*hpaNode    // free list for hpaNode reuse
-	portalPathBuf []int        // reusable portal key accumulation
-	waypointsBuf [][2]int      // reusable waypoint accumulation
-	portalKeyBuf []int         // reusable result in findReachablePortals (start)
-	portalKeyEndBuf []int      // reusable result in findReachablePortals (end)
-	endSetMap    map[int]struct{} // reusable end-portal set
+	neighborBuf     []*finder.Node
+	bfsCostsBuf     []int
+	bfsQueueBuf     [][2]int
+	tmpNode         *finder.Node
+	allNodes        map[int]*hpaNode
+	openSlice       []*hpaNode
+	hpaNodePool     []*hpaNode       // free list for hpaNode reuse
+	portalPathBuf   []int            // reusable portal key accumulation
+	waypointsBuf    [][2]int         // reusable waypoint accumulation
+	portalKeyBuf    []int            // reusable result in findReachablePortals (start)
+	portalKeyEndBuf []int            // reusable result in findReachablePortals (end)
+	endSetMap       map[int]struct{} // reusable end-portal set
 }
 
 // HPAOption configures an HPAFinder.
