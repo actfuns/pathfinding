@@ -167,12 +167,22 @@ func (g *HexGrid) doStaggerY(y int) bool {
 
 // --- tile coordinate implementations of finder.Grid ---
 
-func (g *HexGrid) index(x, y int) int              { return y*g.width + x }
-func (g *HexGrid) Width() int                      { return g.width }
-func (g *HexGrid) Height() int                     { return g.height }
-func (g *HexGrid) IsInside(x, y int) bool          { return x >= 0 && x < g.width && y >= 0 && y < g.height }
+func (g *HexGrid) index(x, y int) int { return y*g.width + x }
+
+// Width returns the number of tiles along the X axis.
+func (g *HexGrid) Width() int { return g.width }
+
+// Height returns the number of tiles along the Y axis.
+func (g *HexGrid) Height() int { return g.height }
+
+// IsInside reports whether the given tile coordinates are within the grid bounds.
+func (g *HexGrid) IsInside(x, y int) bool { return x >= 0 && x < g.width && y >= 0 && y < g.height }
+
+// GetNodeAt returns the node at the given tile coordinates. The coordinates must be inside the grid; the caller should check IsInside first.
 func (g *HexGrid) GetNodeAt(x, y int) *finder.Node { return g.nodes[g.index(x, y)] }
 
+// IsWalkableAt reports whether the tile at the given coordinates is walkable.
+// Coordinates outside the grid bounds are considered not walkable.
 func (g *HexGrid) IsWalkableAt(x, y int) bool {
 	if !g.IsInside(x, y) {
 		return false
@@ -180,10 +190,14 @@ func (g *HexGrid) IsWalkableAt(x, y int) bool {
 	return g.nodes[g.index(x, y)].Walkable
 }
 
+// SetWalkableAt sets the walkability of the tile at the given coordinates.
 func (g *HexGrid) SetWalkableAt(x, y int, walkable bool) {
 	g.nodes[g.index(x, y)].Walkable = walkable
 }
 
+// Clone returns a deep copy of the hex grid, including a copy of all nodes with
+// parent references cleared. The clone shares the finder and precomputed layout
+// parameters but owns its own node slice.
 func (g *HexGrid) Clone() finder.Grid {
 	ng := &HexGrid{
 		width:         g.width,
@@ -596,4 +610,3 @@ func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) strin
 	return b.String()
 }
 
-// RenderSVG renders the staggered grid and an optional path as an SVG string.

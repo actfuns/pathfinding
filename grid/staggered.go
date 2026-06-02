@@ -135,13 +135,18 @@ func (g *StaggeredGrid) isShifted(index int) bool {
 // --- tile coordinate implementations of finder.Grid ---
 
 func (g *StaggeredGrid) index(x, y int) int { return y*g.width + x }
+// Width returns the number of tiles horizontally in the staggered grid.
 func (g *StaggeredGrid) Width() int         { return g.width }
+// Height returns the number of tiles vertically in the staggered grid.
 func (g *StaggeredGrid) Height() int        { return g.height }
+// IsInside checks whether the tile coordinates (x, y) are within the grid bounds.
 func (g *StaggeredGrid) IsInside(x, y int) bool {
 	return x >= 0 && x < g.width && y >= 0 && y < g.height
 }
+// GetNodeAt returns the node at the given tile coordinates.
 func (g *StaggeredGrid) GetNodeAt(x, y int) *finder.Node { return g.nodes[g.index(x, y)] }
 
+// IsWalkableAt returns whether the tile at (x, y) is walkable (no obstacle).
 func (g *StaggeredGrid) IsWalkableAt(x, y int) bool {
 	if !g.IsInside(x, y) {
 		return false
@@ -149,10 +154,12 @@ func (g *StaggeredGrid) IsWalkableAt(x, y int) bool {
 	return g.nodes[g.index(x, y)].Walkable
 }
 
+// SetWalkableAt sets the walkability of the tile at (x, y).
 func (g *StaggeredGrid) SetWalkableAt(x, y int, walkable bool) {
 	g.nodes[g.index(x, y)].Walkable = walkable
 }
 
+// Clone returns a deep copy of the staggered grid with independent node data.
 func (g *StaggeredGrid) Clone() finder.Grid {
 	ng := &StaggeredGrid{
 		cardinalOffsets:  g.cardinalOffsets,
@@ -471,8 +478,8 @@ func (g *StaggeredGrid) staggeredLineOfSight(a, b [2]int) bool {
 	return true
 }
 
-// GetNeighbors returns neighbors for staggered isometric grids.
-
+// GetNeighbors returns neighbors for a node on a staggered isometric grid, respecting the
+// diagonal movement rule. The result is written into the provided buffer.
 func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
 	x, y := node.X, node.Y
 	neighbors := buffer[:0]

@@ -4,7 +4,10 @@ package grid
 type GridType int
 
 const (
+	// Orthogonal is a standard square-tile grid (4-directional or 8-directional).
 	Orthogonal GridType = iota
-	Staggered           // 45-degree isometric/staggered (diamond-shaped tiles)
-	Hexagonal           // hexagonal (both pointy and flat-top)
+	// Staggered is a 45-degree isometric/staggered grid (diamond-shaped tiles).
+	Staggered
+	// Hexagonal is a hexagonal grid (both pointy-top and flat-top layouts).
+	Hexagonal
 )

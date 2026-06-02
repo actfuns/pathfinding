@@ -58,15 +58,30 @@ func NewOrthogonalGrid(matrix [][]int, opts ...OrthogonalOption) *OrthogonalGrid
 // --- tile coordinate implementations of finder.Grid ---
 
 func (g *OrthogonalGrid) index(x, y int) int { return y*g.width + x }
-func (g *OrthogonalGrid) Width() int         { return g.width }
-func (g *OrthogonalGrid) Height() int        { return g.height }
-func (g *OrthogonalGrid) TileWidth() int     { return g.tileW }
-func (g *OrthogonalGrid) TileHeight() int    { return g.tileH }
+
+// Width returns the number of tiles horizontally in the grid.
+func (g *OrthogonalGrid) Width() int { return g.width }
+
+// Height returns the number of tiles vertically in the grid.
+func (g *OrthogonalGrid) Height() int { return g.height }
+
+// TileWidth returns the world-space width of a single tile.
+func (g *OrthogonalGrid) TileWidth() int { return g.tileW }
+
+// TileHeight returns the world-space height of a single tile.
+func (g *OrthogonalGrid) TileHeight() int { return g.tileH }
+
+// IsInside reports whether the tile coordinate (x, y) is within the grid bounds.
 func (g *OrthogonalGrid) IsInside(x, y int) bool {
 	return x >= 0 && x < g.width && y >= 0 && y < g.height
 }
+
+// GetNodeAt returns the node at tile coordinate (x, y). The caller must ensure
+// the coordinate is inside the grid (see IsInside); otherwise the method panics.
 func (g *OrthogonalGrid) GetNodeAt(x, y int) *finder.Node { return g.nodes[g.index(x, y)] }
 
+// IsWalkableAt reports whether the tile at (x, y) is walkable. Coordinates
+// outside the grid are reported as not walkable.
 func (g *OrthogonalGrid) IsWalkableAt(x, y int) bool {
 	if !g.IsInside(x, y) {
 		return false
@@ -74,10 +89,15 @@ func (g *OrthogonalGrid) IsWalkableAt(x, y int) bool {
 	return g.nodes[g.index(x, y)].Walkable
 }
 
+// SetWalkableAt sets the walkability of the tile at (x, y). The caller must
+// ensure the coordinate is inside the grid; otherwise the method panics.
 func (g *OrthogonalGrid) SetWalkableAt(x, y int, walkable bool) {
 	g.nodes[g.index(x, y)].Walkable = walkable
 }
 
+// Clone creates a deep copy of the grid. The returned grid has its own node
+// slice; each node is copied, but the parent pointer is cleared. The finder
+// reference and tile dimensions are shared from the original.
 func (g *OrthogonalGrid) Clone() finder.Grid {
 	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, finder: g.finder}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
@@ -95,21 +115,32 @@ func (g *OrthogonalGrid) SupportsJPSCanonicalPruning() bool { return true }
 
 // --- world coordinate helpers ---
 
+// WorldToTile converts a world-space coordinate to a tile-space coordinate.
+// The conversion uses integer truncation; results outside the grid should be
+// checked with IsInside before use.
 func (g *OrthogonalGrid) WorldToTile(wx, wy float32) (int, int) {
 	tx := int(wx) / g.tileW
 	ty := int(wy) / g.tileH
 	return tx, ty
 }
 
+// TileToWorld converts a tile-space coordinate to world-space, returning the
+// center point of the tile (offset by half the tile dimensions).
 func (g *OrthogonalGrid) TileToWorld(tx, ty int) (float32, float32) {
 	return float32(tx*g.tileW + g.tileW/2), float32(ty*g.tileH + g.tileH/2)
 }
 
+// IsWalkableAtWorld reports whether the tile at the given world-space
+// coordinate is walkable. The coordinate is converted to tile-space
+// via WorldToTile before checking.
 func (g *OrthogonalGrid) IsWalkableAtWorld(wx, wy float32) bool {
 	tx, ty := g.WorldToTile(wx, wy)
 	return g.IsWalkableAt(tx, ty)
 }
 
+// SetWalkableAtWorld sets the walkability of the tile at the given world-space
+// coordinate. The coordinate is converted to tile-space via WorldToTile before
+// applying the change.
 func (g *OrthogonalGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 	tx, ty := g.WorldToTile(wx, wy)
 	g.SetWalkableAt(tx, ty, walkable)
@@ -238,6 +269,10 @@ func (g *OrthogonalGrid) tileLineOfSight(a, b [2]int) bool {
 
 // --- neighbors ---
 
+// GetNeighbors returns the walkable neighbors of the given node. The diagonal
+// parameter controls which diagonal moves are permitted. The result is written
+// into the provided buffer slice (which is resliced to zero and reused), so the
+// caller must not hold references past the next call.
 func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
 	x, y := node.X, node.Y
 	w := g.width
