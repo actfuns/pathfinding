@@ -1,5 +1,7 @@
 package finder
 
+import "sync/atomic"
+
 // BreadthFirstFinder is a Breadth-First-Search pathfinder.
 type BreadthFirstFinder struct {
 	DiagonalMovement DiagonalMovement
@@ -30,7 +32,7 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 
 // FindPath finds a path using BFS.
 func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	f.searchSeq = int(atomic.AddUint64(&globalSearchSeq, 1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 	startNode.ResetSearch(f.searchSeq)

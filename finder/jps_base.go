@@ -1,5 +1,7 @@
 package finder
 
+import "sync/atomic"
+
 // JumpPointFinderBase is the base implementation for Jump Point Search.
 type JumpPointFinderBase struct {
 	Heuristic        HeuristicFunc
@@ -45,7 +47,7 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 
 // FindPath finds a path using JPS.
 func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	b.searchSeq++
+	b.searchSeq = int(atomic.AddUint64(&globalSearchSeq, 1))
 	b.openList = &MinHeap{nodes: b.heapSlice[:0]}
 	defer func() { b.heapSlice = b.openList.nodes[:0] }()
 	b.startNode = grid.GetNodeAt(startX, startY)

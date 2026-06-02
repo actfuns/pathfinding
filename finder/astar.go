@@ -1,5 +1,7 @@
 package finder
 
+import "sync/atomic"
+
 // AStarFinder is an implementation of the A* pathfinding algorithm.
 type AStarFinder struct {
 	Heuristic        HeuristicFunc
@@ -44,7 +46,7 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.
 func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	f.searchSeq = int(atomic.AddUint64(&globalSearchSeq, 1))
 	openList := &MinHeap{nodes: f.heapSlice[:0]}
 	defer func() { f.heapSlice = openList.nodes[:0] }()
 	startNode := grid.GetNodeAt(startX, startY)

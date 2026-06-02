@@ -1,5 +1,7 @@
 package finder
 
+import "sync/atomic"
+
 // BiAStarFinder is a bidirectional A* pathfinder.
 type BiAStarFinder struct {
 	Heuristic        HeuristicFunc
@@ -45,7 +47,7 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 
 // FindPath finds a path using bidirectional A*.
 func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	f.searchSeq = int(atomic.AddUint64(&globalSearchSeq, 1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 	startNode.ResetSearch(f.searchSeq)

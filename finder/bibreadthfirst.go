@@ -1,5 +1,7 @@
 package finder
 
+import "sync/atomic"
+
 // BiBreadthFirstFinder is a bidirectional BFS pathfinder.
 type BiBreadthFirstFinder struct {
 	DiagonalMovement DiagonalMovement
@@ -30,7 +32,7 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 
 // FindPath finds a path using bidirectional BFS.
 func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	f.searchSeq = int(atomic.AddUint64(&globalSearchSeq, 1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 	startNode.ResetSearch(f.searchSeq)
