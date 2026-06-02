@@ -65,6 +65,29 @@ func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Gr
 	return f.findPathInternal(startNode, endNode, startX, startY, endX, endY)
 }
 
+// SmoothPath removes unnecessary waypoints from a path by checking
+// line-of-sight between each point. Only points where the direct line
+// is blocked by obstacles are kept. The result is written in-place
+// over the input buffer.
+func (f *WaypointFinder) SmoothPath(path [][2]int, grid finder.Grid) [][2]int {
+	if len(path) < 3 {
+		return path
+	}
+	writeIdx := 1
+	for i := 2; i < len(path); i++ {
+		if !hasLineOfSight(path[writeIdx-1][0], path[writeIdx-1][1],
+			path[i][0], path[i][1], grid) {
+			path[writeIdx] = path[i-1]
+			writeIdx++
+		}
+	}
+	if path[writeIdx-1] != path[len(path)-1] {
+		path[writeIdx] = path[len(path)-1]
+		writeIdx++
+	}
+	return path[:writeIdx]
+}
+
 // findPathInternal runs A* between two graph nodes.
 func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, startX, startY, endX, endY int) [][2]int {
 	open := &nodeHeap{nodes: f.heapSlice[:0]}

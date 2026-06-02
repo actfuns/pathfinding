@@ -275,3 +275,33 @@ func BenchmarkWaypointFindPath(b *testing.B) {
 		}
 	}
 }
+
+func TestSmoothPathRemovesRedundantNodes(t *testing.T) {
+	f := NewWaypointFinder()
+	g := f.Graph()
+	a := g.AddNode(0, 0)
+	b := g.AddNode(5, 0)
+	c := g.AddNode(10, 0)
+	a.Connect(b)
+	b.Connect(c)
+
+	grid := walkableGrid(15, 5)
+	path := f.FindPath(0, 0, 10, 0, grid)
+	if path == nil {
+		t.Fatal("expected path")
+	}
+	smoothed := f.SmoothPath(path, grid)
+	if len(smoothed) != 2 {
+		t.Errorf("expected 2 points after smooth, got %d: %v", len(smoothed), smoothed)
+	}
+}
+
+func TestSmoothPathShort(t *testing.T) {
+	f := NewWaypointFinder()
+	grid := walkableGrid(10, 10)
+	short := [][2]int{{0, 0}, {5, 5}}
+	result := f.SmoothPath(short, grid)
+	if len(result) != 2 {
+		t.Error("short path should not change")
+	}
+}
