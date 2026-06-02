@@ -14,8 +14,6 @@ func TestWaypointGraphStructure(t *testing.T) {
 	a.Connect(b)
 	b.Connect(c)
 
-	// epiplon equivalent: Node has Position and ConnectedNodes[]
-	// Our WaypointNode has X,Y and Edges[]
 	if a.X != 0 || a.Y != 0 {
 		t.Errorf("expected node at (0,0), got (%v,%v)", a.X, a.Y)
 	}
@@ -47,7 +45,6 @@ func TestWaypointFindClosest(t *testing.T) {
 	g.AddNode(10, 10)
 	g.AddNode(5, 5)
 
-	// epiplon's FindClosestNode iterates all nodes, finds closest
 	n := g.FindClosest(4, 4)
 	if n == nil {
 		t.Fatal("expected node, got nil")
@@ -56,7 +53,6 @@ func TestWaypointFindClosest(t *testing.T) {
 		t.Errorf("expected closest (5,5), got (%v,%v)", n.X, n.Y)
 	}
 
-	// Same behavior: if at exact node position, return that node
 	exact := g.FindClosest(0, 0)
 	if exact == nil || exact.X != 0 || exact.Y != 0 {
 		t.Errorf("expected exact match (0,0), got (%v,%v)", exact.X, exact.Y)
@@ -65,47 +61,38 @@ func TestWaypointFindClosest(t *testing.T) {
 
 // TestWaypointPathCost verifies A* finds optimal (shortest) path.
 func TestWaypointPathCost(t *testing.T) {
-	g := NewWaypointGraph()
-	a := g.AddNode(0, 0)
-	b := g.AddNode(5, 0)
-	c := g.AddNode(5, 5)
-	d := g.AddNode(5, 10)
-	e := g.AddNode(0, 10)
+	f := NewWaypointFinder()
+	a := f.AddNode(0, 0)
+	b := f.AddNode(5, 0)
+	c := f.AddNode(5, 5)
+	d := f.AddNode(5, 10)
+	e := f.AddNode(0, 10)
 
-	// Linear chain: A-B-C-D-E
-	a.Connect(b)
-	b.Connect(c)
-	c.Connect(d)
-	d.Connect(e)
+	f.Connect(a, b)
+	f.Connect(b, c)
+	f.Connect(c, d)
+	f.Connect(d, e)
+	f.Connect(a, c) // direct shortcut
 
-	// Also direct A-C connection (shorter than A-B-C)
-	a.Connect(c)
-
-	f := NewWaypointFinder(g)
-
-	// Path from A to C: A* should choose direct A-C not A-B-C
-	// epiplon's DFS with heuristic sorting may or may not pick optimal—
-	// it depends on sort order. Our A* guarantees optimal.
-	path := f.FindPathFloat(0.0, 0.0, 5.0, 5.0)
+	g := walkableGrid(15, 15)
+	path := f.FindPath(0, 0, 5, 5, g)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
 
-	// Verify path cost is optimal
-	cost := pathCost(path)
-	directCost := dist2(0, 0, 5, 5)
+	cost := pathCostInt(path)
+	directCost := dist2Int(0, 0, 5, 5)
 	if cost > directCost+0.001 {
 		t.Errorf("path cost %.2f exceeds direct cost %.2f — suboptimal", cost, directCost)
 	}
-
 	t.Logf("waypoint path: %v, cost: %.2f", path, cost)
 }
 
 // TestWaypointEmptyGraph verifies FindPath returns nil for empty graph.
 func TestWaypointEmptyGraph(t *testing.T) {
-	g := NewWaypointGraph()
-	f := NewWaypointFinder(g)
-	path := f.FindPathFloat(0.0, 0.0, 10.0, 10.0)
+	f := NewWaypointFinder()
+	g := walkableGrid(15, 15)
+	path := f.FindPath(0, 0, 10, 10, g)
 	if path != nil {
 		t.Error("expected nil for empty graph")
 	}
@@ -113,87 +100,79 @@ func TestWaypointEmptyGraph(t *testing.T) {
 
 // TestWaypointDisconnectedGraph verifies FindPath returns nil for disconnected components.
 func TestWaypointDisconnectedGraph(t *testing.T) {
-	g := NewWaypointGraph()
-	g.AddNode(0, 0)
-	g.AddNode(10, 0)
-	// No connection between a and b — epiplon's DFS would also fail
+	f := NewWaypointFinder()
+	f.AddNode(0, 0)
+	f.AddNode(10, 0)
+	// No connection
 
-	f := NewWaypointFinder(g)
-	path := f.FindPathFloat(0.0, 0.0, 10.0, 0.0)
+	g := walkableGrid(15, 5)
+	path := f.FindPath(0, 0, 10, 0, g)
 	if path != nil {
 		t.Error("expected nil for disconnected graph")
 	}
 }
 
-// TestWaypointStartEndPositions verifies the path includes exact
-// start and end world positions (not just node positions).
+// TestWaypointStartEndPositions verifies the path includes exact start and end positions.
 func TestWaypointStartEndPositions(t *testing.T) {
-	g := NewWaypointGraph()
-	g.AddNode(5, 5)
-	g.AddNode(10, 5)
-	// Connect them
-	g.Nodes[0].Connect(g.Nodes[1])
+	f := NewWaypointFinder()
+	a := f.AddNode(5, 5)
+	b := f.AddNode(10, 5)
+	f.Connect(a, b)
 
-	f := NewWaypointFinder(g)
-
-	// Start at (0,0) — closest node is (5,5)
-	// End at (15,5) — closest node is (10,5)
-	path := f.FindPathFloat(0.0, 0.0, 15.0, 5.0)
+	g := walkableGrid(20, 20)
+	path := f.FindPath(0, 0, 15, 5, g)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
-	// Path should be: (0,0) → (5,5) → (10,5) → (15,5)
 	if len(path) != 4 {
 		t.Errorf("expected 4 points (start, node1, node2, end), got %d: %v", len(path), path)
 	}
-	if path[0] != [2]float64{0, 0} {
+	if path[0] != [2]int{0, 0} {
 		t.Errorf("expected start (0,0), got %v", path[0])
 	}
-	if path[len(path)-1] != [2]float64{15, 5} {
+	if path[len(path)-1] != [2]int{15, 5} {
 		t.Errorf("expected end (15,5), got %v", path[len(path)-1])
 	}
 }
 
 // TestWaypointPathIsReverseable verifies paths work in both directions.
 func TestWaypointPathIsReverseable(t *testing.T) {
-	g := NewWaypointGraph()
-	a := g.AddNode(0, 0)
-	b := g.AddNode(5, 0)
-	c := g.AddNode(10, 0)
-	a.Connect(b)
-	b.Connect(c)
+	f := NewWaypointFinder()
+	a := f.AddNode(0, 0)
+	b := f.AddNode(5, 0)
+	c := f.AddNode(10, 0)
+	f.Connect(a, b)
+	f.Connect(b, c)
 
-	f := NewWaypointFinder(g)
-
-	forward := f.FindPathFloat(0.0, 0.0, 10.0, 0.0)
-	reverse := f.FindPathFloat(10.0, 0.0, 0.0, 0.0)
+	g := walkableGrid(15, 5)
+	forward := f.FindPath(0, 0, 10, 0, g)
+	reverse := f.FindPath(10, 0, 0, 0, g)
 
 	if forward == nil || reverse == nil {
 		t.Fatal("expected both directions to have paths")
 	}
-
-	if forward[0] != [2]float64{0, 0} || forward[len(forward)-1] != [2]float64{10, 0} {
+	if forward[0] != [2]int{0, 0} || forward[len(forward)-1] != [2]int{10, 0} {
 		t.Error("forward direction incorrect")
 	}
-	if reverse[0] != [2]float64{10, 0} || reverse[len(reverse)-1] != [2]float64{0, 0} {
+	if reverse[0] != [2]int{10, 0} || reverse[len(reverse)-1] != [2]int{0, 0} {
 		t.Error("reverse direction incorrect")
 	}
 }
 
 // --- helpers ---
 
-func pathCost(path [][2]float64) float64 {
+func pathCostInt(path [][2]int) float64 {
 	cost := 0.0
 	for i := 1; i < len(path); i++ {
 		dx := path[i][0] - path[i-1][0]
 		dy := path[i][1] - path[i-1][1]
-		cost += math.Sqrt(dx*dx + dy*dy)
+		cost += math.Sqrt(float64(dx*dx + dy*dy))
 	}
 	return cost
 }
 
-func dist2(x1, y1, x2, y2 float64) float64 {
+func dist2Int(x1, y1, x2, y2 int) float64 {
 	dx := x1 - x2
 	dy := y1 - y2
-	return math.Sqrt(dx*dx + dy*dy)
+	return math.Sqrt(float64(dx*dx + dy*dy))
 }
