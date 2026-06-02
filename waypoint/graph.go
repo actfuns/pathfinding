@@ -18,8 +18,13 @@ func sqrt(x float64) float64 {
 
 // WaypointNode represents a node in the waypoint graph.
 type WaypointNode struct {
-	ID    int
-	X, Y  float64
+	// ID is a unique identifier for this node, typically its index in the graph.
+	ID int
+	// X is the world-space x-coordinate of this node.
+	X float64
+	// Y is the world-space y-coordinate of this node.
+	Y float64
+	// Edges is the list of directed edges originating from this node.
 	Edges []*WaypointEdge
 }
 
@@ -61,12 +66,15 @@ func (n *WaypointNode) ConnectOneWay(other *WaypointNode) {
 
 // WaypointEdge represents a directed connection between two waypoint nodes.
 type WaypointEdge struct {
-	To   *WaypointNode
+	// To is the destination node of this edge.
+	To *WaypointNode
+	// Cost is the traversal cost (Euclidean distance) of this edge.
 	Cost float64
 }
 
 // WaypointGraph holds all nodes in the waypoint graph.
 type WaypointGraph struct {
+	// Nodes is the complete list of nodes in this graph.
 	Nodes []*WaypointNode
 }
 
