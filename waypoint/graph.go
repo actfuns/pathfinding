@@ -29,13 +29,13 @@ const (
 // WaypointNode represents a node in the waypoint graph.
 type WaypointNode struct {
 	ID    int
-	X     float64
-	Y     float64
+	X     int
+	Y     int
 	Edges []*WaypointEdge
 }
 
-// NewWaypointNode creates a new waypoint node.
-func NewWaypointNode(id int, x, y float64) *WaypointNode {
+// NewWaypointNode creates a new waypoint node at the given tile coordinate.
+func NewWaypointNode(id, x, y int) *WaypointNode {
 	return &WaypointNode{
 		ID:    id,
 		X:     x,
@@ -53,10 +53,7 @@ func (n *WaypointNode) Connect(other *WaypointNode, states ...EdgeState) {
 	}
 	dx := n.X - other.X
 	dy := n.Y - other.Y
-	cost := dx*dx + dy*dy
-	if cost > 0 {
-		cost = sqrt(cost)
-	}
+	cost := sqrt(float64(dx*dx + dy*dy))
 	n.Edges = append(n.Edges, &WaypointEdge{To: other, Cost: cost, State: state})
 	other.Edges = append(other.Edges, &WaypointEdge{To: n, Cost: cost, State: state})
 }
@@ -69,10 +66,7 @@ func (n *WaypointNode) ConnectOneWay(other *WaypointNode, states ...EdgeState) {
 	}
 	dx := n.X - other.X
 	dy := n.Y - other.Y
-	cost := dx*dx + dy*dy
-	if cost > 0 {
-		cost = sqrt(cost)
-	}
+	cost := sqrt(float64(dx*dx + dy*dy))
 	n.Edges = append(n.Edges, &WaypointEdge{To: other, Cost: cost, State: state})
 }
 
@@ -95,15 +89,15 @@ func NewWaypointGraph() *WaypointGraph {
 	}
 }
 
-// AddNode adds a node to the graph and returns it.
-func (g *WaypointGraph) AddNode(x, y float64) *WaypointNode {
+// AddNode adds a node at tile coordinate (x, y) and returns it.
+func (g *WaypointGraph) AddNode(x, y int) *WaypointNode {
 	n := NewWaypointNode(len(g.Nodes), x, y)
 	g.Nodes = append(g.Nodes, n)
 	return n
 }
 
-// FindClosest finds the closest node to a given position.
-func (g *WaypointGraph) FindClosest(x, y float64) *WaypointNode {
+// FindClosest finds the closest node to tile coordinate (x, y).
+func (g *WaypointGraph) FindClosest(x, y int) *WaypointNode {
 	if len(g.Nodes) == 0 {
 		return nil
 	}
@@ -128,7 +122,7 @@ type GridLOS interface {
 // FindClosestWithLOS finds the closest node that has a clear line of sight
 // from the given position on the specified grid. If no node has LOS, falls
 // back to the closest node regardless of LOS.
-func (g *WaypointGraph) FindClosestWithLOS(x, y float64, grid GridLOS) *WaypointNode {
+func (g *WaypointGraph) FindClosestWithLOS(x, y int, grid GridLOS) *WaypointNode {
 	if len(g.Nodes) == 0 {
 		return nil
 	}
@@ -151,12 +145,9 @@ func (g *WaypointGraph) FindClosestWithLOS(x, y float64, grid GridLOS) *Waypoint
 
 // hasLineOfSight checks whether the straight line from (x1,y1) to (x2,y2)
 // passes only through walkable cells on the given grid.
-func hasLineOfSight(x1, y1, x2, y2 float64, grid GridLOS) bool {
-	ix1, iy1 := int(x1), int(y1)
-	ix2, iy2 := int(x2), int(y2)
-
-	dx := ix2 - ix1
-	dy := iy2 - iy1
+func hasLineOfSight(x1, y1, x2, y2 int, grid GridLOS) bool {
+	dx := x2 - x1
+	dy := y2 - y1
 	var sx, sy int
 	if dx < 0 {
 		dx = -dx
@@ -173,27 +164,27 @@ func hasLineOfSight(x1, y1, x2, y2 float64, grid GridLOS) bool {
 	err := dx - dy
 
 	for {
-		if !grid.IsWalkableAt(ix1, iy1) {
+		if !grid.IsWalkableAt(x1, y1) {
 			return false
 		}
-		if ix1 == ix2 && iy1 == iy2 {
+		if x1 == x2 && y1 == y2 {
 			break
 		}
 		e2 := 2 * err
 		if e2 > -dy {
 			err -= dy
-			ix1 += sx
+			x1 += sx
 		}
 		if e2 < dx {
 			err += dx
-			iy1 += sy
+			y1 += sy
 		}
 	}
 	return true
 }
 
-func distSq(x1, y1, x2, y2 float64) float64 {
+func distSq(x1, y1, x2, y2 int) float64 {
 	dx := x1 - x2
 	dy := y1 - y2
-	return dx*dx + dy*dy
+	return float64(dx*dx + dy*dy)
 }

@@ -13,7 +13,7 @@ func TestWaypointGraphBasic(t *testing.T) {
 	b.Connect(c)
 
 	f := NewWaypointFinder(g)
-	path := f.FindPathFloat(0, 0, 10, 10)
+	path := f.FindPathFloat(0.0, 0.0, 10.0, 10.0)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -36,7 +36,7 @@ func TestWaypointGraphDirectConnection(t *testing.T) {
 	a.Connect(b)
 
 	f := NewWaypointFinder(g)
-	path := f.FindPathFloat(0, 0, 5, 5)
+	path := f.FindPathFloat(0.0, 0.0, 5.0, 5.0)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -52,7 +52,7 @@ func TestWaypointGraphNoPath(t *testing.T) {
 	// No connection between a and b
 
 	f := NewWaypointFinder(g)
-	path := f.FindPathFloat(0, 0, 10, 0)
+	path := f.FindPathFloat(0.0, 0.0, 10.0, 0.0)
 	if path != nil {
 		t.Error("expected nil path for disconnected graph")
 	}
@@ -61,7 +61,7 @@ func TestWaypointGraphNoPath(t *testing.T) {
 func TestWaypointGraphEmpty(t *testing.T) {
 	g := NewWaypointGraph()
 	f := NewWaypointFinder(g)
-	path := f.FindPathFloat(0, 0, 10, 10)
+	path := f.FindPathFloat(0.0, 0.0, 10.0, 10.0)
 	if path != nil {
 		t.Error("expected nil path for empty graph")
 	}
@@ -77,7 +77,7 @@ func TestWaypointGraphBidirectional(t *testing.T) {
 
 	f := NewWaypointFinder(g)
 	// Reverse direction should also work
-	path := f.FindPathFloat(10, 0, 0, 0)
+	path := f.FindPathFloat(10.0, 0.0, 0.0, 0.0)
 	if path == nil {
 		t.Fatal("expected path in reverse direction")
 	}

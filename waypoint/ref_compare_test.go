@@ -48,7 +48,7 @@ func TestWaypointFindClosest(t *testing.T) {
 	g.AddNode(5, 5)
 
 	// epiplon's FindClosestNode iterates all nodes, finds closest
-	n := g.FindClosest(4.5, 4.5)
+	n := g.FindClosest(4, 4)
 	if n == nil {
 		t.Fatal("expected node, got nil")
 	}
@@ -86,7 +86,7 @@ func TestWaypointPathCost(t *testing.T) {
 	// Path from A to C: A* should choose direct A-C not A-B-C
 	// epiplon's DFS with heuristic sorting may or may not pick optimal—
 	// it depends on sort order. Our A* guarantees optimal.
-	path := f.FindPathFloat(0, 0, 5, 5)
+	path := f.FindPathFloat(0.0, 0.0, 5.0, 5.0)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -105,7 +105,7 @@ func TestWaypointPathCost(t *testing.T) {
 func TestWaypointEmptyGraph(t *testing.T) {
 	g := NewWaypointGraph()
 	f := NewWaypointFinder(g)
-	path := f.FindPathFloat(0, 0, 10, 10)
+	path := f.FindPathFloat(0.0, 0.0, 10.0, 10.0)
 	if path != nil {
 		t.Error("expected nil for empty graph")
 	}
@@ -119,7 +119,7 @@ func TestWaypointDisconnectedGraph(t *testing.T) {
 	// No connection between a and b — epiplon's DFS would also fail
 
 	f := NewWaypointFinder(g)
-	path := f.FindPathFloat(0, 0, 10, 0)
+	path := f.FindPathFloat(0.0, 0.0, 10.0, 0.0)
 	if path != nil {
 		t.Error("expected nil for disconnected graph")
 	}
@@ -138,7 +138,7 @@ func TestWaypointStartEndPositions(t *testing.T) {
 
 	// Start at (0,0) — closest node is (5,5)
 	// End at (15,5) — closest node is (10,5)
-	path := f.FindPathFloat(0, 0, 15, 5)
+	path := f.FindPathFloat(0.0, 0.0, 15.0, 5.0)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -165,8 +165,8 @@ func TestWaypointPathIsReverseable(t *testing.T) {
 
 	f := NewWaypointFinder(g)
 
-	forward := f.FindPathFloat(0, 0, 10, 0)
-	reverse := f.FindPathFloat(10, 0, 0, 0)
+	forward := f.FindPathFloat(0.0, 0.0, 10.0, 0.0)
+	reverse := f.FindPathFloat(10.0, 0.0, 0.0, 0.0)
 
 	if forward == nil || reverse == nil {
 		t.Fatal("expected both directions to have paths")

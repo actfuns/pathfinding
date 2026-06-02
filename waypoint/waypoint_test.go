@@ -42,7 +42,7 @@ func TestFindPathInt(t *testing.T) {
 
 	f := NewWaypointFinder(g)
 
-	path := f.FindPathFloat(0, 0, 10, 0)
+	path := f.FindPathFloat(0.0, 0.0, 10.0, 0.0)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -100,13 +100,13 @@ func TestFindPathWithDirectedEdges(t *testing.T) {
 	f := NewWaypointFinder(g)
 
 	// Forward should work
-	path := f.FindPathFloat(0, 0, 10, 0)
+	path := f.FindPathFloat(0.0, 0.0, 10.0, 0.0)
 	if path == nil {
 		t.Fatal("expected forward path with directed edges")
 	}
 
 	// Reverse should fail (no edge back)
-	reverse := f.FindPathFloat(10, 0, 0, 0)
+	reverse := f.FindPathFloat(10.0, 0.0, 0.0, 0.0)
 	if reverse != nil {
 		t.Error("expected nil for reverse on directed graph")
 	}
