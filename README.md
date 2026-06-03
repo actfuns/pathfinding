@@ -352,6 +352,15 @@ go run examples/flowfield/
 
 ## 版本历史
 
+### v0.6.0 — Flow Field 流场群体寻路
+- `flowfield/` 包：New/NewMulti 单目标/多目标建场
+- Reset/ResetMulti 切换目标，复用内存
+- GetDirection O(1) 方向查询（0.5ns）
+- GetCost/FindPath 调试支持
+- WithDiagonal 对角线支持
+- 瓦片权重自动纳入
+- examples/flowfield/ 多单位平滑移动示例
+
 ### v0.5.x — Tile Weight Cost 权重系统 + SVG 着色渲染
 - `finder.Node.Weight` 字段，A*/BiA*/IDA*/JPS/JPS+ 步进成本 × tile.Weight
 - `grid.Grid.SetWeightAt` / `GetWeightAt`，三层网格实现
