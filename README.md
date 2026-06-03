@@ -110,7 +110,7 @@ JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `ju
 | **export/import** | `PrecomputedData()` / `LoadPrecomputed()` 支持烘焙数据导出为文件，服务端启动直接加载 |
 | **searchSeq 全局唯一** | 所有 finder 的 `searchSeq` 通过全局原子计数器初始化，不同 finder 可安全共享同一 grid |
 
-适用场景：**障碍物密集的静态小地图**（如游戏房间内布局固定的障碍地图）。开阔地形下利用预计算距离表可直接跳跃到目标，反而是 JPS+ 最快的场景（100×100 仅 2.4µs）。
+适用场景：**障碍物密集的静态小地图**（如游戏房间内布局固定的障碍地图）。开阔地形下利用预计算距离表可直接跳跃到目标，反而是 JPS+ 最快的场景（100×100 仅 0.6µs）。
 
 ```go
 import (
@@ -202,38 +202,40 @@ path := f.FindPath(0, 0, 10, 10, grid)
 
 ## 性能基准
 
-以下基准测试在 **Intel i5-13400** 上运行。测试三种障碍密度：
+以下基准测试在 **Intel i5-13400** 上运行。测试三种障碍密度（固定种子，可复现）：
 
 - **Open (0%)** — 全空网格
 - **Sparse (10%)** — 稀疏障碍
 - **Dense (20%)** — 密集障碍
 
+运行命令：`go test -bench=BenchmarkCompare -benchmem ./finder/`
+
 | 规模 | 密度 | 算法 | 时间/op | 内存/op | 分配/op |
 | :--- | :--- | :--- | ---: | ---: | ---: |
-| 100×100 | Open | **A\*** | 161 µs | 0 B | 0 |
-| | | **JPS** | 131 µs | 5.8 KB | 9 |
-| | | **JPS+** | **2.4 µs** | 5.7 KB | 7 |
-| | Sparse | **A\*** | 255 µs | 0 B | 0 |
-| | | **JPS** | 42 µs | 39.1 KB | 476 |
-| | | **JPS+** | **34 µs** | 27.2 KB | 96 |
-| | Dense | **A\*** | 220 µs | 0 B | 0 |
-| | | **JPS** | 38 µs | 42.6 KB | 515 |
-| | | **JPS+** | **40 µs** | 27.4 KB | 97 |
-| 200×200 | Open | **A\*** | 1.03 ms | 0 B | 0 |
-| | | **JPS** | 569 µs | 11.3 KB | 10 |
-| | | **JPS+** | **31 µs** | 29.6 KB | 78 |
-| | Sparse | **A\*** | 538 µs | 0 B | 0 |
-| | | **JPS** | 83 µs | 76.6 KB | 935 |
-| | | **JPS+** | **70 µs** | 52.0 KB | 181 |
-| | Dense | **A\*** | 292 µs | 0 B | 0 |
-| | | **JPS** | 71 µs | 80.0 KB | 949 |
-| | | **JPS+** | **61 µs** | 55.1 KB | 193 |
+| 100×100 | Open | **A\*** | 150 µs | 0 B | 0 |
+| | | **JPS** | 122 µs | 88 B | 3 |
+| | | **JPS+** | **0.6 µs** | 24 B | 1 |
+| | Sparse | **A\*** | 294 µs | 0 B | 0 |
+| | | **JPS** | 29 µs | 12.5 KB | 392 |
+| | | **JPS+** | **19 µs** | 24 B | 1 |
+| | Dense | **A\*** | 135 µs | 0 B | 0 |
+| | | **JPS** | 24 µs | 12.9 KB | 375 |
+| | | **JPS+** | **20 µs** | 24 B | 1 |
+| 200×200 | Open | **A\*** | 1.10 ms | 0 B | 0 |
+| | | **JPS** | 605 µs | 88 B | 3 |
+| | | **JPS+** | **19 µs** | 24 B | 1 |
+| | Sparse | **A\*** | 667 µs | 0 B | 0 |
+| | | **JPS** | 62 µs | 25.2 KB | 795 |
+| | | **JPS+** | **45 µs** | 24 B | 1 |
+| | Dense | **A\*** | 662 µs | 0 B | 0 |
+| | | **JPS** | 54 µs | 27.7 KB | 815 |
+| | | **JPS+** | **53 µs** | 24 B | 1 |
 
 关键发现：
-- **开阔地形 (0%)** — JPS+ 利用预计算跳点表直接跳到目标，100×100 仅 **2.4µs**，比 A\* 快 **67×**
-- **有障碍时** — JPS 和 JPS+ 表现接近，比 A\* 快 3~6×
+- **开阔地形 (0%)** — JPS+ 利用预计算跳点表直接跳到目标，100×100 仅 **0.6µs**，比 A\* 快 **250×**
+- **有障碍时** — JPS 和 JPS+ 表现接近，比 A\* 快 3~12×
 - **A\* 零分配** — 内部复用 Node/OpenSet 缓冲区，全程 0 B/op
-- **JPS/JPS+ 有分配** — 每次寻路需分配路径结果，但 JPS+ 分配次数约为 JPS 的 1/5
+- **JPS+ 近乎零分配** — 内联 Bresenham 消除 ExpandPath 分配，仅返回路径的 1 次分配
 
 ### Waypoint 寻路
 
@@ -246,8 +248,8 @@ path := f.FindPath(0, 0, 10, 10, grid)
 
 | 规模 | A\* | JPS | JPS+ | HPA\* |
 | :--- | ---: | ---: | ---: | ---: |
-| 100×100 (10% obs) | 255 µs | 42 µs | **34 µs** | 2,911 ns |
-| 200×200 (10% obs) | 538 µs | 83 µs | **70 µs** | 3,782 ns |
+| 100×100 (10% obs) | 294 µs | 29 µs | **19 µs** | 2,911 ns |
+| 200×200 (10% obs) | 667 µs | 62 µs | **45 µs** | 3,782 ns |
 | 500×500 (10% obs) | 25 ms | 46 ms | — | **35 µs** |
 
 HPA\* 在 500×500 上相比 A\* 加速约 **730×**。
@@ -255,18 +257,18 @@ HPA\* 在 500×500 上相比 A\* 加速约 **730×**。
 ## 命令
 
 ```bash
-# 运行全部测试
+# 运行全部测试（压力测试需 -tags stress）
 go test ./... -count=1 -vet=all
 
-# 压力测试
-go test -v -run TestOrthogonalStress ./grid/
-go test -v -run TestOrthogonalStress_DenseGrid ./grid/
-go test -v -run TestHexStress ./grid/
-go test -v -run TestStaggeredStress ./grid/
+# 压力测试（构建标签保护，默认不运行）
+go test -tags stress -v -run Stress ./grid/
 
-# 基准测试
+# 基准测试（A* / JPS / JPS+ 对比）
+go test -bench=BenchmarkCompare -benchmem ./finder/
+# 基准测试（Orthogonal / Hex / Staggered 网格）
 go test -bench=BenchmarkOrthogonalAlloc -benchmem ./grid/
 go test -bench=BenchmarkOrthogonal100 -benchmem ./grid/
+# 基准测试（HPA* / Waypoint）
 go test -bench=. -benchmem ./hpa/
 go test -bench=. -benchmem ./waypoint/
 ```
