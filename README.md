@@ -124,6 +124,7 @@ g := grid.NewOrthogonalGrid(terrain,
 
 - **瓦片坐标查询** — Width, Height, IsInside, IsWalkableAt, SetWalkableAt, GetNodeAt, ObstacleCount
 - **瓦片权重** — SetWeightAt, GetWeightAt（v0.5.0+）
+- **流场群体寻路** — flowfield.New / GetDirection（O(1) 多人查表，v0.5.0+）
 - **世界坐标转换** — WorldToTile, TileToWorld, IsWalkableAtWorld, SetWalkableAtWorld
 - **最近可通行点** — FindNearestWalkable, FindNearestWalkableTile
 - **寻路** — FindPath, FindSmoothPath, SmoothenTilePath
@@ -141,6 +142,7 @@ g := grid.NewOrthogonalGrid(terrain,
 | **JPS (Jump Point Search)** | ❌ | 跳点搜索，利用网格对称性加速 |
 | **JPS+ (Jump Point Search Plus)** | ❌ | JPS 优化变体，Precompute 跳点表，O(1) 查表替换递归扫描 |
 | **HPA\*** | ❌ | 层级寻路，分块抽象加速大地图 |
+| **Flow Field** | ❌ | 流场群体寻路，一次 Dijkstra 所有人 O(1) 查方向 |
 
 ### JPS 变体
 
@@ -343,6 +345,9 @@ go run examples/weighted/
 
 # SVG 可视化输出
 go run examples/svg/ | head -5
+
+# 流场群体寻路
+go run examples/flowfield/
 ```
 
 ## 版本历史
@@ -374,7 +379,7 @@ go run examples/svg/ | head -5
 - [Grid 实现](grid/) — 正交、六边形、交错三种网格类型
 - [HPA\*](hpa/) — 层级寻路（Portal Compression + String Pulling + Path Cache）
 - [Waypoint](waypoint/) — 航点图寻路（空间索引 + LOS 过滤）
-- [Examples](examples/) — 可直接运行的示例（basic/weighted/svg）
+- [Examples](examples/) — 可直接运行的示例（basic/weighted/svg/flowfield）
 
 ## 许可
 
