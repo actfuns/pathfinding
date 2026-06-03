@@ -74,7 +74,7 @@ type JPSPlusFinder struct {
 	openList  *MinHeap
 	heapSlice []*Node
 	pathBuf   [][2]int
-	searchSeq int
+	expandBuf [][2]int
 
 	// Pre-allocated direction slice (avoid allocation in hot path)
 	dirs []int
@@ -94,7 +94,6 @@ func NewJPSPlusFinder(opts ...Option) *JPSPlusFinder {
 		DiagonalMovement: opt.DiagonalMovement,
 		Weight:           1,
 		dirs:             dirs,
-		searchSeq:        newSearchSeq(),
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic
@@ -334,7 +333,7 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 	if j.jumpTable == nil {
 		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
 	}
-	j.searchSeq++
+	searchSeq := int(globalSearchSeq.Add(1))
 	j.grid = grid
 	j.openList = &MinHeap{nodes: j.heapSlice[:0]}
 	defer func() { j.heapSlice = j.openList.nodes[:0] }()
@@ -352,8 +351,8 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 		return [][2]int{{startX, startY}}
 	}
 
-	j.startNode.ResetSearch(j.searchSeq)
-	j.endNode.ResetSearch(j.searchSeq)
+	j.startNode.ResetSearch(searchSeq)
+	j.endNode.ResetSearch(searchSeq)
 	j.startNode.G = 0
 	j.startNode.F = 0
 	j.openList.Push(j.startNode)
@@ -370,15 +369,52 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 			for i, k := 0, len(j.pathBuf)-1; i < k; i, k = i+1, k-1 {
 				j.pathBuf[i], j.pathBuf[k] = j.pathBuf[k], j.pathBuf[i]
 			}
-			return ExpandPath(j.pathBuf)
+			j.expandBuf = j.expandBuf[:0]
+			for i := 0; i < len(j.pathBuf)-1; i++ {
+				x0, y0 := j.pathBuf[i][0], j.pathBuf[i][1]
+				x1, y1 := j.pathBuf[i+1][0], j.pathBuf[i+1][1]
+				dx := x1 - x0
+				dy := y1 - y0
+				var sx, sy int
+				if dx < 0 {
+					dx = -dx
+					sx = -1
+				} else {
+					sx = 1
+				}
+				if dy < 0 {
+					dy = -dy
+					sy = -1
+				} else {
+					sy = 1
+				}
+				err := dx - dy
+				for {
+					if x0 == x1 && y0 == y1 {
+						break
+					}
+					j.expandBuf = append(j.expandBuf, [2]int{x0, y0})
+					e2 := 2 * err
+					if e2 > -dy {
+						err -= dy
+						x0 += sx
+					}
+					if e2 < dx {
+						err += dx
+						y0 += sy
+					}
+				}
+			}
+			j.expandBuf = append(j.expandBuf, j.pathBuf[len(j.pathBuf)-1])
+			return j.expandBuf
 		}
 
-		j.identifySuccessors(node)
+		j.identifySuccessors(node, searchSeq)
 	}
 	return nil
 }
 
-func (j *JPSPlusFinder) identifySuccessors(node *Node) {
+func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 	x, y := node.X, node.Y
 	endX, endY := j.endNode.X, j.endNode.Y
 	heuristic := j.Heuristic
@@ -401,7 +437,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node) {
 				gd := octileDist(AbsInt(endX-x), AbsInt(endY-y))
 				ng := node.G + gd
 				endNode := j.endNode
-				endNode.ResetSearch(j.searchSeq)
+				endNode.ResetSearch(searchSeq)
 				if !endNode.Closed && (endNode.Opened == 0 || ng < endNode.G) {
 					endNode.G = ng
 					if endNode.Opened == 0 {
@@ -427,7 +463,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node) {
 				continue
 			}
 			adjNode := grid.GetNodeAt(nx, ny)
-			adjNode.ResetSearch(j.searchSeq)
+			adjNode.ResetSearch(searchSeq)
 			if adjNode.Closed {
 				continue
 			}
@@ -461,7 +497,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node) {
 		}
 
 		jumpNode := grid.GetNodeAt(jx, jy)
-		jumpNode.ResetSearch(j.searchSeq)
+		jumpNode.ResetSearch(searchSeq)
 
 		if jumpNode.Closed {
 			continue
@@ -509,10 +545,6 @@ func absDirDist(rx, ry, dx, dy int) int {
 		return AbsInt(rx / dx)
 	}
 	return AbsInt(ry / dy)
-}
-
-func (j *JPSPlusFinder) heuristic(x1, y1, x2, y2 int) float64 {
-	return j.Heuristic(float64(AbsInt(x2-x1)), float64(AbsInt(y2-y1)))
 }
 
 func octileDist(dx, dy int) float64 {

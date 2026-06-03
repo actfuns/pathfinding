@@ -14,8 +14,6 @@ type JumpPointFinderBase struct {
 	pathBuf          [][2]int
 	expandBuf        [][2]int
 
-	searchSeq int
-
 	jumpFn          func(b *JumpPointFinderBase, x, y, px, py int) *[2]int
 	findNeighborsFn func(b *JumpPointFinderBase, node *Node) [][2]int
 }
@@ -35,7 +33,6 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 		DiagonalMovement: opt.DiagonalMovement,
 		TrackRecursion:   false,
 		neighborBuf:      make([]*Node, 0, 8),
-		searchSeq:        newSearchSeq(),
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic
@@ -46,7 +43,7 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 
 // FindPath finds a path using JPS.
 func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	b.searchSeq++
+	searchSeq := int(globalSearchSeq.Add(1))
 	b.openList = &MinHeap{nodes: b.heapSlice[:0]}
 	defer func() { b.heapSlice = b.openList.nodes[:0] }()
 	b.startNode = grid.GetNodeAt(startX, startY)
@@ -54,8 +51,8 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 	b.grid = grid
 	b.neighborBuf = b.neighborBuf[:0]
 
-	b.startNode.ResetSearch(b.searchSeq)
-	b.endNode.ResetSearch(b.searchSeq)
+	b.startNode.ResetSearch(searchSeq)
+	b.endNode.ResetSearch(searchSeq)
 	b.startNode.G = 0
 	b.startNode.F = 0
 	b.openList.Push(b.startNode)
@@ -73,19 +70,55 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 			for i, j := 0, len(b.pathBuf)-1; i < j; i, j = i+1, j-1 {
 				b.pathBuf[i], b.pathBuf[j] = b.pathBuf[j], b.pathBuf[i]
 			}
-			// Jump point paths skip intermediate tiles, so ExpandPath fills them in.
-			// This still allocates the expanded result, which can't be cached
-			// because the expansion length varies per path.
-			return ExpandPath(b.pathBuf)
+			// Jump point paths skip intermediate tiles, so expand inline.
+			// Uses expandBuf instead of ExpandPath to avoid allocation.
+			b.expandBuf = b.expandBuf[:0]
+			for i := 0; i < len(b.pathBuf)-1; i++ {
+				x0, y0 := b.pathBuf[i][0], b.pathBuf[i][1]
+				x1, y1 := b.pathBuf[i+1][0], b.pathBuf[i+1][1]
+				dx := x1 - x0
+				dy := y1 - y0
+				var sx, sy int
+				if dx < 0 {
+					dx = -dx
+					sx = -1
+				} else {
+					sx = 1
+				}
+				if dy < 0 {
+					dy = -dy
+					sy = -1
+				} else {
+					sy = 1
+				}
+				err := dx - dy
+				for {
+					if x0 == x1 && y0 == y1 {
+						break
+					}
+					b.expandBuf = append(b.expandBuf, [2]int{x0, y0})
+					e2 := 2 * err
+					if e2 > -dy {
+						err -= dy
+						x0 += sx
+					}
+					if e2 < dx {
+						err += dx
+						y0 += sy
+					}
+				}
+			}
+			b.expandBuf = append(b.expandBuf, b.pathBuf[len(b.pathBuf)-1])
+			return b.expandBuf
 		}
 
-		b.identifySuccessors(node)
+		b.identifySuccessors(node, searchSeq)
 	}
 
 	return nil
 }
 
-func (b *JumpPointFinderBase) identifySuccessors(node *Node) {
+func (b *JumpPointFinderBase) identifySuccessors(node *Node, searchSeq int) {
 	grid := b.grid
 	heuristic := b.Heuristic
 	openList := b.openList
@@ -113,7 +146,7 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node) {
 
 		jx, jy := jumpPoint[0], jumpPoint[1]
 		jumpNode := grid.GetNodeAt(jx, jy)
-		jumpNode.ResetSearch(b.searchSeq)
+		jumpNode.ResetSearch(searchSeq)
 
 		if jumpNode.Closed {
 			continue
