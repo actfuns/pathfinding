@@ -94,9 +94,9 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]i
 			x, y := neighbor.X, neighbor.Y
 			var ng float64
 			if x-node.X == 0 || y-node.Y == 0 {
-				ng = node.G + 1
+				ng = node.G + 1*neighbor.Weight
 			} else {
-				ng = node.G + SQRT2
+				ng = node.G + SQRT2*neighbor.Weight
 			}
 
 			if neighbor.Opened == 0 || ng < neighbor.G {

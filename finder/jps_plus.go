@@ -435,8 +435,8 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 			if (dist <= 0 && endDist <= obstacleDist) || (dist > 0 && endDist <= int(dist)) {
 				// End is reachable in this direction, add it as successor
 				gd := octileDist(AbsInt(endX-x), AbsInt(endY-y))
-				ng := node.G + gd
 				endNode := j.endNode
+				ng := node.G + gd*endNode.Weight
 				endNode.ResetSearch(searchSeq)
 				if !endNode.Closed && (endNode.Opened == 0 || ng < endNode.G) {
 					endNode.G = ng
@@ -471,7 +471,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 			if dx != 0 && dy != 0 {
 				moveCost = SQRT2
 			}
-			ng := node.G + moveCost
+			ng := node.G + moveCost*adjNode.Weight
 			if adjNode.Opened == 0 || ng < adjNode.G {
 				adjNode.G = ng
 				if adjNode.Opened == 0 {
@@ -504,7 +504,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 		}
 
 		gd := octileDist(AbsInt(jx-x), AbsInt(jy-y))
-		ng := node.G + gd
+		ng := node.G + gd*jumpNode.Weight
 
 		if jumpNode.Opened == 0 || ng < jumpNode.G {
 			jumpNode.G = ng

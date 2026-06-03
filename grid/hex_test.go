@@ -282,6 +282,17 @@ func TestHexSVG(t *testing.T) {
 				return m
 			}(),
 		},
+		{
+			name: "weighted terrain 5x5", startX: 0, startY: 0, endX: 4, endY: 4,
+			matrix: NewMatrix(5, 5),
+			weights: [][]float64{
+				{1.0, 1.0, 1.0, 1.0, 1.0},
+				{1.0, 0.3, 0.3, 0.3, 1.0},
+				{1.0, 0.3, 5.0, 0.3, 1.0},
+				{1.0, 0.3, 0.3, 0.3, 1.0},
+				{1.0, 1.0, 1.0, 1.0, 1.0},
+			},
+		},
 	}
 
 	t.Run("pointy-top", func(t *testing.T) {

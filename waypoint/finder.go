@@ -198,14 +198,17 @@ type nodeHeap struct {
 	nodes []*aNode
 }
 
+// Len returns the number of nodes in the heap.
 func (h *nodeHeap) Len() int { return len(h.nodes) }
 
+// Push adds a node to the heap and maintains the min-heap invariant.
 func (h *nodeHeap) Push(n *aNode) {
 	n.heapIdx = len(h.nodes)
 	h.nodes = append(h.nodes, n)
 	h.siftUp(n.heapIdx)
 }
 
+// Pop removes and returns the node with the smallest f value.
 func (h *nodeHeap) Pop() *aNode {
 	n := len(h.nodes)
 	last := h.nodes[n-1]

@@ -153,7 +153,7 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node, searchSeq int) {
 		}
 
 		d := Octile(float64(AbsInt(jx-x)), float64(AbsInt(jy-y)))
-		ng := node.G + d
+		ng := node.G + d*jumpNode.Weight
 
 		if jumpNode.Opened == 0 || ng < jumpNode.G {
 			jumpNode.G = ng

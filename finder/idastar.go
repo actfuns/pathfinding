@@ -66,9 +66,9 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 
 	cost := func(a, b *Node) float64 {
 		if a.X == b.X || a.Y == b.Y {
-			return 1
+			return 1 * b.Weight
 		}
-		return SQRT2
+		return SQRT2 * b.Weight
 	}
 
 	startTime := time.Now()

@@ -210,6 +210,19 @@ func (g *HexGrid) SetWalkableAt(x, y int, walkable bool) {
 	node.Walkable = walkable
 }
 
+// SetWeightAt sets the movement cost multiplier for the tile at (x, y).
+func (g *HexGrid) SetWeightAt(x, y int, weight float64) {
+	g.nodes[g.index(x, y)].Weight = weight
+}
+
+// GetWeightAt returns the movement cost multiplier for the tile at (x, y).
+func (g *HexGrid) GetWeightAt(x, y int) float64 {
+	if !g.IsInside(x, y) {
+		return 1.0
+	}
+	return g.nodes[g.index(x, y)].Weight
+}
+
 // ObstacleCount returns the number of non-walkable tiles in the grid.
 func (g *HexGrid) ObstacleCount() int { return g.obstacleCount }
 
@@ -387,13 +400,6 @@ func (g *HexGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 	g.SetWalkableAt(tx, ty, walkable)
 }
 
-// FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
-// from the given world position (wx, wy). Returns the world-space center of the
-// nearest walkable tile and true if found; returns (0, 0, false) if no walkable
-// tile exists within the search radius. The search uses concentric square expansion
-// (Chebyshev distance). Within each ring, the walkable tile with the smallest
-// Euclidean distance to (wx, wy) is selected.
-
 // tileEdgePoint returns the closest point on the edge of tile (tx, ty) to (wx, wy),
 // inset by one world-space unit inward from the tile boundary.
 func (g *HexGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float32, float32) {
@@ -416,6 +422,8 @@ func (g *HexGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float32, flo
 	return px, py
 }
 
+// FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
+// from the given world position (wx, wy). See Grid.FindNearestWalkable for details.
 func (g *HexGrid) FindNearestWalkable(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool) {
 	if maxRadius < 0 {
 		return 0, 0, false
@@ -752,8 +760,19 @@ func (g *HexGrid) GetNeighbors(node *finder.Node, _ finder.DiagonalMovement, buf
 	return neighbors
 }
 
-// RenderSVG renders the hex grid and an optional path as an SVG string.
-func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) string {
+// RenderSVG renders the hex grid with weight-colored tiles and paths.
+func (g *HexGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
+	// Use defaults when nil
+	if cfg == nil {
+		cfg = DefaultSVGOpts
+	}
+	// Derive start/end from first path
+	startX, startY, endX, endY := 0, 0, 0, 0
+	if len(paths) > 0 && len(paths[0]) > 0 {
+		startX, startY = paths[0][0][0], paths[0][0][1]
+		endX, endY = paths[0][len(paths[0])-1][0], paths[0][len(paths[0])-1][1]
+	}
+
 	padding := 20.0
 
 	// Find bounds of all tile center points
@@ -825,7 +844,7 @@ func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) strin
 		}
 	}
 
-	svgW := (vxMax - vxMin) + padding*2
+	svgW := (vxMax - vxMin) + padding*2 + 120
 	svgH := (vyMax - vyMin) + padding*2
 	dx := padding - vxMin
 	dy := padding - vyMin
@@ -837,11 +856,11 @@ func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) strin
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
 			cx, cy := g.tileToScreenCoords(x, y)
-			fill := "#ffffff"
-			stroke := "#cccccc"
+			fill, stroke := "#c8e6c9", "#cccccc"
 			if !g.IsWalkableAt(x, y) {
-				fill = "#333333"
-				stroke = "#333333"
+				fill, stroke = "#555555", "#444444"
+			} else {
+				fill = weightToColor(g.nodes[g.index(x, y)].Weight, cfg)
 			}
 			pts := make([]string, len(hexOffsets))
 			for i, off := range hexOffsets {
@@ -852,7 +871,7 @@ func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) strin
 		}
 	}
 
-	drawPathAndMarkers(&b, path, startX, startY, endX, endY,
+	drawPathAndMarkers(&b, startX, startY, endX, endY,
 		func(tx, ty int) (float64, float64) {
 			cx, cy := g.tileToScreenCoords(tx, ty)
 			var cxOff, cyOff float64
@@ -864,8 +883,9 @@ func (g *HexGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) strin
 				cyOff = float64(g.tileH) / 2
 			}
 			return cx + cxOff + dx, cy + cyOff + dy
-		})
+		}, paths...)
 
+	renderLegend(&b, svgW-130, padding, cfg)
 	b.WriteString("</svg>\n")
 	return b.String()
 }

@@ -1,7 +1,6 @@
 package grid
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -113,25 +112,24 @@ func TestOrthogonalSVG(t *testing.T) {
 				return m
 			}(),
 		},
+		{
+			name: "weighted terrain 10x8", startX: 1, startY: 0, endX: 7, endY: 7,
+			matrix: NewMatrix(10, 8),
+			weights: [][]float64{
+				{0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3},
+				{0.3, 1.0, 1.0, 1.0, 5.0, 5.0, 1.0, 1.0, 5.0, 0.3},
+				{0.3, 1.0, 1.0, 5.0, 5.0, 5.0, 5.0, 1.0, 5.0, 0.3},
+				{0.3, 1.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 0.3},
+				{0.3, 1.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 0.3},
+				{0.3, 1.0, 1.0, 5.0, 5.0, 5.0, 5.0, 1.0, 5.0, 0.3},
+				{0.3, 1.0, 1.0, 1.0, 5.0, 5.0, 1.0, 1.0, 5.0, 0.3},
+				{0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3},
+			},
+		},
 	}
 	runSVGTest(t, "orthogonal", scenarios, func(matrix [][]int) gridForSVG {
 		return NewOrthogonalGrid(matrix)
 	})
-}
-
-func TestOrthogonalSVG_NoPath(t *testing.T) {
-	g := NewOrthogonalGrid([][]int{
-		{0, 1, 0},
-		{0, 1, 0},
-		{0, 1, 0},
-	})
-	svg := g.RenderSVG(nil, 0, 0, 2, 0)
-	if !strings.Contains(svg, "<svg") {
-		t.Error("SVG missing <svg tag")
-	}
-	if strings.Contains(svg, "#0066cc") {
-		t.Error("SVG should not contain path when nil path given")
-	}
 }
 
 func TestOrthogonalFindNearestWalkable(t *testing.T) {

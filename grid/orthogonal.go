@@ -112,6 +112,22 @@ func (g *OrthogonalGrid) SetWalkableAt(x, y int, walkable bool) {
 	node.Walkable = walkable
 }
 
+// SetWeightAt sets the movement cost multiplier for the tile at (x, y).
+// A weight of 1.0 is the default; higher values make the tile more costly
+// to traverse. Panics if (x, y) is outside the grid.
+func (g *OrthogonalGrid) SetWeightAt(x, y int, weight float64) {
+	g.nodes[g.index(x, y)].Weight = weight
+}
+
+// GetWeightAt returns the movement cost multiplier for the tile at (x, y).
+// Returns the default weight (1.0) for tiles outside the grid.
+func (g *OrthogonalGrid) GetWeightAt(x, y int) float64 {
+	if !g.IsInside(x, y) {
+		return 1.0
+	}
+	return g.nodes[g.index(x, y)].Weight
+}
+
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). Returns the world-space center of the
 // nearest walkable tile and true if found; returns (0, 0, false) if no walkable
@@ -141,6 +157,8 @@ func (g *OrthogonalGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float
 	return px, py
 }
 
+// FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
+// from the given world position (wx, wy). See the method doc on Grid for details.
 func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool) {
 	if maxRadius < 0 {
 		return 0, 0, false
@@ -597,66 +615,95 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 	return neighbors
 }
 
-// RenderSVG renders the grid and an optional path as an SVG string.
-func (g *OrthogonalGrid) RenderSVG(path [][2]int, startX, startY, endX, endY int) string {
+// RenderSVG renders the grid with weight-colored tiles and one or more paths.
+// Each path in paths is drawn in a different color. The first path uses the
+// default blue; additional paths cycle through red, green, and purple.
+// Walkable tiles are colored by their Weight field:
+//
+//	weight=1.0 (default): light green
+//	weight<1.0 (road):    light blue
+//	weight>1.0 (swamp):   yellow → orange gradient
+//
+// Blocked tiles are shown in dark gray with a hatch pattern.
+func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
+	// Use defaults when nil
+	if cfg == nil {
+		cfg = DefaultSVGOpts
+	}
+	// Derive start/end marker positions from the first path
+	startX, startY := 0, 0
+	endX, endY := 0, 0
+	if len(paths) > 0 && len(paths[0]) > 0 {
+		startX, startY = paths[0][0][0], paths[0][0][1]
+		endX, endY = paths[0][len(paths[0])-1][0], paths[0][len(paths[0])-1][1]
+	}
 	cellW := 40
 	cellH := 40
 	padding := 20
-	width := g.width*cellW + padding*2
+	legendW := 120
+	leftPad := padding + legendW + padding
+	width := g.width*cellW + leftPad + padding
 	height := g.height*cellH + padding*2
 
 	var b strings.Builder
 	b.WriteString(xmlHeader(width, height))
 
+	// Weight-to-color helper (from cfg or defaults)
+	weightColor := func(w float64) string {
+		return weightToColor(w, cfg)
+	}
+
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
-			rx := padding + x*cellW
-			ry := padding + y*cellH
-			fill := "#ffffff"
-			stroke := "#cccccc"
+			rx := leftPad + x*cellW
+			ry := leftPad + y*cellH
+			var fill, stroke string
 			if !g.IsWalkableAt(x, y) {
-				fill = "#333333"
-				stroke = "#333333"
+				fill = "#555555"
+				stroke = "#444444"
+			} else {
+				fill = weightColor(g.nodes[g.index(x, y)].Weight)
+				stroke = "#cccccc"
 			}
 			fmt.Fprintf(&b, `<rect x="%d" y="%d" width="%d" height="%d" fill="%s" stroke="%s" stroke-width="1"/>`+"\n",
 				rx, ry, cellW, cellH, fill, stroke)
 		}
 	}
 
-	drawPathAndMarkers(&b, path, startX, startY, endX, endY,
-		func(tx, ty int) (float64, float64) {
-			return float64(padding + tx*cellW + cellW/2),
-				float64(padding + ty*cellH + cellH/2)
-		})
-
-	b.WriteString("</svg>\n")
-	return b.String()
-}
-
-// RenderSVG renders the hex grid and an optional path as an SVG string.
-
-func drawPathAndMarkers(b *strings.Builder, path [][2]int, startX, startY, endX, endY int,
-	centerOf func(tx, ty int) (float64, float64)) {
-
-	if len(path) > 0 {
-		pts := make([]string, len(path))
-		for i, p := range path {
-			cx, cy := centerOf(p[0], p[1])
-			pts[i] = fmt.Sprintf("%.1f,%.1f", cx, cy)
+	// Draw each path with a distinct color
+	pathColors := []string{"#0066cc", "#e53935", "#2e7d32", "#7b1fa2"}
+	for pi, path := range paths {
+		color := pathColors[pi%len(pathColors)]
+		strokeWidth := 3.0
+		dashArray := ""
+		if pi == 1 {
+			dashArray = ` stroke-dasharray="6,4"`
 		}
-		fmt.Fprintf(b, `<polyline points="%s" fill="none" stroke="#0066cc" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`+"\n",
-			strings.Join(pts, " "))
+		if len(path) > 0 {
+			pts := make([]string, len(path))
+			for i, p := range path {
+				pts[i] = fmt.Sprintf("%.1f,%.1f",
+					float64(leftPad+p[0]*cellW+cellW/2),
+					float64(leftPad+p[1]*cellH+cellH/2))
+			}
+			fmt.Fprintf(&b, `<polyline points="%s" fill="none" stroke="%s" stroke-width="%.0f"%s stroke-linejoin="round" stroke-linecap="round"/>`+"\n",
+				strings.Join(pts, " "), color, strokeWidth, dashArray)
+		}
 	}
 
-	sx, sy := centerOf(startX, startY)
-	fmt.Fprintf(b, `<circle cx="%.1f" cy="%.1f" r="6" fill="#00cc44" stroke="#009933" stroke-width="2"/>`+"\n", sx, sy)
+	// Start marker (green circle with "S")
+	sx := float64(padding + startX*cellW + cellW/2)
+	sy := float64(padding + startY*cellH + cellH/2)
+	fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="7" fill="#00cc44" stroke="#009933" stroke-width="2"/>`+"\n", sx, sy)
+	fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" font-size="10" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">S</text>`+"\n", sx, sy+3.5)
 
-	ex, ey := centerOf(endX, endY)
-	fmt.Fprintf(b, `<circle cx="%.1f" cy="%.1f" r="6" fill="#cc0000" stroke="#990000" stroke-width="2"/>`+"\n", ex, ey)
-}
+	// End marker (red circle with "E")
+	ex := float64(padding + endX*cellW + cellW/2)
+	ey := float64(padding + endY*cellH + cellH/2)
+	fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="7" fill="#cc0000" stroke="#990000" stroke-width="2"/>`+"\n", ex, ey)
+	fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" font-size="10" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">E</text>`+"\n", ex, ey+3.5)
 
-func xmlHeader(w, h int) string {
-	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">
-`, w, h, w, h)
+	renderLegend(&b, float64(padding), float64(padding), cfg)
+	b.WriteString("</svg>\n")
+	return b.String()
 }

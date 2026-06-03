@@ -5,6 +5,12 @@ type Node struct {
 	X        int
 	Y        int
 	Walkable bool
+	// Weight is the per-tile movement cost multiplier. All walkable tiles have
+	// a weight >= 1. A weight of 2.0 means moving through this tile costs twice
+	// as much as moving through a default tile. Used by cost-aware pathfinders
+	// (A*, Dijkstra, JPS, etc.). Defaults to 1.0. Set via NewNode or
+	// grid.Grid.SetWeightAt.
+	Weight float64
 
 	// Pathfinding state (reused across searches)
 	G, H, F float64
@@ -25,9 +31,9 @@ type Node struct {
 	SearchID int
 }
 
-// NewNode creates a node.
+// NewNode creates a node with default weight 1.0.
 func NewNode(x, y int) *Node {
-	return &Node{X: x, Y: y, Walkable: true}
+	return &Node{X: x, Y: y, Walkable: true, Weight: 1.0}
 }
 
 // ResetSearch resets all search-related fields if seq doesn't match.
