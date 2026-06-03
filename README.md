@@ -2,175 +2,6 @@
 
 一个全面的 Go 寻路库，支持多种网格类型和搜索算法。
 
-## 性能基准
-
-以下基准测试在 **Intel i5-13400** 上运行。所有数据基于 `BenchmarkOrthogonalAlloc` 和 `BenchmarkWaypointFindPath`。
-
-**指标说明：**
-- **时间/op** — 每次寻路的平均耗时（ns）
-- **内存/op** — 每次寻路的平均内存分配（B）
-- **分配/op** — 每次寻路的平均分配次数
-- 分配次数 = GC 压力：分配越多，GC 越频繁，帧率越不稳定
-
-### 综合对比
-
-| 网格规模 | 算法 | 时间/op | 内存/op | 分配/op |
-| :--- | :--- | ---: | ---: | ---: |
-| 100×100 | Open (0%) | **A\*** | 161 µs | 0 B | 0 |
-| | | **JPS** | 131 µs | 5.8 KB | 9 |
-| | | **JPS+** | **2.4 µs** | 5.7 KB | 7 |
-| | Sparse (10%) | **A\*** | 255 µs | 0 B | 0 |
-| | | **JPS** | 42 µs | 39.1 KB | 476 |
-| | | **JPS+** | **34 µs** | 27.2 KB | 96 |
-| | Dense (20%) | **A\*** | 220 µs | 0 B | 0 |
-| | | **JPS** | 38 µs | 42.6 KB | 515 |
-| | | **JPS+** | **40 µs** | 27.4 KB | 97 |
-| 200×200 | Open (0%) | **A\*** | 1.03 ms | 0 B | 0 |
-| | | **JPS** | 569 µs | 11.3 KB | 10 |
-| | | **JPS+** | **31 µs** | 29.6 KB | 78 |
-| | Sparse (10%) | **A\*** | 538 µs | 0 B | 0 |
-| | | **JPS** | 83 µs | 76.6 KB | 935 |
-| | | **JPS+** | **70 µs** | 52.0 KB | 181 |
-| | Dense (20%) | **A\*** | 292 µs | 0 B | 0 |
-| | | **JPS** | 71 µs | 80.0 KB | 949 |
-| | | **JPS+** | **61 µs** | 55.1 KB | 193 |
-
-关键发现：
-- **开阔地形（0% 障碍）** — JPS+ 利用预计算跳点表，可直接跳到目标点。100×100 仅 **2.4µs**，相比 A\* 加速 ~**67×**，相比 JPS 加速 ~**54×**。并非退化到 A\*
-- **有障碍时** — JPS 和 JPS+ 表现接近，比 A\* 快 3~6×
-- **A\* 零分配** — 内部复用 Node/OpenSet 缓冲区，全程 0 B/op
-- **JPS/JPS+ 有分配** — 每次寻路需分配路径结果，但 JPS+ 分配次数约为 JPS 的 1/5
-- **GC 压力** — JPS 在 500×500 上产生 35 万次分配，频繁触发 GC；JPS+ 预计算后寻路分配量稳定
-
-### Waypoint 寻路
-
-| 基准 | 时间/op | 内存/op | 分配/op |
-| :--- | ---: | ---: | ---: |
-| FindPath（预热后） | 139,615 ns | 1 B | 0 |
-| ConnectNearby（676 节点） | 1,508,913 ns | 244,768 B | 6,901 |
-
-## 特性
-
-### 寻路算法
-
-| 算法 | 双向 | 说明 |
-| :--- | :---: | :--- |
-| **A\*** | ✅ | 经典启发式最短路径 |
-| **Dijkstra** | ✅ | 加权最短路径（无启发式） |
-| **Best-First Search** | ✅ | 贪心最佳优先搜索 |
-| **Breadth-First Search** | ✅ | 广度优先遍历 |
-| **IDA\*** | ❌ | 迭代加深 A\*，内存占用极低 |
-| **JPS (Jump Point Search)** | ❌ | 跳点搜索，利用网格对称性加速 |
-| **JPS+ (Jump Point Search Plus)** | ❌ | JPS 优化变体，Precompute 跳点表，O(1) 查表替换递归扫描 |
-
-#### JPS 变体
-
-根据对角线移动规则提供四个优化变体：
-
-| 变体 | 对角线规则 | 适用场景 |
-| :--- | :--- | :--- |
-| **JPS — Never** | 禁止对角线 | 四方向移动 |
-| **JPS — Always** | 始终允许对角线 | 开阔地形 |
-| **JPS — NoObstacles** | 无障碍时允许对角线 | 半开阔地形 |
-| **JPS — AtMostOne** | 最多一个障碍时允许对角线 | 复杂障碍布局 |
-
-#### JPS+ (Jump Point Search Plus)
-
-JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `jump()` 扫描：
-
-| 特性 | 说明 |
-| :--- | :--- |
-| **Precompute** | 两阶段预计算：Phase 1 检测 Primary Jump Points，Phase 2 计算 8 方向距离表 |
-| **export/import** | `PrecomputedData()` / `LoadPrecomputed()` 支持烘焙数据导出为文件，服务端启动直接加载 |
-| **searchSeq 全局唯一** | 所有 finder 的 `searchSeq` 通过全局原子计数器初始化，不同 finder 可安全共享同一 grid |
-
-适用场景：**障碍物密集的静态小地图**（如游戏房间内布局固定的障碍地图）。开阔地形下利用预计算距离表可直接跳跃到目标，反而是 JPS+ 最快的场景（100×100 仅 2.4µs）。
-
-### 网格类型
-
-- **正交网格 (Orthogonal)** — 标准方格网格，支持自定义 TileSize 转换世界坐标
-- **六边形网格 (Hexagonal)** — 六边形瓦片网格（轴向坐标）
-- **交错网格 (Staggered)** — 45 度等距/交错瓦片网格
-
-### 高级系统
-
-#### HPA\* (Hierarchical Pathfinding A\*)
-
-层级寻路，通过抽象分层加速大地图寻路。核心优化：
-
-| 优化 | 说明 |
-| :--- | :--- |
-| **Portal Compression (P0)** | 将相邻可通行边缘合并为连续 Portal，减少抽象图节点数 4~8× |
-| **String Pulling (P1)** | 对最终路径进行 LOS 平滑，消除层级抽象产生的冗余拐点 |
-| **Allocation Optimization (P2)** | 复用内部缓冲区（portalPathBuf、waypointsBuf、waypointsResult），预热后零分配 |
-| **Portal Path Cache (P3)** | 缓存 (startChunk, endChunk) → portal 路径，重复查询直接复用，避免抽象层 A\* |
-
-HPA\* 优势：
-- **大地图** 500×500 相比 A\* 加速约 3600×
-- **预热后零分配** — `waypointsResult` 复用内部缓冲区，不触发 GC
-- **String Pulling 默认开启** — 路径平滑无需额外步骤
-- **自动路径缓存** — 相同 chunk 起终点重复查询 O(1) 返回
-
-#### OrthogonalGrid 分配与路径平滑
-
-`OrthogonalGrid` 对 A\* 寻路做了极致的内存优化：
-
-| 优化 | 说明 |
-| :--- | :--- |
-| **TileSize 转换** | 世界坐标 ↔ 瓦片坐标自动换算，支持非 1:1 比例 |
-| **零分配 A\*** | AStar Finder 内部复用 Node 和 OpenSet 缓冲区，benchmark 显示 0 B/op |
-| **LOS Smoothing** | `FindSmoothPath` 基于 Bresenham 直线可视性消除冗余路径点，开销仅 ~25% |
-| **可插拔 Finder** | 通过 `WithOrthogonalFinder()` 可替换底层寻路算法 |
-
-#### Waypoint Graph
-
-航点图寻路，基于预计算节点连通性。适用于静态路网场景。
-
-| 优化 | 说明 |
-| :--- | :--- |
-| **空间哈希索引** | cellSize=64 网格分区，`FindClosest`/`FindClosestWithLOS` 降至 O(1)~O(k) |
-| **ConnectNearby 优化** | 从 O(n²) 降至 O(n×k)，仅检查邻近 cell 内的节点对 |
-| **LOS 边缘过滤** | 节点连接自动检测障碍物遮挡，仅保留可视连接 |
-| **EdgeState 系统** | 支持 Static / Dynamic / Null 三种边状态，可动态阻塞 |
-
-## 压力测试
-
-```bash
-# 各算法在 100×100 网格上的压力测试
-go test -v -run TestOrthogonalStress ./grid/
-
-# 500×500 大地图压力测试
-go test -v -run TestOrthogonalStress_DenseGrid ./grid/
-
-# 六边形网格压力测试
-go test -v -run TestHexStress ./grid/
-
-# 交错网格压力测试
-go test -v -run TestStaggeredStress ./grid/
-```
-
-## 基准测试
-
-```bash
-# 跨算法、多规模性能对比（含内存分配）
-go test -bench=BenchmarkOrthogonalAlloc -benchmem ./grid/
-
-# 100×100 各算法基准
-go test -bench=BenchmarkOrthogonal100 -benchmem ./grid/
-
-# 500×500 大地图基准
-go test -bench=BenchmarkOrthogonal500 -benchmem ./grid/
-
-# HPA* 专项基准
-go test -bench=. -benchmem ./hpa/
-
-# Waypoint 基准（寻路 + 空间索引）
-go test -bench=. -benchmem ./waypoint/
-
-# 运行全部测试
-go test ./... -count=1 -vet=all
-```
-
 ## 安装
 
 ```bash
@@ -204,15 +35,114 @@ func main() {
     path := g.FindPath(0, 0, 4, 4)
     fmt.Println("路径:", path)
 
-    // 或使用路径平滑
-    // smooth := g.FindSmoothPath(0, 0, 4, 4)
-
     // 在运行时修改地形
     g.SetWalkableAt(2, 2, false)
 }
 ```
 
-### HPA\* 使用示例
+也可创建全空网格：
+
+```go
+m := grid.NewMatrix(100, 100)    // 100×100 全空
+g := grid.NewOrthogonalGrid(m)
+```
+
+### 使用其他寻路算法
+
+```go
+import "github.com/actfuns/pathfinding/finder"
+
+// 替换默认的 A* 为 JPS
+g := grid.NewOrthogonalGrid(terrain,
+    grid.WithOrthogonalFinder(finder.NewJumpPointFinder()),
+)
+```
+
+## 网格类型
+
+| 类型 | 说明 |
+| :--- | :--- |
+| **正交网格 (Orthogonal)** | 标准方格网格，支持自定义 TileSize 转换世界坐标 |
+| **六边形网格 (Hexagonal)** | 六边形瓦片网格（轴向坐标），支持 flat-top / pointy-top |
+| **交错网格 (Staggered)** | 45 度等距/交错瓦片网格（钻石形瓦片） |
+
+### Grid 接口
+
+所有网格类型实现统一的 `grid.Grid` 接口：
+
+- **瓦片坐标查询** — Width, Height, IsInside, IsWalkableAt, SetWalkableAt, GetNodeAt, ObstacleCount
+- **世界坐标转换** — WorldToTile, TileToWorld, IsWalkableAtWorld, SetWalkableAtWorld
+- **最近可通行点** — FindNearestWalkable, FindNearestWalkableTile
+- **寻路** — FindPath, FindSmoothPath, SmoothenTilePath
+- **渲染** — RenderSVG（输出调试 SVG）
+
+## 寻路算法
+
+| 算法 | 双向 | 说明 |
+| :--- | :---: | :--- |
+| **A\*** | ✅ | 经典启发式最短路径 |
+| **Dijkstra** | ✅ | 加权最短路径（无启发式） |
+| **Best-First Search** | ✅ | 贪心最佳优先搜索 |
+| **Breadth-First Search** | ✅ | 广度优先遍历 |
+| **IDA\*** | ❌ | 迭代加深 A\*，内存占用极低 |
+| **JPS (Jump Point Search)** | ❌ | 跳点搜索，利用网格对称性加速 |
+| **JPS+ (Jump Point Search Plus)** | ❌ | JPS 优化变体，Precompute 跳点表，O(1) 查表替换递归扫描 |
+| **HPA\*** | ❌ | 层级寻路，分块抽象加速大地图 |
+
+### JPS 变体
+
+根据对角线移动规则提供四个优化变体：
+
+| 变体 | 对角线规则 | 适用场景 |
+| :--- | :--- | :--- |
+| **Never** | 禁止对角线 | 四方向移动 |
+| **Always** | 始终允许对角线 | 开阔地形 |
+| **NoObstacles** | 无障碍时允许对角线 | 半开阔地形 |
+| **AtMostOne** | 最多一个障碍时允许对角线 | 复杂障碍布局 |
+
+### JPS+ (Jump Point Search Plus)
+
+JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `jump()` 扫描：
+
+| 特性 | 说明 |
+| :--- | :--- |
+| **Precompute** | 两阶段预计算：Phase 1 检测 Primary Jump Points，Phase 2 计算 8 方向距离表 |
+| **export/import** | `PrecomputedData()` / `LoadPrecomputed()` 支持烘焙数据导出为文件，服务端启动直接加载 |
+| **searchSeq 全局唯一** | 所有 finder 的 `searchSeq` 通过全局原子计数器初始化，不同 finder 可安全共享同一 grid |
+
+适用场景：**障碍物密集的静态小地图**（如游戏房间内布局固定的障碍地图）。开阔地形下利用预计算距离表可直接跳跃到目标，反而是 JPS+ 最快的场景（100×100 仅 2.4µs）。
+
+```go
+import (
+    "github.com/actfuns/pathfinding/finder"
+    "github.com/actfuns/pathfinding/grid"
+)
+
+matrix := [][]int{{0, 0, 0}, {0, 1, 0}, {0, 0, 0}}
+g := grid.NewOrthogonalGrid(matrix)
+
+f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
+f.Precompute(g)
+
+path := f.FindPath(0, 0, 2, 2, g)
+
+// 导出烘焙数据供后续启动直接加载
+data, _ := f.PrecomputedData()
+// os.WriteFile("map_data.bin", data, 0644)
+```
+
+## 高级系统
+
+### HPA\* (Hierarchical Pathfinding A\*)
+
+层级寻路，通过抽象分层加速大地图寻路。核心优化：
+
+| 优化 | 说明 |
+| :--- | :--- |
+| **Portal Compression (P0)** | 将相邻可通行边缘合并为连续 Portal，减少抽象图节点数 4~8× |
+| **String Pulling (P1)** | 对最终路径进行 LOS 平滑，消除层级抽象产生的冗余拐点 |
+| **Allocation Optimization (P2)** | 复用内部缓冲区（portalPathBuf、waypointsBuf、waypointsResult），预热后零分配 |
+| **Portal Path Cache (P3)** | 缓存 (startChunk, endChunk) → portal 路径，重复查询直接复用，避免抽象层 A\* |
 
 ```go
 import (
@@ -220,22 +150,28 @@ import (
     "github.com/actfuns/pathfinding/hpa"
 )
 
-// 创建大地图
 matrix := generateGrid(500, 500, 0.1)
 g := grid.NewOrthogonalGrid(matrix)
 
-// 创建 HPA* finder
 f := hpa.NewHPAFinder(
     hpa.WithChunkSize(32),
     hpa.WithStringPulling(true),
 )
-f.Build(g) // 预构建层级图
+f.Build(g)
 
-// 寻路
 path := f.FindPath(0, 0, 499, 499, g)
 ```
 
-### Waypoint 使用示例
+### Waypoint Graph
+
+航点图寻路，基于预计算节点连通性。适用于静态路网场景。
+
+| 优化 | 说明 |
+| :--- | :--- |
+| **空间哈希索引** | cellSize=64 网格分区，`FindClosest`/`FindClosestWithLOS` 降至 O(1)~O(k) |
+| **ConnectNearby 优化** | 从 O(n²) 降至 O(n×k)，仅检查邻近 cell 内的节点对 |
+| **LOS 边缘过滤** | 节点连接自动检测障碍物遮挡，仅保留可视连接 |
+| **EdgeState 系统** | 支持 Static / Dynamic / Null 三种边状态，可动态阻塞 |
 
 ```go
 import "github.com/actfuns/pathfinding/waypoint"
@@ -245,41 +181,94 @@ a := g.AddNode(0, 0)
 b := g.AddNode(10, 0)
 c := g.AddNode(10, 10)
 
-// 手动连接
 a.Connect(b, waypoint.EdgeStateStatic)
 b.Connect(c)
 
-// 或自动连接（距离 + LOS 检测）
-grid := walkableGrid(20, 20)
-g.ConnectNearby(15, grid)
-
-// 寻路
 f := waypoint.NewWaypointFinder(g)
 path := f.FindPath(0, 0, 10, 10, grid)
 ```
 
-### JPS+ 使用示例
+### OrthogonalGrid 分配与路径平滑
 
-```go
-import (
-    "github.com/actfuns/pathfinding/finder"
-    "github.com/actfuns/pathfinding/grid"
-)
+`OrthogonalGrid` 对 A\* 寻路做了极致的内存优化：
 
-// 创建网格
-matrix := [][]int{{0, 0, 0}, {0, 1, 0}, {0, 0, 0}}
-g := grid.NewOrthogonalGrid(matrix)
+| 优化 | 说明 |
+| :--- | :--- |
+| **TileSize 转换** | 世界坐标 ↔ 瓦片坐标自动换算，支持非 1:1 比例 |
+| **零分配 A\*** | AStar Finder 内部复用 Node 和 OpenSet 缓冲区，benchmark 显示 0 B/op |
+| **LOS Smoothing** | `FindSmoothPath` 基于 Bresenham 直线可视性消除冗余路径点，开销仅 ~25% |
+| **可插拔 Finder** | 通过 `WithOrthogonalFinder()` 可替换底层寻路算法 |
+| **障碍物计数** | `obstacleCount` 跟踪不可通行瓦片数，全空时 FindPath 直接返回线段，不走算法 |
 
-// 创建 finder 并预计算
-f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
-f.Precompute(g)
+## 性能基准
 
-// 寻路
-path := f.FindPath(0, 0, 2, 2, g)
+以下基准测试在 **Intel i5-13400** 上运行。测试三种障碍密度：
 
-// 导出烘焙数据供后续启动直接加载
-data, _ := f.PrecomputedData()
-// os.WriteFile("map_data.bin", data, 0644)
+- **Open (0%)** — 全空网格
+- **Sparse (10%)** — 稀疏障碍
+- **Dense (20%)** — 密集障碍
+
+| 规模 | 密度 | 算法 | 时间/op | 内存/op | 分配/op |
+| :--- | :--- | :--- | ---: | ---: | ---: |
+| 100×100 | Open | **A\*** | 161 µs | 0 B | 0 |
+| | | **JPS** | 131 µs | 5.8 KB | 9 |
+| | | **JPS+** | **2.4 µs** | 5.7 KB | 7 |
+| | Sparse | **A\*** | 255 µs | 0 B | 0 |
+| | | **JPS** | 42 µs | 39.1 KB | 476 |
+| | | **JPS+** | **34 µs** | 27.2 KB | 96 |
+| | Dense | **A\*** | 220 µs | 0 B | 0 |
+| | | **JPS** | 38 µs | 42.6 KB | 515 |
+| | | **JPS+** | **40 µs** | 27.4 KB | 97 |
+| 200×200 | Open | **A\*** | 1.03 ms | 0 B | 0 |
+| | | **JPS** | 569 µs | 11.3 KB | 10 |
+| | | **JPS+** | **31 µs** | 29.6 KB | 78 |
+| | Sparse | **A\*** | 538 µs | 0 B | 0 |
+| | | **JPS** | 83 µs | 76.6 KB | 935 |
+| | | **JPS+** | **70 µs** | 52.0 KB | 181 |
+| | Dense | **A\*** | 292 µs | 0 B | 0 |
+| | | **JPS** | 71 µs | 80.0 KB | 949 |
+| | | **JPS+** | **61 µs** | 55.1 KB | 193 |
+
+关键发现：
+- **开阔地形 (0%)** — JPS+ 利用预计算跳点表直接跳到目标，100×100 仅 **2.4µs**，比 A\* 快 **67×**
+- **有障碍时** — JPS 和 JPS+ 表现接近，比 A\* 快 3~6×
+- **A\* 零分配** — 内部复用 Node/OpenSet 缓冲区，全程 0 B/op
+- **JPS/JPS+ 有分配** — 每次寻路需分配路径结果，但 JPS+ 分配次数约为 JPS 的 1/5
+
+### Waypoint 寻路
+
+| 基准 | 时间/op | 内存/op | 分配/op |
+| :--- | ---: | ---: | ---: |
+| FindPath（预热后） | 139,615 ns | 1 B | 0 |
+| ConnectNearby（676 节点） | 1,508,913 ns | 244,768 B | 6,901 |
+
+### 各规模对比
+
+| 规模 | A\* | JPS | JPS+ | HPA\* |
+| :--- | ---: | ---: | ---: | ---: |
+| 100×100 (10% obs) | 255 µs | 42 µs | **34 µs** | 2,911 ns |
+| 200×200 (10% obs) | 538 µs | 83 µs | **70 µs** | 3,782 ns |
+| 500×500 (10% obs) | 25 ms | 46 ms | — | **35 µs** |
+
+HPA\* 在 500×500 上相比 A\* 加速约 **730×**。
+
+## 命令
+
+```bash
+# 运行全部测试
+go test ./... -count=1 -vet=all
+
+# 压力测试
+go test -v -run TestOrthogonalStress ./grid/
+go test -v -run TestOrthogonalStress_DenseGrid ./grid/
+go test -v -run TestHexStress ./grid/
+go test -v -run TestStaggeredStress ./grid/
+
+# 基准测试
+go test -bench=BenchmarkOrthogonalAlloc -benchmem ./grid/
+go test -bench=BenchmarkOrthogonal100 -benchmem ./grid/
+go test -bench=. -benchmem ./hpa/
+go test -bench=. -benchmem ./waypoint/
 ```
 
 ## 设计原则
@@ -288,12 +277,13 @@ data, _ := f.PrecomputedData()
 - **接口统一** — 所有算法实现 `finder.Finder` 接口，可互换
 - **可插拔** — `OrthogonalGrid.WithOrthogonalFinder()` 允许运行时替换寻路算法
 - **Option 模式** — 所有配置项通过函数选项安全设置
+- **接口分离** — `finder.Grid` 只暴露寻路所需方法，`grid.Grid` 提供完整的消费者接口
 
 ## 文档
 
 - [Finder API](finder/finder.go) — 所有寻路算法的通用接口
-- [Grid](finder/grid.go) — 网格表示和地形定义
-- [网格实现](grid/) — 正交、六边形、交错三种网格类型
+- [Grid](finder/grid.go) — 寻路算法所需的网格接口
+- [Grid 实现](grid/) — 正交、六边形、交错三种网格类型
 - [HPA\*](hpa/) — 层级寻路（Portal Compression + String Pulling + Path Cache）
 - [Waypoint](waypoint/) — 航点图寻路（空间索引 + LOS 过滤）
 
