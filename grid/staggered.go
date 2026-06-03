@@ -13,15 +13,16 @@ import (
 // but overrides screenToTileCoords with a 4-corner detection + 45° rotation
 // (exactly as Tiled's StaggeredRenderer does).
 type StaggeredGrid struct {
-	staggerAxis  string // "x" or "y" — which axis is staggered
-	staggerIndex string // "even" or "odd" — which indexes are shifted
-	tileW        int    // pixel width of a tile
-	tileH        int    // pixel height of a tile
-	width        int    // tiles across
-	height       int    // tiles down
-	nodes        []*finder.Node
-	finder       finder.Finder
-	worldBuf     [][2]float32
+	staggerAxis   string // "x" or "y" — which axis is staggered
+	staggerIndex  string // "even" or "odd" — which indexes are shifted
+	tileW         int    // pixel width of a tile
+	tileH         int    // pixel height of a tile
+	width         int    // tiles across
+	height        int    // tiles down
+	nodes         []*finder.Node
+	finder        finder.Finder
+	worldBuf      [][2]float32
+	obstacleCount int
 
 	// Precomputed cardinal and diagonal neighbor offsets
 	cardinalOffsets  [4][2]int
@@ -62,22 +63,27 @@ func NewStaggeredGrid(matrix [][]int, opts ...StaggerOption) *StaggeredGrid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]*finder.Node, 0, w*h)
+	obs := 0
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			n := finder.NewNode(x, y)
 			n.Walkable = matrix[y][x] == 0
+			if !n.Walkable {
+				obs++
+			}
 			nodes = append(nodes, n)
 		}
 	}
 	g := &StaggeredGrid{
-		staggerAxis:  "y",
-		staggerIndex: "odd",
-		tileW:        64,
-		tileH:        64,
-		width:        w,
-		height:       h,
-		nodes:        nodes,
-		finder:       finder.NewAStarFinder(),
+		staggerAxis:   "y",
+		staggerIndex:  "odd",
+		tileW:         64,
+		tileH:         64,
+		width:         w,
+		height:        h,
+		obstacleCount: obs,
+		nodes:         nodes,
+		finder:        finder.NewAStarFinder(),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -160,8 +166,20 @@ func (g *StaggeredGrid) IsWalkableAt(x, y int) bool {
 
 // SetWalkableAt sets the walkability of the tile at (x, y).
 func (g *StaggeredGrid) SetWalkableAt(x, y int, walkable bool) {
-	g.nodes[g.index(x, y)].Walkable = walkable
+	node := g.nodes[g.index(x, y)]
+	if node.Walkable == walkable {
+		return
+	}
+	if walkable {
+		g.obstacleCount--
+	} else {
+		g.obstacleCount++
+	}
+	node.Walkable = walkable
 }
+
+// ObstacleCount returns the number of non-walkable tiles in the grid.
+func (g *StaggeredGrid) ObstacleCount() int { return g.obstacleCount }
 
 // Clone returns a deep copy of the staggered grid with independent node data.
 func (g *StaggeredGrid) Clone() finder.Grid {
@@ -175,6 +193,7 @@ func (g *StaggeredGrid) Clone() finder.Grid {
 		tileH:            g.tileH,
 		width:            g.width,
 		height:           g.height,
+		obstacleCount:    g.obstacleCount,
 		finder:           g.finder,
 	}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
@@ -619,6 +638,15 @@ func (g *StaggeredGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
 		return nil
 	}
+	if g.obstacleCount == 0 {
+		if cap(g.worldBuf) < 2 {
+			g.worldBuf = make([][2]float32, 2)
+		}
+		g.worldBuf = g.worldBuf[:2]
+		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
+		return g.worldBuf
+	}
 	path := g.finder.FindPath(sx, sy, ex, ey, g)
 	if path == nil {
 		return nil
@@ -646,6 +674,15 @@ func (g *StaggeredGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 
 	ex, ey := g.WorldToTile(wx2, wy2)
 	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
 		return nil
+	}
+	if g.obstacleCount == 0 {
+		if cap(g.worldBuf) < 2 {
+			g.worldBuf = make([][2]float32, 2)
+		}
+		g.worldBuf = g.worldBuf[:2]
+		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
+		return g.worldBuf
 	}
 	path := g.finder.FindPath(sx, sy, ex, ey, g)
 	if path == nil {

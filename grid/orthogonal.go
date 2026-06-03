@@ -10,13 +10,14 @@ import (
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
 // World-space helpers convert using tileW/tileH.
 type OrthogonalGrid struct {
-	tileW    int // world units per tile horizontally
-	tileH    int // world units per tile vertically
-	width    int // tiles across
-	height   int // tiles down
-	nodes    []*finder.Node
-	finder   finder.Finder
-	worldBuf [][2]float32
+	tileW         int // world units per tile horizontally
+	tileH         int // world units per tile vertically
+	width         int // tiles across
+	height        int // tiles down
+	obstacleCount int // number of non-walkable tiles
+	nodes         []*finder.Node
+	finder        finder.Finder
+	worldBuf      [][2]float32
 }
 
 // Finder returns the pathfinder associated with this grid.
@@ -41,14 +42,18 @@ func NewOrthogonalGrid(matrix [][]int, opts ...OrthogonalOption) *OrthogonalGrid
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]*finder.Node, 0, w*h)
+	obs := 0
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			n := finder.NewNode(x, y)
 			n.Walkable = matrix[y][x] == 0
+			if !n.Walkable {
+				obs++
+			}
 			nodes = append(nodes, n)
 		}
 	}
-	g := &OrthogonalGrid{width: w, height: h, tileW: 1, tileH: 1, nodes: nodes, finder: finder.NewAStarFinder()}
+	g := &OrthogonalGrid{width: w, height: h, tileW: 1, tileH: 1, obstacleCount: obs, nodes: nodes, finder: finder.NewAStarFinder()}
 	for _, opt := range opts {
 		opt(g)
 	}
@@ -71,6 +76,9 @@ func (g *OrthogonalGrid) TileWidth() int { return g.tileW }
 // TileHeight returns the world-space height of a single tile.
 func (g *OrthogonalGrid) TileHeight() int { return g.tileH }
 
+// ObstacleCount returns the number of non-walkable tiles in the grid.
+func (g *OrthogonalGrid) ObstacleCount() int { return g.obstacleCount }
+
 // IsInside reports whether the tile coordinate (x, y) is within the grid bounds.
 func (g *OrthogonalGrid) IsInside(x, y int) bool {
 	return x >= 0 && x < g.width && y >= 0 && y < g.height
@@ -92,7 +100,16 @@ func (g *OrthogonalGrid) IsWalkableAt(x, y int) bool {
 // SetWalkableAt sets the walkability of the tile at (x, y). The caller must
 // ensure the coordinate is inside the grid; otherwise the method panics.
 func (g *OrthogonalGrid) SetWalkableAt(x, y int, walkable bool) {
-	g.nodes[g.index(x, y)].Walkable = walkable
+	node := g.nodes[g.index(x, y)]
+	if node.Walkable == walkable {
+		return
+	}
+	if walkable {
+		g.obstacleCount--
+	} else {
+		g.obstacleCount++
+	}
+	node.Walkable = walkable
 }
 
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
@@ -322,7 +339,7 @@ func (g *OrthogonalGrid) FindNearestWalkableTile(wx, wy float32, maxRadius int) 
 // slice; each node is copied, but the parent pointer is cleared. The finder
 // reference and tile dimensions are shared from the original.
 func (g *OrthogonalGrid) Clone() finder.Grid {
-	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, finder: g.finder}
+	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, finder: g.finder}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
 	for i, n := range g.nodes {
 		cp := *n
@@ -384,6 +401,15 @@ func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
 		return nil
 	}
+	if g.obstacleCount == 0 {
+		if cap(g.worldBuf) < 2 {
+			g.worldBuf = make([][2]float32, 2)
+		}
+		g.worldBuf = g.worldBuf[:2]
+		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
+		return g.worldBuf
+	}
 	path := g.finder.FindPath(sx, sy, ex, ey, g)
 	if path == nil {
 		return nil
@@ -412,6 +438,15 @@ func (g *OrthogonalGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32
 	ex, ey := g.WorldToTile(wx2, wy2)
 	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
 		return nil
+	}
+	if g.obstacleCount == 0 {
+		if cap(g.worldBuf) < 2 {
+			g.worldBuf = make([][2]float32, 2)
+		}
+		g.worldBuf = g.worldBuf[:2]
+		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
+		return g.worldBuf
 	}
 	path := g.finder.FindPath(sx, sy, ex, ey, g)
 	if path == nil {

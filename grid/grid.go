@@ -37,6 +37,7 @@ type Grid interface {
 	IsWalkableAt(x, y int) bool
 	SetWalkableAt(x, y int, walkable bool)
 	GetNodeAt(x, y int) *finder.Node
+	ObstacleCount() int
 
 	// World coordinate conversion
 	WorldToTile(wx, wy float32) (int, int)

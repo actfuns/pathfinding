@@ -352,3 +352,26 @@ func TestHexFindNearestWalkable(t *testing.T) {
 		}
 	})
 }
+func TestHexObstacleCount(t *testing.T) {
+	g := NewHexGrid([][]int{
+		{0, 0, 0},
+		{0, 1, 0},
+		{0, 0, 0},
+	})
+	if n := g.ObstacleCount(); n != 1 {
+		t.Errorf("expected 1 obstacle, got %d", n)
+	}
+	g.SetWalkableAt(0, 0, false)
+	if n := g.ObstacleCount(); n != 2 {
+		t.Errorf("expected 2 obstacles, got %d", n)
+	}
+	g.SetWalkableAt(1, 1, true)
+	g.SetWalkableAt(0, 0, true)
+	if n := g.ObstacleCount(); n != 0 {
+		t.Errorf("expected 0 obstacles, got %d", n)
+	}
+	g2 := g.Clone()
+	if n := g2.(*HexGrid).ObstacleCount(); n != 0 {
+		t.Errorf("clone: expected 0 obstacles, got %d", n)
+	}
+}

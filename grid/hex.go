@@ -33,9 +33,10 @@ type HexGrid struct {
 	renW     int // colW + sideOffX  (= effective tileW for render)
 	renH     int // rowH + sideOffY  (= effective tileH for render)
 
-	nodes    []*finder.Node
-	finder   finder.Finder
-	worldBuf [][2]float32
+	nodes         []*finder.Node
+	finder        finder.Finder
+	worldBuf      [][2]float32
+	obstacleCount int
 
 	// Precomputed neighbor offsets (indexed by parity)
 	neighborsEven [6][2]int
@@ -79,21 +80,26 @@ func NewHexGrid(matrix [][]int, opts ...HexOption) *HexGrid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]*finder.Node, 0, w*h)
+	obs := 0
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			n := finder.NewNode(x, y)
 			n.Walkable = matrix[y][x] == 0
+			if !n.Walkable {
+				obs++
+			}
 			nodes = append(nodes, n)
 		}
 	}
 
 	g := &HexGrid{
-		width:  w,
-		height: h,
-		tileW:  64,
-		tileH:  64,
-		nodes:  nodes,
-		finder: finder.NewAStarFinder(),
+		width:         w,
+		height:        h,
+		tileW:         64,
+		tileH:         64,
+		obstacleCount: obs,
+		nodes:         nodes,
+		finder:        finder.NewAStarFinder(),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -192,8 +198,20 @@ func (g *HexGrid) IsWalkableAt(x, y int) bool {
 
 // SetWalkableAt sets the walkability of the tile at the given coordinates.
 func (g *HexGrid) SetWalkableAt(x, y int, walkable bool) {
-	g.nodes[g.index(x, y)].Walkable = walkable
+	node := g.nodes[g.index(x, y)]
+	if node.Walkable == walkable {
+		return
+	}
+	if walkable {
+		g.obstacleCount--
+	} else {
+		g.obstacleCount++
+	}
+	node.Walkable = walkable
 }
+
+// ObstacleCount returns the number of non-walkable tiles in the grid.
+func (g *HexGrid) ObstacleCount() int { return g.obstacleCount }
 
 // Clone returns a deep copy of the hex grid, including a copy of all nodes with
 // parent references cleared. The clone shares the finder and precomputed layout
@@ -217,6 +235,7 @@ func (g *HexGrid) Clone() finder.Grid {
 		renH:          g.renH,
 		neighborsEven: g.neighborsEven,
 		neighborsOdd:  g.neighborsOdd,
+		obstacleCount: g.obstacleCount,
 		finder:        g.finder,
 	}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
@@ -603,6 +622,15 @@ func (g *HexGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
 		return nil
 	}
+	if g.obstacleCount == 0 {
+		if cap(g.worldBuf) < 2 {
+			g.worldBuf = make([][2]float32, 2)
+		}
+		g.worldBuf = g.worldBuf[:2]
+		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
+		return g.worldBuf
+	}
 	path := g.finder.FindPath(sx, sy, ex, ey, g)
 	if path == nil {
 		return nil
@@ -630,6 +658,15 @@ func (g *HexGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	ex, ey := g.WorldToTile(wx2, wy2)
 	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
 		return nil
+	}
+	if g.obstacleCount == 0 {
+		if cap(g.worldBuf) < 2 {
+			g.worldBuf = make([][2]float32, 2)
+		}
+		g.worldBuf = g.worldBuf[:2]
+		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
+		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
+		return g.worldBuf
 	}
 	path := g.finder.FindPath(sx, sy, ex, ey, g)
 	if path == nil {
