@@ -368,6 +368,229 @@ func (g *HexGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 	g.SetWalkableAt(tx, ty, walkable)
 }
 
+// FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
+// from the given world position (wx, wy). Returns the world-space center of the
+// nearest walkable tile and true if found; returns (0, 0, false) if no walkable
+// tile exists within the search radius. The search uses concentric square expansion
+// (Chebyshev distance). Within each ring, the walkable tile with the smallest
+// Euclidean distance to (wx, wy) is selected.
+
+// tileEdgePoint returns the closest point on the edge of tile (tx, ty) to (wx, wy),
+// inset by one world-space unit inward from the tile boundary.
+func (g *HexGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float32, float32) {
+	left := float32(tx*g.tileW) + inset
+	right := float32((tx+1)*g.tileW) - inset
+	top := float32(ty*g.tileH) + inset
+	bottom := float32((ty+1)*g.tileH) - inset
+	px := wx
+	if px < left {
+		px = left
+	} else if px > right {
+		px = right
+	}
+	py := wy
+	if py < top {
+		py = top
+	} else if py > bottom {
+		py = bottom
+	}
+	return px, py
+}
+
+func (g *HexGrid) FindNearestWalkable(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool) {
+	if maxRadius < 0 {
+		return 0, 0, false
+	}
+	tx, ty := g.WorldToTile(wx, wy)
+	if g.IsWalkableAt(tx, ty) {
+		ww, wh := g.tileEdgePoint(tx, ty, wx, wy, edgeInset)
+		return ww, wh, true
+	}
+	// Sub-tile offset — determines which edge tile is closest to (wx, wy)
+	cx, cy := float32(tx*g.tileW+g.tileW/2), float32(ty*g.tileH+g.tileH/2)
+	ox, oy := wx-cx, wy-cy
+	var aox float32 = ox
+	if aox < 0 {
+		aox = -aox
+	}
+	var aoy float32 = oy
+	if aoy < 0 {
+		aoy = -aoy
+	}
+
+	for r := 1; r <= maxRadius; r++ {
+		top, bottom := ty-r, ty+r
+		left, right := tx-r, tx+r
+
+		// Edge cells (same row/col as tile center) are always closer than corners.
+		// Order by sub-tile offset direction.
+		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int
+		if aox >= aoy {
+			if ox < 0 {
+				e1x, e1y = left, ty
+				e2x, e2y = right, ty
+			} else {
+				e1x, e1y = right, ty
+				e2x, e2y = left, ty
+			}
+			if oy < 0 {
+				e3x, e3y = tx, top
+				e4x, e4y = tx, bottom
+			} else {
+				e3x, e3y = tx, bottom
+				e4x, e4y = tx, top
+			}
+		} else {
+			if oy < 0 {
+				e1x, e1y = tx, top
+				e2x, e2y = tx, bottom
+			} else {
+				e1x, e1y = tx, bottom
+				e2x, e2y = tx, top
+			}
+			if ox < 0 {
+				e3x, e3y = left, ty
+				e4x, e4y = right, ty
+			} else {
+				e3x, e3y = right, ty
+				e4x, e4y = left, ty
+			}
+		}
+		if g.IsWalkableAt(e1x, e1y) {
+			rx, ry := g.tileEdgePoint(e1x, e1y, wx, wy, edgeInset)
+			return rx, ry, true
+		}
+		if g.IsWalkableAt(e2x, e2y) {
+			rx, ry := g.tileEdgePoint(e2x, e2y, wx, wy, edgeInset)
+			return rx, ry, true
+		}
+		if g.IsWalkableAt(e3x, e3y) {
+			rx, ry := g.tileEdgePoint(e3x, e3y, wx, wy, edgeInset)
+			return rx, ry, true
+		}
+		if g.IsWalkableAt(e4x, e4y) {
+			rx, ry := g.tileEdgePoint(e4x, e4y, wx, wy, edgeInset)
+			return rx, ry, true
+		}
+
+		// Full perimeter scan (excluding cells already checked above)
+		for cx := left; cx <= right; cx++ {
+			if g.IsWalkableAt(cx, top) {
+				rx, ry := g.tileEdgePoint(cx, top, wx, wy, edgeInset)
+				return rx, ry, true
+			}
+		}
+		for cy := top + 1; cy <= bottom; cy++ {
+			if g.IsWalkableAt(right, cy) {
+				rx, ry := g.tileEdgePoint(right, cy, wx, wy, edgeInset)
+				return rx, ry, true
+			}
+		}
+		for cx := right - 1; cx >= left; cx-- {
+			if g.IsWalkableAt(cx, bottom) {
+				rx, ry := g.tileEdgePoint(cx, bottom, wx, wy, edgeInset)
+				return rx, ry, true
+			}
+		}
+		for cy := bottom - 1; cy >= top+1; cy-- {
+			if g.IsWalkableAt(left, cy) {
+				rx, ry := g.tileEdgePoint(left, cy, wx, wy, edgeInset)
+				return rx, ry, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+// FindNearestWalkableTile finds the nearest walkable tile within maxRadius (tile rings)
+// from the given world position (wx, wy). Returns the tile coordinates and true if found;
+// returns (0, 0, false) if no walkable tile exists within the search radius.
+func (g *HexGrid) FindNearestWalkableTile(wx, wy float32, maxRadius int) (int, int, bool) {
+	tx, ty := g.WorldToTile(wx, wy)
+	if g.IsWalkableAt(tx, ty) {
+		return tx, ty, true
+	}
+	var aox float32 = wx - float32(tx*g.tileW+g.tileW/2)
+	if aox < 0 {
+		aox = -aox
+	}
+	var aoy float32 = wy - float32(ty*g.tileH+g.tileH/2)
+	if aoy < 0 {
+		aoy = -aoy
+	}
+	for r := 1; r <= maxRadius; r++ {
+		top, bottom := ty-r, ty+r
+		left, right := tx-r, tx+r
+
+		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int
+		if aox >= aoy {
+			if wx-float32(tx*g.tileW+g.tileW/2) < 0 {
+				e1x, e1y = left, ty
+				e2x, e2y = right, ty
+			} else {
+				e1x, e1y = right, ty
+				e2x, e2y = left, ty
+			}
+			if wy-float32(ty*g.tileH+g.tileH/2) < 0 {
+				e3x, e3y = tx, top
+				e4x, e4y = tx, bottom
+			} else {
+				e3x, e3y = tx, bottom
+				e4x, e4y = tx, top
+			}
+		} else {
+			if wy-float32(ty*g.tileH+g.tileH/2) < 0 {
+				e1x, e1y = tx, top
+				e2x, e2y = tx, bottom
+			} else {
+				e1x, e1y = tx, bottom
+				e2x, e2y = tx, top
+			}
+			if wx-float32(tx*g.tileW+g.tileW/2) < 0 {
+				e3x, e3y = left, ty
+				e4x, e4y = right, ty
+			} else {
+				e3x, e3y = right, ty
+				e4x, e4y = left, ty
+			}
+		}
+		if g.IsWalkableAt(e1x, e1y) {
+			return e1x, e1y, true
+		}
+		if g.IsWalkableAt(e2x, e2y) {
+			return e2x, e2y, true
+		}
+		if g.IsWalkableAt(e3x, e3y) {
+			return e3x, e3y, true
+		}
+		if g.IsWalkableAt(e4x, e4y) {
+			return e4x, e4y, true
+		}
+
+		for cx := left; cx <= right; cx++ {
+			if g.IsWalkableAt(cx, top) {
+				return cx, top, true
+			}
+		}
+		for cy := top + 1; cy <= bottom; cy++ {
+			if g.IsWalkableAt(right, cy) {
+				return right, cy, true
+			}
+		}
+		for cx := right - 1; cx >= left; cx-- {
+			if g.IsWalkableAt(cx, bottom) {
+				return cx, bottom, true
+			}
+		}
+		for cy := bottom - 1; cy >= top+1; cy-- {
+			if g.IsWalkableAt(left, cy) {
+				return left, cy, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
 // FindPath finds a path between two world positions through the hex grid.
 // The returned [][2]float32 is backed by an internal buffer and is only
 // valid until the next FindPath/FindSmoothPath call on the same grid.

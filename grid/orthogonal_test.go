@@ -133,3 +133,115 @@ func TestOrthogonalSVG_NoPath(t *testing.T) {
 		t.Error("SVG should not contain path when nil path given")
 	}
 }
+
+func TestOrthogonalFindNearestWalkable(t *testing.T) {
+	// 5x5 grid with obstacles in cross pattern, tileW=tileH=1
+	g := NewOrthogonalGrid([][]int{
+		{0, 0, 0, 0, 0},
+		{0, 0, 1, 0, 0},
+		{0, 1, 1, 1, 0},
+		{0, 0, 1, 0, 0},
+		{0, 0, 0, 0, 0},
+	})
+
+	t.Run("self walkable", func(t *testing.T) {
+		x, y, ok := g.FindNearestWalkable(0, 0, 5, 0)
+		if !ok {
+			t.Fatal("expected ok")
+		}
+		if x != 0 || y != 0 {
+			t.Errorf("expected (0,0), got (%v,%v)", x, y)
+		}
+	})
+
+	t.Run("neighbor in ring 1 around obstacle", func(t *testing.T) {
+		_, _, ok := g.FindNearestWalkable(2, 2, 3, 0)
+		if !ok {
+			t.Fatal("expected ok, center obstacle has walkable neighbors")
+		}
+	})
+
+	t.Run("all obstacles returns false", func(t *testing.T) {
+		g2 := NewOrthogonalGrid([][]int{{1, 1}, {1, 1}})
+		_, _, ok := g2.FindNearestWalkable(0, 0, 5, 0)
+		if ok {
+			t.Error("expected false when all obstacles")
+		}
+	})
+
+	t.Run("maxRadius=0 only checks self", func(t *testing.T) {
+		_, _, ok := g.FindNearestWalkable(2, 2, 0, 0)
+		if ok {
+			t.Error("expected false when self obstacle and maxRadius=0")
+		}
+	})
+
+	t.Run("maxRadius negative", func(t *testing.T) {
+		_, _, ok := g.FindNearestWalkable(2, 2, -1, 0)
+		if ok {
+			t.Error("expected false when maxRadius < 0")
+		}
+	})
+
+	t.Run("walkable self with limited radius", func(t *testing.T) {
+		x, y, ok := g.FindNearestWalkable(4, 4, 1, 0)
+		if !ok {
+			t.Fatal("expected ok")
+		}
+		if x != 4 || y != 4 {
+			t.Errorf("expected (4,4), got (%v,%v)", x, y)
+		}
+	})
+
+	t.Run("outside grid returns false", func(t *testing.T) {
+		_, _, ok := g.FindNearestWalkable(100, 100, 5, 0)
+		if ok {
+			t.Error("expected false outside grid")
+		}
+	})
+
+	t.Run("finds single walkable cell across rings", func(t *testing.T) {
+		g3 := NewOrthogonalGrid([][]int{
+			{0, 1, 1, 1, 1},
+			{1, 1, 1, 1, 1},
+			{1, 1, 1, 1, 1},
+			{1, 1, 1, 1, 1},
+			{1, 1, 1, 1, 1},
+		})
+		x, y, ok := g3.FindNearestWalkable(4, 4, 8, 0)
+		if !ok {
+			t.Fatal("expected ok")
+		}
+		if x != 1 || y != 1 {
+			t.Errorf("expected (1,1) [edge of tile (0,0)], got (%v,%v)", x, y)
+		}
+	})
+}
+
+func TestOrthogonalFindNearestWalkableWorld(t *testing.T) {
+	// Grid with custom tile size to test world coordinate conversion
+	g := NewOrthogonalGrid([][]int{
+		{0, 0, 0},
+		{0, 1, 0},
+		{0, 0, 0},
+	}, WithOrthogonalTileSize(32, 32))
+
+	x, y, ok := g.FindNearestWalkable(48, 48, 3, 0)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	// Query point (48,48) is exactly at the center of obstacle tile (1,1).
+	// All 4 cardinal neighbors are equally close. Accept any of their edge points:
+	// tile (1,0): (48,32), tile (0,1): (32,48), tile (2,1): (64,48), tile (1,2): (48,64)
+	if x == 48 && y == 32 {
+		// top edge
+	} else if x == 48 && y == 64 {
+		// bottom edge
+	} else if x == 32 && y == 48 {
+		// left edge
+	} else if x == 64 && y == 48 {
+		// right edge
+	} else {
+		t.Errorf("unexpected result (%v,%v), expected one of cardinal edge points: (48,32), (32,48), (64,48), (48,64)", x, y)
+	}
+}
