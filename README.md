@@ -47,6 +47,58 @@ m := grid.NewMatrix(100, 100)    // 100×100 全空
 g := grid.NewOrthogonalGrid(m)
 ```
 
+### 瓦片权重（Tile Weight Cost）
+
+v0.5.0+ 支持每个瓦片的移动成本权重。A*、Dijkstra、IDA*、JPS、JPS+ 在计算步进成本时自动乘以目标瓦片的 Weight 值。
+
+```go
+g := grid.NewOrthogonalGrid(matrix)
+
+// 设置地形权重：道路(0.3)，草地(1.0)，沼泽(5.0)，岩浆(10.0)
+g.SetWeightAt(2, 3, 5.0)
+g.SetWeightAt(3, 3, 5.0)
+g.SetWeightAt(5, 0, 0.3)  // 低成本道路
+
+f := finder.NewAStarFinder()
+path := f.FindPath(0, 0, 7, 7, g)
+// A* 会自动选择总成本最低的路径，而非步骤最少的路径
+```
+
+默认权重为 `1.0`，设为 `0` 表示不可通行。所有成本感知算法（A*、Dijkstra、IDA*、JPS、JPS+）都支持。BFS 和 Best-First Search 不使用成本计算，因此不受权重影响。
+
+### SVG 可视化
+
+`RenderSVG` 根据瓦片权重自动着色，并显示图例：
+
+```go
+// 默认着色（nil = 使用 DefaultSVGOpts）
+svg := g.RenderSVG(nil, path)
+
+// 自定义颜色映射
+svg := g.RenderSVG(&grid.SVGOpts{
+    WeightColors: [][2]string{
+        {"0.3", "#bbdefb"}, // ≤0.3 蓝色（道路）
+        {"1.0", "#c8e6c9"}, // ≤1.0 绿色（草地）
+        {"5.0", "#ffcc80"}, // ≤5.0 橙色（沼泽）
+        {"+Inf", "#ef5350"},// >5.0 红色（极端）
+    },
+    LegendEntries: [][2]string{
+        {"#bbdefb", "Road"},
+        {"#c8e6c9", "Grass"},
+        {"#ffcc80", "Swamp"},
+        {"#555555", "Wall"},
+    },
+}, path)
+```
+
+支持多路径叠加（第一条蓝色实线，第二条红色虚线）：
+
+```go
+svg := g.RenderSVG(nil, pathWithWeights, pathWithoutWeights)
+```
+
+环境变量 `NAVPATH_DUMP_SVG=1` 可在测试时自动输出 SVG 到 `grid/testdata/svg/`。
+
 ### 使用其他寻路算法
 
 ```go
@@ -71,10 +123,11 @@ g := grid.NewOrthogonalGrid(terrain,
 所有网格类型实现统一的 `grid.Grid` 接口：
 
 - **瓦片坐标查询** — Width, Height, IsInside, IsWalkableAt, SetWalkableAt, GetNodeAt, ObstacleCount
+- **瓦片权重** — SetWeightAt, GetWeightAt（v0.5.0+）
 - **世界坐标转换** — WorldToTile, TileToWorld, IsWalkableAtWorld, SetWalkableAtWorld
 - **最近可通行点** — FindNearestWalkable, FindNearestWalkableTile
 - **寻路** — FindPath, FindSmoothPath, SmoothenTilePath
-- **渲染** — RenderSVG（输出调试 SVG）
+- **渲染** — RenderSVG(cfg, paths...)（权重着色 + 多路径 + 图例，v0.5.0+）
 
 ## 寻路算法
 
@@ -271,7 +324,40 @@ go test -bench=BenchmarkOrthogonal100 -benchmem ./grid/
 # 基准测试（HPA* / Waypoint）
 go test -bench=. -benchmem ./hpa/
 go test -bench=. -benchmem ./waypoint/
+
+# 生成 SVG 可视化（有权重场景自动着色 + 图例）
+NAVPATH_DUMP_SVG=1 go test -run "TestOrthogonalSVG|TestHexSVG|TestStaggeredSVG" ./grid/
+ls grid/testdata/svg/*weighted*.svg
 ```
+
+## 示例
+
+`examples/` 目录包含可直接运行的示例：
+
+```bash
+# 基本 A* 寻路
+go run examples/basic/
+
+# 权重地形对比（显示权重如何影响路径选择）
+go run examples/weighted/
+
+# SVG 可视化输出
+go run examples/svg/ | head -5
+```
+
+## 版本历史
+
+### v0.5.x — Tile Weight Cost 权重系统 + SVG 着色渲染
+- `finder.Node.Weight` 字段，A*/BiA*/IDA*/JPS/JPS+ 步进成本 × tile.Weight
+- `grid.Grid.SetWeightAt` / `GetWeightAt`，三层网格实现
+- `RenderSVG(cfg, paths...)` 权重着色 + 多路径 + 右侧图例
+- `SVGOpts` 自定义颜色映射和图例标签
+- `DefaultSVGOpts` 全局默认配置
+- `examples/` 目录（basic / weighted / svg）
+- godoc 注释补全
+
+### v0.4.0
+- JPS+/HPA* 性能优化、Bresenham 内联、全局原子计数器
 
 ## 设计原则
 
@@ -288,6 +374,7 @@ go test -bench=. -benchmem ./waypoint/
 - [Grid 实现](grid/) — 正交、六边形、交错三种网格类型
 - [HPA\*](hpa/) — 层级寻路（Portal Compression + String Pulling + Path Cache）
 - [Waypoint](waypoint/) — 航点图寻路（空间索引 + LOS 过滤）
+- [Examples](examples/) — 可直接运行的示例（basic/weighted/svg）
 
 ## 许可
 
