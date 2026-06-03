@@ -6,7 +6,6 @@ type BreadthFirstFinder struct {
 	// under what obstacle conditions. Defaults to DiagonalNever.
 	DiagonalMovement DiagonalMovement
 
-	searchSeq   int
 	neighborBuf []*Node
 	pathBuf     [][2]int
 }
@@ -17,7 +16,6 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 	f := &BreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
 		neighborBuf:      make([]*Node, 0, 8),
-		searchSeq:        newSearchSeq(),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -33,11 +31,11 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 
 // FindPath finds a path using BFS.
 func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	searchSeq := int(globalSearchSeq.Add(1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
-	startNode.ResetSearch(f.searchSeq)
-	endNode.ResetSearch(f.searchSeq)
+	startNode.ResetSearch(searchSeq)
+	endNode.ResetSearch(searchSeq)
 	openList := make([]*Node, 0, 64)
 	openList = append(openList, startNode)
 	startNode.Opened = 1
@@ -62,7 +60,7 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid)
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(f.searchSeq)
+			neighbor.ResetSearch(searchSeq)
 			if neighbor.Closed || neighbor.Opened != 0 {
 				continue
 			}

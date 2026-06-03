@@ -13,7 +13,6 @@ type BiAStarFinder struct {
 	// what conditions. Defaults to DiagonalNever.
 	DiagonalMovement DiagonalMovement
 
-	searchSeq      int
 	neighborBuf    []*Node
 	startHeapSlice []*Node
 	endHeapSlice   []*Node
@@ -28,7 +27,6 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
 		neighborBuf:      make([]*Node, 0, 8),
-		searchSeq:        newSearchSeq(),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -53,11 +51,11 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 
 // FindPath finds a path using bidirectional A*.
 func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	searchSeq := int(globalSearchSeq.Add(1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
-	startNode.ResetSearch(f.searchSeq)
-	endNode.ResetSearch(f.searchSeq)
+	startNode.ResetSearch(searchSeq)
+	endNode.ResetSearch(searchSeq)
 
 	const (
 		BY_START = 1
@@ -86,7 +84,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(f.searchSeq)
+			neighbor.ResetSearch(searchSeq)
 			if neighbor.Closed {
 				continue
 			}
@@ -124,7 +122,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(f.searchSeq)
+			neighbor.ResetSearch(searchSeq)
 			if neighbor.Closed {
 				continue
 			}

@@ -15,7 +15,6 @@ type IDAStarFinder struct {
 	// TimeLimit is the maximum number of seconds to spend searching before giving up. A value <= 0 means no limit.
 	TimeLimit float64
 
-	searchSeq   int
 	neighborBuf []*Node
 }
 
@@ -29,7 +28,6 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 		TrackRecursion:   false,
 		TimeLimit:        -1,
 		neighborBuf:      make([]*Node, 0, 8),
-		searchSeq:        newSearchSeq(),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -56,11 +54,11 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 
 // FindPath finds a path using IDA*.
 func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	searchSeq := int(globalSearchSeq.Add(1))
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
-	start.ResetSearch(f.searchSeq)
-	end.ResetSearch(f.searchSeq)
+	start.ResetSearch(searchSeq)
+	end.ResetSearch(searchSeq)
 
 	h := func(a, b *Node) float64 {
 		return f.Heuristic(float64(AbsInt(b.X-a.X)), float64(AbsInt(b.Y-a.Y)))
@@ -98,7 +96,7 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(f.searchSeq)
+			neighbor.ResetSearch(searchSeq)
 			if f.TrackRecursion {
 				neighbor.RetainCount++
 				if !neighbor.Tested {
@@ -154,9 +152,10 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 			return path
 		}
 
-		if t == 0 {
+		if t >= float64(1<<60) {
 			return nil
 		}
+
 		cutOff = t
 	}
 }

@@ -17,7 +17,6 @@ type AStarFinder struct {
 	// Defaults to DiagonalNever when not configured via Options.
 	DiagonalMovement DiagonalMovement
 
-	searchSeq   int // incremented each FindPath call for node state reset
 	neighborBuf []*Node
 	heapSlice   []*Node
 	pathBuf     [][2]int
@@ -31,7 +30,6 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
 		neighborBuf:      make([]*Node, 0, 8),
-		searchSeq:        newSearchSeq(),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -56,14 +54,14 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.
 func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	searchSeq := int(globalSearchSeq.Add(1))
 	openList := &MinHeap{nodes: f.heapSlice[:0]}
 	defer func() { f.heapSlice = openList.nodes[:0] }()
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 
-	startNode.ResetSearch(f.searchSeq)
-	endNode.ResetSearch(f.searchSeq)
+	startNode.ResetSearch(searchSeq)
+	endNode.ResetSearch(searchSeq)
 	startNode.G = 0
 	startNode.F = 0
 	openList.Push(startNode)
@@ -88,7 +86,7 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]i
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(f.searchSeq)
+			neighbor.ResetSearch(searchSeq)
 			if neighbor.Closed {
 				continue
 			}

@@ -7,7 +7,6 @@ type BiBreadthFirstFinder struct {
 	// do not block the way).
 	DiagonalMovement DiagonalMovement
 
-	searchSeq   int
 	neighborBuf []*Node
 	pathBuf     [][2]int
 }
@@ -18,7 +17,6 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 	f := &BiBreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
 		neighborBuf:      make([]*Node, 0, 8),
-		searchSeq:        newSearchSeq(),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -34,11 +32,11 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 
 // FindPath finds a path using bidirectional BFS.
 func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
-	f.searchSeq++
+	searchSeq := int(globalSearchSeq.Add(1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
-	startNode.ResetSearch(f.searchSeq)
-	endNode.ResetSearch(f.searchSeq)
+	startNode.ResetSearch(searchSeq)
+	endNode.ResetSearch(searchSeq)
 
 	const (
 		BY_START = 1
@@ -67,7 +65,7 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(f.searchSeq)
+			neighbor.ResetSearch(searchSeq)
 			if neighbor.Closed {
 				continue
 			}
@@ -89,7 +87,7 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(f.searchSeq)
+			neighbor.ResetSearch(searchSeq)
 			if neighbor.Closed {
 				continue
 			}
