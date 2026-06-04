@@ -7,6 +7,16 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
+// fastRand returns a pseudo-random uint32 (xorshift).
+var fastRandState uint32 = 1
+func fastRand() uint32 {
+	fastRandState ^= fastRandState << 13
+	fastRandState ^= fastRandState >> 17
+	fastRandState ^= fastRandState << 5
+	return fastRandState
+}
+
+
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
 // World-space helpers convert using tileW/tileH.
 type OrthogonalGrid struct {
@@ -127,6 +137,95 @@ func (g *OrthogonalGrid) GetWeightAt(x, y int) float64 {
 	}
 	return g.nodes[g.index(x, y)].Weight
 }
+
+// RandomWalkableTile returns a random walkable tile coordinate.
+// Returns (-1, -1) if no walkable tile exists.
+func (g *OrthogonalGrid) RandomWalkableTile() (int, int) {
+	if g.obstacleCount >= g.width*g.height {
+		return -1, -1
+	}
+	for i := 0; i < 100; i++ {
+		x := int(uint32(g.width) * fastRand())
+		y := int(uint32(g.height) * fastRand())
+		if g.IsWalkableAt(x, y) {
+			return x, y
+		}
+	}
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			if g.IsWalkableAt(x, y) {
+				return x, y
+			}
+		}
+	}
+	return -1, -1
+}
+
+// RandomWalkableTileWorld returns the world center of a random walkable tile.
+func (g *OrthogonalGrid) RandomWalkableTileWorld() (float32, float32, bool) {
+	tx, ty := g.RandomWalkableTile()
+	if tx < 0 {
+		return 0, 0, false
+	}
+	wx, wy := g.TileToWorld(tx, ty)
+	return wx, wy, true
+}
+
+// RandomWalkableTileInRadius returns a random walkable tile within radius tiles of (cx, cy).
+func (g *OrthogonalGrid) RandomWalkableTileInRadius(cx, cy, radius int) (int, int) {
+	for i := 0; i < 50; i++ {
+		dx := int(uint32(2*radius+1)*fastRand()) - radius
+		dy := int(uint32(2*radius+1)*fastRand()) - radius
+		x, y := cx+dx, cy+dy
+		if g.IsWalkableAt(x, y) {
+			return x, y
+		}
+	}
+	return -1, -1
+}
+
+// RandomWalkableTileInRadiusWorld returns the world center of a random walkable tile
+// within radius tiles of (wx, wy).
+func (g *OrthogonalGrid) RandomWalkableTileInRadiusWorld(wx, wy float32, radius int) (float32, float32, bool) {
+	tx, ty := g.WorldToTile(wx, wy)
+	rtx, rty := g.RandomWalkableTileInRadius(tx, ty, radius)
+	if rtx < 0 {
+		return 0, 0, false
+	}
+	wx2, wy2 := g.TileToWorld(rtx, rty)
+	return wx2, wy2, true
+}
+
+// HasLineOfSight reports whether two tiles see each other via Bresenham.
+func (g *OrthogonalGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
+	dx := x2 - x1
+	dy := y2 - y1
+	var sx, sy int
+	if dx < 0 { dx = -dx; sx = -1 } else { sx = 1 }
+	if dy < 0 { dy = -dy; sy = -1 } else { sy = 1 }
+	err := dx - dy
+	x, y := x1, y1
+	for {
+		if !g.IsWalkableAt(x, y) {
+			return false
+		}
+		if x == x2 && y == y2 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy { err -= dy; x += sx }
+		if e2 < dx { err += dx; y += sy }
+	}
+	return true
+}
+
+// HasLineOfSightWorld reports whether two world positions can see each other.
+func (g *OrthogonalGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
+	tx1, ty1 := g.WorldToTile(x1, y1)
+	tx2, ty2 := g.WorldToTile(x2, y2)
+	return g.HasLineOfSight(tx1, ty1, tx2, ty2)
+}
+
 
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). Returns the world-space center of the

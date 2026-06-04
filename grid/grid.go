@@ -116,6 +116,19 @@ type Grid interface {
 	// FindNearestWalkableTile is like FindNearestWalkable but returns tile
 	// coordinates instead of edge-clamped world coordinates.
 	FindNearestWalkableTile(wx, wy float32, maxRadius int) (int, int, bool)
+	// RandomWalkableTile returns a random walkable tile coordinate.
+	// Returns (-1, -1) if no walkable tile exists.
+	RandomWalkableTile() (int, int)
+	// RandomWalkableTileWorld returns the world center of a random
+	// walkable tile. Returns (0, 0, false) if none found.
+	RandomWalkableTileWorld() (float32, float32, bool)
+	// RandomWalkableTileInRadius returns a random walkable tile within
+	// radius tiles of (cx, cy). Returns (-1, -1) if none found.
+	RandomWalkableTileInRadius(cx, cy, radius int) (int, int)
+	// RandomWalkableTileInRadiusWorld returns the world center of a
+	// random walkable tile within radius tiles of (wx, wy).
+	// Returns (0, 0, false) if none found.
+	RandomWalkableTileInRadiusWorld(wx, wy float32, radius int) (float32, float32, bool)
 
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
