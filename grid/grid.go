@@ -117,6 +117,16 @@ type Grid interface {
 	// coordinates instead of edge-clamped world coordinates.
 	FindNearestWalkableTile(wx, wy float32, maxRadius int) (int, int, bool)
 
+	// RandomWalkableTile returns a random walkable tile coordinate.
+	// Returns (-1, -1) if no walkable tile exists.
+	RandomWalkableTile() (int, int)
+	// RandomWalkableTileInRadius returns a random walkable tile within
+	// radius tiles of (cx, cy). Returns (-1, -1) if none found.
+	RandomWalkableTileInRadius(cx, cy, radius int) (int, int)
+	// HasLineOfSight reports whether two tiles can see each other —
+	// every tile on the Bresenham line between them is walkable.
+	HasLineOfSight(x1, y1, x2, y2 int) bool
+
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
 	// FindPath finds a path between two world positions through the grid.

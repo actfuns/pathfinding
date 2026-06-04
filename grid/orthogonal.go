@@ -7,6 +7,16 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
+// fastRand returns a pseudo-random uint32 (xorshift).
+var fastRandState uint32 = 1
+func fastRand() uint32 {
+	fastRandState ^= fastRandState << 13
+	fastRandState ^= fastRandState >> 17
+	fastRandState ^= fastRandState << 5
+	return fastRandState
+}
+
+
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
 // World-space helpers convert using tileW/tileH.
 type OrthogonalGrid struct {

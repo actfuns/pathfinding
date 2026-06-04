@@ -8,6 +8,9 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
+// fastRand returns a pseudo-random uint32 (xorshift).
+
+
 // HexGrid is a hexagonal grid using axial coordinates (X, Y).
 // Supports both flat-top (stagger on X) and pointy-top (stagger on Y) layouts,
 // matching Tiled's "hexagonal" orientation.

@@ -8,6 +8,9 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
+// fastRand returns a pseudo-random uint32 (xorshift).
+
+
 // StaggeredGrid is a 45-degree isometric/staggered grid (diamond-shaped tiles).
 // It mirrors Tiled's "staggered" orientation, using the HexagonalRenderer math
 // but overrides screenToTileCoords with a 4-corner detection + 45° rotation
