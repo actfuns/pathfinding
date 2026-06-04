@@ -8,9 +8,6 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
-// fastRand returns a pseudo-random uint32 (xorshift).
-
-
 // StaggeredGrid is a 45-degree isometric/staggered grid (diamond-shaped tiles).
 // It mirrors Tiled's "staggered" orientation, using the HexagonalRenderer math
 // but overrides screenToTileCoords with a 4-corner detection + 45° rotation
@@ -192,6 +189,110 @@ func (g *StaggeredGrid) GetWeightAt(x, y int) float64 {
 		return 1.0
 	}
 	return g.nodes[g.index(x, y)].Weight
+}
+
+// RandomWalkable returns a random walkable tile coordinate.
+// Returns (-1, -1) if no walkable tile exists.
+func (g *StaggeredGrid) RandomWalkable() (int, int, bool) {
+	if g.obstacleCount >= g.width*g.height {
+		return 0, 0, false
+	}
+	for i := 0; i < 100; i++ {
+		x := int(uint32(g.width) * fastRand())
+		y := int(uint32(g.height) * fastRand())
+		if g.IsWalkableAt(x, y) {
+			return x, y, true
+		}
+	}
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			if g.IsWalkableAt(x, y) {
+				return x, y, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+// RandomWalkableTileWorld returns the world center of a random walkable tile.
+func (g *StaggeredGrid) RandomWalkableWorld() (float32, float32, bool) {
+	tx, ty, ok := g.RandomWalkable()
+	if !ok {
+		return 0, 0, false
+	}
+	wx, wy := g.TileToWorld(tx, ty)
+	return wx, wy, true
+}
+
+// RandomWalkableInRadius returns a random walkable tile within radius tiles of (cx, cy).
+func (g *StaggeredGrid) RandomWalkableInRadius(cx, cy, radius int) (int, int, bool) {
+	for i := 0; i < 50; i++ {
+		dx := int(uint32(2*radius+1)*fastRand()) - radius
+		dy := int(uint32(2*radius+1)*fastRand()) - radius
+		x, y := cx+dx, cy+dy
+		if g.IsWalkableAt(x, y) {
+			return x, y, true
+		}
+	}
+	return 0, 0, false
+}
+
+// RandomWalkableInRadiusWorld returns the world center of a random walkable tile
+// within radius tiles of (wx, wy).
+func (g *StaggeredGrid) RandomWalkableInRadiusWorld(wx, wy float32, radius int) (float32, float32, bool) {
+	tx, ty := g.WorldToTile(wx, wy)
+	rtx, rty, ok := g.RandomWalkableInRadius(tx, ty, radius)
+	if !ok {
+		return 0, 0, false
+	}
+	wx2, wy2 := g.TileToWorld(rtx, rty)
+	return wx2, wy2, true
+}
+
+// HasLineOfSight reports whether two tiles see each other via Bresenham.
+func (g *StaggeredGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
+	dx := x2 - x1
+	dy := y2 - y1
+	var sx, sy int
+	if dx < 0 {
+		dx = -dx
+		sx = -1
+	} else {
+		sx = 1
+	}
+	if dy < 0 {
+		dy = -dy
+		sy = -1
+	} else {
+		sy = 1
+	}
+	err := dx - dy
+	x, y := x1, y1
+	for {
+		if !g.IsWalkableAt(x, y) {
+			return false
+		}
+		if x == x2 && y == y2 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x += sx
+		}
+		if e2 < dx {
+			err += dx
+			y += sy
+		}
+	}
+	return true
+}
+
+// HasLineOfSightWorld reports whether two world positions can see each other.
+func (g *StaggeredGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
+	tx1, ty1 := g.WorldToTile(x1, y1)
+	tx2, ty2 := g.WorldToTile(x2, y2)
+	return g.HasLineOfSight(tx1, ty1, tx2, ty2)
 }
 
 // ObstacleCount returns the number of non-walkable tiles in the grid.
@@ -443,7 +544,7 @@ func (g *StaggeredGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float3
 
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). See Grid.FindNearestWalkable for details.
-func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool) {
+func (g *StaggeredGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool) {
 	if maxRadius < 0 {
 		return 0, 0, false
 	}
@@ -551,7 +652,7 @@ func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int, edgeI
 // FindNearestWalkableTile finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). Returns the tile coordinates and true if found;
 // returns (0, 0, false) if no walkable tile exists within the search radius.
-func (g *StaggeredGrid) FindNearestWalkableTile(wx, wy float32, maxRadius int) (int, int, bool) {
+func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, bool) {
 	tx, ty := g.WorldToTile(wx, wy)
 	if g.IsWalkableAt(tx, ty) {
 		return tx, ty, true
@@ -640,7 +741,7 @@ func (g *StaggeredGrid) FindNearestWalkableTile(wx, wy float32, maxRadius int) (
 // FindPath finds a path between two world positions through the staggered grid.
 // The returned [][2]float32 is backed by an internal buffer and is only
 // valid until the next FindPath/FindSmoothPath call on the same grid.
-func (g *StaggeredGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
+func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
 	}
@@ -677,7 +778,7 @@ func (g *StaggeredGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 
 // FindSmoothPath finds a path between two world positions and smooths it.
 // Same buffer contract as FindPath.
-func (g *StaggeredGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
+func (g *StaggeredGrid) FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
 	}
@@ -699,7 +800,7 @@ func (g *StaggeredGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 
 	if path == nil {
 		return nil
 	}
-	path = g.SmoothenTilePath(path)
+	path = g.SmoothenPath(path)
 	if cap(g.worldBuf) >= len(path) {
 		g.worldBuf = g.worldBuf[:len(path)]
 	} else {
@@ -715,7 +816,7 @@ func (g *StaggeredGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 
 
 // SmoothenTilePath smooths a tile-coordinate staggered path by removing unnecessary waypoints.
 // Writes the smoothed result in-place over the input (finder's cached pathBuf).
-func (g *StaggeredGrid) SmoothenTilePath(path [][2]int) [][2]int {
+func (g *StaggeredGrid) SmoothenPath(path [][2]int) [][2]int {
 	if len(path) < 2 {
 		return path
 	}
