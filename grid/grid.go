@@ -74,36 +74,67 @@ var DefaultSVGOpts = &SVGOpts{
 // queries, pathfinding, and rendering. This is separate from finder.Grid,
 // which only exposes what pathfinding algorithms need.
 type Grid interface {
-	// Tile coordinate queries
+	// Width returns the number of tiles horizontally in the grid.
 	Width() int
+	// Height returns the number of tiles vertically in the grid.
 	Height() int
+	// IsInside reports whether the tile (x, y) is within the grid bounds.
 	IsInside(x, y int) bool
+	// IsWalkableAt reports whether the tile (x, y) is walkable.
+	// Tiles outside the grid are reported as not walkable.
 	IsWalkableAt(x, y int) bool
+	// SetWalkableAt sets the walkability of the tile (x, y).
 	SetWalkableAt(x, y int, walkable bool)
+	// GetNodeAt returns the node at tile (x, y). Panics if outside the grid.
 	GetNodeAt(x, y int) *finder.Node
+	// ObstacleCount returns the number of non-walkable tiles.
 	ObstacleCount() int
 
-	// Tile weight support
+	// SetWeightAt sets the per-tile movement cost multiplier for tile (x, y).
+	// Weight 1.0 is the default; higher values make movement more expensive.
 	SetWeightAt(x, y int, weight float64)
+	// GetWeightAt returns the movement cost multiplier for tile (x, y).
+	// Returns 1.0 for tiles outside the grid.
 	GetWeightAt(x, y int) float64
 
-	// World coordinate conversion
+	// WorldToTile converts a world-space coordinate to tile-space.
+	// Results outside the grid should be checked with IsInside.
 	WorldToTile(wx, wy float32) (int, int)
+	// TileToWorld converts a tile coordinate to world-space, returning
+	// the centre point of the tile.
 	TileToWorld(tx, ty int) (float32, float32)
+	// IsWalkableAtWorld reports whether the tile at world position (wx, wy) is walkable.
 	IsWalkableAtWorld(wx, wy float32) bool
+	// SetWalkableAtWorld sets the walkability of the tile at world position (wx, wy).
 	SetWalkableAtWorld(wx, wy float32, walkable bool)
 
-	// Nearest walkable search
+	// FindNearestWalkable finds the nearest walkable tile within maxRadius
+	// (Chebyshev distance in tiles) from world position (wx, wy).
+	// Returns the closest point on the edge of the nearest walkable tile, or
+	// (0, 0, false) if no walkable tile exists within the search radius.
 	FindNearestWalkable(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool)
+	// FindNearestWalkableTile is like FindNearestWalkable but returns tile
+	// coordinates instead of edge-clamped world coordinates.
 	FindNearestWalkableTile(wx, wy float32, maxRadius int) (int, int, bool)
 
-	// Pathfinding
+	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
+	// FindPath finds a path between two world positions through the grid.
+	// Uses the grid's Finder. Returns the path in world coordinates.
+	// Result is backed by an internal buffer — valid only until the next FindPath call.
 	FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32
+	// FindSmoothPath finds a path and smooths it via LOS string-pulling.
+	// Same buffer contract as FindPath.
 	FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32
+	// SmoothenTilePath removes unnecessary waypoints from a tile path
+	// by checking line-of-sight between each point.
 	SmoothenTilePath(path [][2]int) [][2]int
 
-	// Rendering
+	// RenderSVG renders the grid and paths as an SVG string.
+	// Tiles are coloured by their Weight value (see DefaultSVGOpts).
+	// Multiple paths are drawn in different colours (1st=blue, 2nd=red dashed).
+	// Start/end markers are derived from the first path.
+	// Pass nil to use DefaultSVGOpts.
 	RenderSVG(cfg *SVGOpts, paths ...[][2]int) string
 }
 
