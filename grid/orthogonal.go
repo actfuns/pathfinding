@@ -9,13 +9,13 @@ import (
 
 // fastRand returns a pseudo-random uint32 (xorshift).
 var fastRandState uint32 = 1
+
 func fastRand() uint32 {
 	fastRandState ^= fastRandState << 13
 	fastRandState ^= fastRandState >> 17
 	fastRandState ^= fastRandState << 5
 	return fastRandState
 }
-
 
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
 // World-space helpers convert using tileW/tileH.
@@ -138,58 +138,58 @@ func (g *OrthogonalGrid) GetWeightAt(x, y int) float64 {
 	return g.nodes[g.index(x, y)].Weight
 }
 
-// RandomWalkableTile returns a random walkable tile coordinate.
+// RandomWalkable returns a random walkable tile coordinate.
 // Returns (-1, -1) if no walkable tile exists.
-func (g *OrthogonalGrid) RandomWalkableTile() (int, int) {
+func (g *OrthogonalGrid) RandomWalkable() (int, int, bool) {
 	if g.obstacleCount >= g.width*g.height {
-		return -1, -1
+		return 0, 0, false
 	}
 	for i := 0; i < 100; i++ {
 		x := int(uint32(g.width) * fastRand())
 		y := int(uint32(g.height) * fastRand())
 		if g.IsWalkableAt(x, y) {
-			return x, y
+			return x, y, true
 		}
 	}
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
 			if g.IsWalkableAt(x, y) {
-				return x, y
+				return x, y, true
 			}
 		}
 	}
-	return -1, -1
+	return 0, 0, false
 }
 
 // RandomWalkableTileWorld returns the world center of a random walkable tile.
-func (g *OrthogonalGrid) RandomWalkableTileWorld() (float32, float32, bool) {
-	tx, ty := g.RandomWalkableTile()
-	if tx < 0 {
+func (g *OrthogonalGrid) RandomWalkableWorld() (float32, float32, bool) {
+	tx, ty, ok := g.RandomWalkable()
+	if !ok {
 		return 0, 0, false
 	}
 	wx, wy := g.TileToWorld(tx, ty)
 	return wx, wy, true
 }
 
-// RandomWalkableTileInRadius returns a random walkable tile within radius tiles of (cx, cy).
-func (g *OrthogonalGrid) RandomWalkableTileInRadius(cx, cy, radius int) (int, int) {
+// RandomWalkableInRadius returns a random walkable tile within radius tiles of (cx, cy).
+func (g *OrthogonalGrid) RandomWalkableInRadius(cx, cy, radius int) (int, int, bool) {
 	for i := 0; i < 50; i++ {
 		dx := int(uint32(2*radius+1)*fastRand()) - radius
 		dy := int(uint32(2*radius+1)*fastRand()) - radius
 		x, y := cx+dx, cy+dy
 		if g.IsWalkableAt(x, y) {
-			return x, y
+			return x, y, true
 		}
 	}
-	return -1, -1
+	return 0, 0, false
 }
 
-// RandomWalkableTileInRadiusWorld returns the world center of a random walkable tile
+// RandomWalkableInRadiusWorld returns the world center of a random walkable tile
 // within radius tiles of (wx, wy).
-func (g *OrthogonalGrid) RandomWalkableTileInRadiusWorld(wx, wy float32, radius int) (float32, float32, bool) {
+func (g *OrthogonalGrid) RandomWalkableInRadiusWorld(wx, wy float32, radius int) (float32, float32, bool) {
 	tx, ty := g.WorldToTile(wx, wy)
-	rtx, rty := g.RandomWalkableTileInRadius(tx, ty, radius)
-	if rtx < 0 {
+	rtx, rty, ok := g.RandomWalkableInRadius(tx, ty, radius)
+	if !ok {
 		return 0, 0, false
 	}
 	wx2, wy2 := g.TileToWorld(rtx, rty)
@@ -201,8 +201,18 @@ func (g *OrthogonalGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
 	dx := x2 - x1
 	dy := y2 - y1
 	var sx, sy int
-	if dx < 0 { dx = -dx; sx = -1 } else { sx = 1 }
-	if dy < 0 { dy = -dy; sy = -1 } else { sy = 1 }
+	if dx < 0 {
+		dx = -dx
+		sx = -1
+	} else {
+		sx = 1
+	}
+	if dy < 0 {
+		dy = -dy
+		sy = -1
+	} else {
+		sy = 1
+	}
 	err := dx - dy
 	x, y := x1, y1
 	for {
@@ -213,8 +223,14 @@ func (g *OrthogonalGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
 			break
 		}
 		e2 := 2 * err
-		if e2 > -dy { err -= dy; x += sx }
-		if e2 < dx { err += dx; y += sy }
+		if e2 > -dy {
+			err -= dy
+			x += sx
+		}
+		if e2 < dx {
+			err += dx
+			y += sy
+		}
 	}
 	return true
 }
@@ -225,7 +241,6 @@ func (g *OrthogonalGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
 	tx2, ty2 := g.WorldToTile(x2, y2)
 	return g.HasLineOfSight(tx1, ty1, tx2, ty2)
 }
-
 
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). Returns the world-space center of the
@@ -258,7 +273,7 @@ func (g *OrthogonalGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float
 
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). See the method doc on Grid for details.
-func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool) {
+func (g *OrthogonalGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool) {
 	if maxRadius < 0 {
 		return 0, 0, false
 	}
@@ -366,7 +381,7 @@ func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int, edge
 // FindNearestWalkableTile finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). Returns the tile coordinates and true if found;
 // returns (0, 0, false) if no walkable tile exists within the search radius.
-func (g *OrthogonalGrid) FindNearestWalkableTile(wx, wy float32, maxRadius int) (int, int, bool) {
+func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, bool) {
 	tx, ty := g.WorldToTile(wx, wy)
 	if g.IsWalkableAt(tx, ty) {
 		return tx, ty, true
@@ -509,7 +524,7 @@ func (g *OrthogonalGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 // Automatically smooths the path via SmoothenTilePath when smoothing is enabled
 // (default). Disable with WithGridSmoothing(false) when using a finder that
 // already does its own smoothing, such as WaypointFinder.
-func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
+func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
 	}
@@ -547,7 +562,7 @@ func (g *OrthogonalGrid) FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 
 // FindSmoothPath finds a path between two world positions and smooths it.
 // Same buffer contract as FindPath.
-func (g *OrthogonalGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32 {
+func (g *OrthogonalGrid) FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
 	}
@@ -569,7 +584,7 @@ func (g *OrthogonalGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32
 	if path == nil {
 		return nil
 	}
-	path = g.SmoothenTilePath(path)
+	path = g.SmoothenPath(path)
 	if cap(g.worldBuf) >= len(path) {
 		g.worldBuf = g.worldBuf[:len(path)]
 	} else {
@@ -586,7 +601,7 @@ func (g *OrthogonalGrid) FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32
 // SmoothenTilePath smooths a tile-coordinate path by removing unnecessary waypoints.
 // Writes the result in-place over the input buffer (which is the finder's cached pathBuf),
 // so the smoothed path reuses the same allocation.
-func (g *OrthogonalGrid) SmoothenTilePath(path [][2]int) [][2]int {
+func (g *OrthogonalGrid) SmoothenPath(path [][2]int) [][2]int {
 	if len(path) < 2 {
 		return path
 	}

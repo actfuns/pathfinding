@@ -70,7 +70,7 @@ func BenchmarkOrthogonal100(b *testing.B) {
 	b.Run("AStarSmooth", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.FindSmoothPath(0, 0, 99, 99)
+			base.FindSmoothPathWorld(0, 0, 99, 99)
 		}
 	})
 	b.Run("JPS", func(b *testing.B) {
@@ -104,7 +104,7 @@ func BenchmarkOrthogonal500(b *testing.B) {
 	b.Run("AStarSmooth", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.FindSmoothPath(0, 0, 499, 499)
+			base.FindSmoothPathWorld(0, 0, 499, 499)
 		}
 	})
 	b.Run("HPA", func(b *testing.B) {
@@ -132,7 +132,7 @@ func BenchmarkHex100(b *testing.B) {
 	b.Run("AStarSmooth", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.FindSmoothPath(sx, sy, ex, ey)
+			base.FindSmoothPathWorld(sx, sy, ex, ey)
 		}
 	})
 }
@@ -152,7 +152,7 @@ func BenchmarkStaggered100(b *testing.B) {
 	b.Run("AStarSmooth", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.FindSmoothPath(sx, sy, ex, ey)
+			base.FindSmoothPathWorld(sx, sy, ex, ey)
 		}
 	})
 }

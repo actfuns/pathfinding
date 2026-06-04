@@ -319,7 +319,7 @@ func TestHexFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("self walkable", func(t *testing.T) {
-		_, _, ok := g.FindNearestWalkable(0, 0, 5, 0)
+		_, _, ok := g.FindNearestWalkableWorld(0, 0, 5, 0)
 		if !ok {
 			t.Fatal("expected ok")
 		}
@@ -327,7 +327,7 @@ func TestHexFindNearestWalkable(t *testing.T) {
 
 	t.Run("obstacle center finds neighbor", func(t *testing.T) {
 		// (2,2) is obstacle ~ world (128,128+)
-		_, _, ok := g.FindNearestWalkable(128, 128, 3, 0)
+		_, _, ok := g.FindNearestWalkableWorld(128, 128, 3, 0)
 		if !ok {
 			t.Fatal("expected ok, obstacle center should have walkable neighbors")
 		}
@@ -335,7 +335,7 @@ func TestHexFindNearestWalkable(t *testing.T) {
 
 	t.Run("all obstacles returns false", func(t *testing.T) {
 		g2 := NewHexGrid([][]int{{1, 1}, {1, 1}})
-		_, _, ok := g2.FindNearestWalkable(32, 32, 5, 0)
+		_, _, ok := g2.FindNearestWalkableWorld(32, 32, 5, 0)
 		if ok {
 			t.Error("expected false when all obstacles")
 		}
@@ -343,21 +343,21 @@ func TestHexFindNearestWalkable(t *testing.T) {
 
 	t.Run("maxRadius=0 only checks self", func(t *testing.T) {
 		g2 := NewHexGrid([][]int{{1, 1}, {1, 1}})
-		_, _, ok := g2.FindNearestWalkable(32, 32, 0, 0)
+		_, _, ok := g2.FindNearestWalkableWorld(32, 32, 0, 0)
 		if ok {
 			t.Error("expected false when self obstacle and maxRadius=0")
 		}
 	})
 
 	t.Run("maxRadius negative", func(t *testing.T) {
-		_, _, ok := g.FindNearestWalkable(32, 32, -1, 0)
+		_, _, ok := g.FindNearestWalkableWorld(32, 32, -1, 0)
 		if ok {
 			t.Error("expected false when maxRadius < 0")
 		}
 	})
 
 	t.Run("outside grid returns false", func(t *testing.T) {
-		_, _, ok := g.FindNearestWalkable(999, 999, 5, 0)
+		_, _, ok := g.FindNearestWalkableWorld(999, 999, 5, 0)
 		if ok {
 			t.Error("expected false outside grid")
 		}

@@ -108,40 +108,40 @@ type Grid interface {
 	// SetWalkableAtWorld sets the walkability of the tile at world position (wx, wy).
 	SetWalkableAtWorld(wx, wy float32, walkable bool)
 
-	// FindNearestWalkable finds the nearest walkable tile within maxRadius
+	// FindNearestWalkable is like FindNearestWalkable but returns tile
+	// coordinates instead of edge-clamped world coordinates.
+	FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, bool)
+	// FindNearestWalkableWorld finds the nearest walkable tile within maxRadius
 	// (Chebyshev distance in tiles) from world position (wx, wy).
 	// Returns the closest point on the edge of the nearest walkable tile, or
 	// (0, 0, false) if no walkable tile exists within the search radius.
-	FindNearestWalkable(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool)
-	// FindNearestWalkableTile is like FindNearestWalkable but returns tile
-	// coordinates instead of edge-clamped world coordinates.
-	FindNearestWalkableTile(wx, wy float32, maxRadius int) (int, int, bool)
-	// RandomWalkableTile returns a random walkable tile coordinate.
+	FindNearestWalkableWorld(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool)
+	// RandomWalkable returns a random walkable tile coordinate.
 	// Returns (-1, -1) if no walkable tile exists.
-	RandomWalkableTile() (int, int)
+	RandomWalkable() (int, int, bool)
 	// RandomWalkableTileWorld returns the world center of a random
 	// walkable tile. Returns (0, 0, false) if none found.
-	RandomWalkableTileWorld() (float32, float32, bool)
-	// RandomWalkableTileInRadius returns a random walkable tile within
+	RandomWalkableWorld() (float32, float32, bool)
+	// RandomWalkableInRadius returns a random walkable tile within
 	// radius tiles of (cx, cy). Returns (-1, -1) if none found.
-	RandomWalkableTileInRadius(cx, cy, radius int) (int, int)
-	// RandomWalkableTileInRadiusWorld returns the world center of a
+	RandomWalkableInRadius(cx, cy, radius int) (int, int, bool)
+	// RandomWalkableInRadiusWorld returns the world center of a
 	// random walkable tile within radius tiles of (wx, wy).
 	// Returns (0, 0, false) if none found.
-	RandomWalkableTileInRadiusWorld(wx, wy float32, radius int) (float32, float32, bool)
+	RandomWalkableInRadiusWorld(wx, wy float32, radius int) (float32, float32, bool)
 
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
-	// FindPath finds a path between two world positions through the grid.
+	// FindPathWorld finds a path between two world positions through the grid.
 	// Uses the grid's Finder. Returns the path in world coordinates.
-	// Result is backed by an internal buffer — valid only until the next FindPath call.
-	FindPath(wx1, wy1, wx2, wy2 float32) [][2]float32
-	// FindSmoothPath finds a path and smooths it via LOS string-pulling.
+	// Result is backed by an internal buffer — valid only until the next FindPathWorld call.
+	FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32
+	// FindSmoothPathWorld finds a path and smooths it via LOS string-pulling.
 	// Same buffer contract as FindPath.
-	FindSmoothPath(wx1, wy1, wx2, wy2 float32) [][2]float32
-	// SmoothenTilePath removes unnecessary waypoints from a tile path
+	FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32
+	// SmoothenPath removes unnecessary waypoints from a tile path
 	// by checking line-of-sight between each point.
-	SmoothenTilePath(path [][2]int) [][2]int
+	SmoothenPath(path [][2]int) [][2]int
 
 	// RenderSVG renders the grid and paths as an SVG string.
 	// Tiles are coloured by their Weight value (see DefaultSVGOpts).

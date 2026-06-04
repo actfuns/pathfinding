@@ -143,7 +143,7 @@ func TestOrthogonalFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("self walkable", func(t *testing.T) {
-		x, y, ok := g.FindNearestWalkable(0, 0, 5, 0)
+		x, y, ok := g.FindNearestWalkableWorld(0, 0, 5, 0)
 		if !ok {
 			t.Fatal("expected ok")
 		}
@@ -153,7 +153,7 @@ func TestOrthogonalFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("neighbor in ring 1 around obstacle", func(t *testing.T) {
-		_, _, ok := g.FindNearestWalkable(2, 2, 3, 0)
+		_, _, ok := g.FindNearestWalkableWorld(2, 2, 3, 0)
 		if !ok {
 			t.Fatal("expected ok, center obstacle has walkable neighbors")
 		}
@@ -161,28 +161,28 @@ func TestOrthogonalFindNearestWalkable(t *testing.T) {
 
 	t.Run("all obstacles returns false", func(t *testing.T) {
 		g2 := NewOrthogonalGrid([][]int{{1, 1}, {1, 1}})
-		_, _, ok := g2.FindNearestWalkable(0, 0, 5, 0)
+		_, _, ok := g2.FindNearestWalkableWorld(0, 0, 5, 0)
 		if ok {
 			t.Error("expected false when all obstacles")
 		}
 	})
 
 	t.Run("maxRadius=0 only checks self", func(t *testing.T) {
-		_, _, ok := g.FindNearestWalkable(2, 2, 0, 0)
+		_, _, ok := g.FindNearestWalkableWorld(2, 2, 0, 0)
 		if ok {
 			t.Error("expected false when self obstacle and maxRadius=0")
 		}
 	})
 
 	t.Run("maxRadius negative", func(t *testing.T) {
-		_, _, ok := g.FindNearestWalkable(2, 2, -1, 0)
+		_, _, ok := g.FindNearestWalkableWorld(2, 2, -1, 0)
 		if ok {
 			t.Error("expected false when maxRadius < 0")
 		}
 	})
 
 	t.Run("walkable self with limited radius", func(t *testing.T) {
-		x, y, ok := g.FindNearestWalkable(4, 4, 1, 0)
+		x, y, ok := g.FindNearestWalkableWorld(4, 4, 1, 0)
 		if !ok {
 			t.Fatal("expected ok")
 		}
@@ -192,7 +192,7 @@ func TestOrthogonalFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("outside grid returns false", func(t *testing.T) {
-		_, _, ok := g.FindNearestWalkable(100, 100, 5, 0)
+		_, _, ok := g.FindNearestWalkableWorld(100, 100, 5, 0)
 		if ok {
 			t.Error("expected false outside grid")
 		}
@@ -206,7 +206,7 @@ func TestOrthogonalFindNearestWalkable(t *testing.T) {
 			{1, 1, 1, 1, 1},
 			{1, 1, 1, 1, 1},
 		})
-		x, y, ok := g3.FindNearestWalkable(4, 4, 8, 0)
+		x, y, ok := g3.FindNearestWalkableWorld(4, 4, 8, 0)
 		if !ok {
 			t.Fatal("expected ok")
 		}
@@ -224,7 +224,7 @@ func TestOrthogonalFindNearestWalkableWorld(t *testing.T) {
 		{0, 0, 0},
 	}, WithOrthogonalTileSize(32, 32))
 
-	x, y, ok := g.FindNearestWalkable(48, 48, 3, 0)
+	x, y, ok := g.FindNearestWalkableWorld(48, 48, 3, 0)
 	if !ok {
 		t.Fatal("expected ok")
 	}
