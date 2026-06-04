@@ -32,7 +32,7 @@ func main() {
     g := grid.NewOrthogonalGrid(terrain)
 
     // 在世界坐标系中寻路
-    path := g.FindPath(0, 0, 4, 4)
+    path := g.FindPathWorld(0, 0, 4, 4)
     fmt.Println("路径:", path)
 
     // 在运行时修改地形
