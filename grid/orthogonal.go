@@ -64,6 +64,9 @@ func NewOrthogonalGrid(matrix [][]int, opts ...OrthogonalOption) *OrthogonalGrid
 
 func (g *OrthogonalGrid) index(x, y int) int { return y*g.width + x }
 
+// TileIndex returns the flat array index for tile (x, y).
+func (g *OrthogonalGrid) TileIndex(x, y int) int { return g.index(x, y) }
+
 // Width returns the number of tiles horizontally in the grid.
 func (g *OrthogonalGrid) Width() int { return g.width }
 

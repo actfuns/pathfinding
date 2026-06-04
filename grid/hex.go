@@ -175,6 +175,9 @@ func (g *HexGrid) doStaggerY(y int) bool {
 
 func (g *HexGrid) index(x, y int) int { return y*g.width + x }
 
+// TileIndex returns the flat array index for tile (x, y).
+func (g *HexGrid) TileIndex(x, y int) int { return g.index(x, y) }
+
 // Width returns the number of tiles along the X axis.
 func (g *HexGrid) Width() int { return g.width }
 

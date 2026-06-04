@@ -142,6 +142,9 @@ func (g *StaggeredGrid) isShifted(index int) bool {
 
 func (g *StaggeredGrid) index(x, y int) int { return y*g.width + x }
 
+// TileIndex returns the flat array index for tile (x, y).
+func (g *StaggeredGrid) TileIndex(x, y int) int { return g.index(x, y) }
+
 // Width returns the number of tiles horizontally in the staggered grid.
 func (g *StaggeredGrid) Width() int { return g.width }
 

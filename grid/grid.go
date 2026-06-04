@@ -99,6 +99,9 @@ type Grid interface {
 	GetNodeAt(x, y int) *finder.Node
 	// ObstacleCount returns the number of non-walkable tiles.
 	ObstacleCount() int
+	// TileIndex returns the flat array index for tile (x, y).
+	// Equivalent to y*Width + x. Panics if outside the grid.
+	TileIndex(x, y int) int
 
 	// SetWeightAt sets the per-tile movement cost multiplier for tile (x, y).
 	// Weight 1.0 is the default; higher values make movement more expensive.
