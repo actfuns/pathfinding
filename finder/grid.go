@@ -13,6 +13,8 @@ type Grid interface {
 	// IsWalkableAt reports whether the tile (x, y) is walkable.
 	// Tiles outside the grid are reported as not walkable.
 	IsWalkableAt(x, y int) bool
+	// SetWalkableAt sets the walkability of the tile (x, y).
+	SetWalkableAt(x, y int, walkable bool)
 	// GetNodeAt returns the node at tile (x, y). Panics if outside the grid.
 	GetNodeAt(x, y int) *Node
 	// GetNeighbors returns the walkable, adjacent neighbors of the given node.

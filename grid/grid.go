@@ -76,8 +76,6 @@ var DefaultSVGOpts = &SVGOpts{
 type Grid interface {
 	finder.Grid
 
-	// SetWalkableAt sets the walkability of the tile (x, y).
-	SetWalkableAt(x, y int, walkable bool)
 	// ObstacleCount returns the number of non-walkable tiles.
 	ObstacleCount() int
 	// TileIndex returns the flat array index for tile (x, y).
