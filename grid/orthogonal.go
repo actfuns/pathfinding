@@ -684,7 +684,7 @@ func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
 			rx := leftPad + x*cellW
-			ry := leftPad + y*cellH
+			ry := padding + (g.height-1-y)*cellH
 			var fill, stroke string
 			if !g.IsWalkableAt(x, y) {
 				fill = "#555555"
@@ -712,7 +712,7 @@ func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 			for i, p := range path {
 				pts[i] = fmt.Sprintf("%.1f,%.1f",
 					float64(leftPad+p[0]*cellW+cellW/2),
-					float64(leftPad+p[1]*cellH+cellH/2))
+					float64(padding+(g.height-1-p[1])*cellH+cellH/2))
 			}
 			fmt.Fprintf(&b, `<polyline points="%s" fill="none" stroke="%s" stroke-width="%.0f"%s stroke-linejoin="round" stroke-linecap="round"/>`+"\n",
 				strings.Join(pts, " "), color, strokeWidth, dashArray)
@@ -720,14 +720,14 @@ func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 	}
 
 	// Start marker (green circle with "S")
-	sx := float64(padding + startX*cellW + cellW/2)
-	sy := float64(padding + startY*cellH + cellH/2)
+	sx := float64(leftPad + startX*cellW + cellW/2)
+	sy := float64(padding + (g.height-1-startY)*cellH + cellH/2)
 	fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="7" fill="#00cc44" stroke="#009933" stroke-width="2"/>`+"\n", sx, sy)
 	fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" font-size="10" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">S</text>`+"\n", sx, sy+3.5)
 
 	// End marker (red circle with "E")
-	ex := float64(padding + endX*cellW + cellW/2)
-	ey := float64(padding + endY*cellH + cellH/2)
+	ex := float64(leftPad + endX*cellW + cellW/2)
+	ey := float64(padding + (g.height-1-endY)*cellH + cellH/2)
 	fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="7" fill="#cc0000" stroke="#990000" stroke-width="2"/>`+"\n", ex, ey)
 	fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" font-size="10" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">E</text>`+"\n", ex, ey+3.5)
 

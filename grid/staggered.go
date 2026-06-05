@@ -890,7 +890,7 @@ func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 	vxMax, vyMax := -math.MaxFloat64, -math.MaxFloat64
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
-			cx, cy := g.tileToScreenCoords(x, y)
+			cx, cy := g.tileToScreenCoords(x, g.height-1-y)
 			for _, off := range diamond {
 				vx := cx + off[0]
 				vy := cy + off[1]
@@ -912,7 +912,7 @@ func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 
 	svgW := (vxMax - vxMin) + padding*2 + 120
 	svgH := (vyMax - vyMin) + padding*2
-	dx := padding - vxMin
+	dx := padding + 120 + padding - vxMin
 	dy := padding - vyMin
 
 	var b strings.Builder
@@ -920,7 +920,7 @@ func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
-			cx, cy := g.tileToScreenCoords(x, y)
+			cx, cy := g.tileToScreenCoords(x, g.height-1-y)
 			fill, stroke := "#c8e6c9", "#cccccc"
 			if !g.IsWalkableAt(x, y) {
 				fill, stroke = "#555555", "#444444"
@@ -938,11 +938,11 @@ func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 
 	drawPathAndMarkers(&b, startX, startY, endX, endY,
 		func(tx, ty int) (float64, float64) {
-			cx, cy := g.tileToScreenCoords(tx, ty)
+			cx, cy := g.tileToScreenCoords(tx, g.height-1-ty)
 			return cx + tileW/2 + dx, cy + tileH/2 + dy
 		}, paths...)
 
-	renderLegend(&b, svgW-130, padding, cfg)
+	renderLegend(&b, padding, padding, cfg)
 	b.WriteString("</svg>\n")
 	return b.String()
 }
