@@ -203,7 +203,7 @@ func (g *StaggeredGrid) GetWeightAt(x, y int) float64 {
 func (g *StaggeredGrid) ObstacleCount() int { return g.obstacleCount }
 
 // Clone returns a deep copy of the staggered grid with independent node data.
-func (g *StaggeredGrid) Clone() finder.Grid {
+func (g *StaggeredGrid) Clone() Grid {
 	ng := &StaggeredGrid{
 		cardinalOffsets:  g.cardinalOffsets,
 		diagNormOffsets:  g.diagNormOffsets,

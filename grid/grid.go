@@ -95,6 +95,8 @@ type Grid interface {
 	// TileXY returns the tile coordinates for a flat array index.
 	// Equivalent to (index % Width, index / Width).
 	TileXY(index int) (int, int)
+	// Clone returns a deep copy of grid with independent node data.
+	Clone() Grid
 
 	// SetWeightAt sets the per-tile movement cost multiplier for tile (x, y).
 	// Weight 1.0 is the default; higher values make movement more expensive.

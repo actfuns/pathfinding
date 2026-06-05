@@ -11,5 +11,4 @@ type Grid interface {
 	SetWalkableAt(x, y int, walkable bool)
 	GetNodeAt(x, y int) *Node
 	GetNeighbors(node *Node, diagonal DiagonalMovement, buffer []*Node) []*Node
-	Clone() Grid
 }

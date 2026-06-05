@@ -364,7 +364,7 @@ func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int
 // Clone creates a deep copy of the grid. The returned grid has its own node
 // slice; each node is copied, but the parent pointer is cleared. The finder
 // reference and tile dimensions are shared from the original.
-func (g *OrthogonalGrid) Clone() finder.Grid {
+func (g *OrthogonalGrid) Clone() Grid {
 	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, finder: g.finder}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
 	for i, n := range g.nodes {
