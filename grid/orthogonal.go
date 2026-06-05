@@ -67,6 +67,11 @@ func (g *OrthogonalGrid) index(x, y int) int { return y*g.width + x }
 // TileIndex returns the flat array index for tile (x, y).
 func (g *OrthogonalGrid) TileIndex(x, y int) int { return g.index(x, y) }
 
+// TileXY returns the tile coordinates for a flat array index.
+func (g *OrthogonalGrid) TileXY(index int) (int, int) {
+	return index % g.width, index / g.width
+}
+
 // Width returns the number of tiles horizontally in the grid.
 func (g *OrthogonalGrid) Width() int { return g.width }
 
@@ -413,6 +418,14 @@ func (g *OrthogonalGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 // Automatically smooths the path via SmoothenTilePath when smoothing is enabled
 // (default). Disable with WithGridSmoothing(false) when using a finder that
 // already does its own smoothing, such as WaypointFinder.
+// FindPath finds a path between two tile positions.
+func (g *OrthogonalGrid) FindPath(x1, y1, x2, y2 int) [][2]int {
+	if g.finder == nil {
+		return nil
+	}
+	return g.finder.FindPath(x1, y1, x2, y2, g)
+}
+
 func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
@@ -451,6 +464,18 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 
 
 // FindSmoothPath finds a path between two world positions and smooths it.
 // Same buffer contract as FindPath.
+func (g *OrthogonalGrid) FindSmoothPath(x1, y1, x2, y2 int) [][2]int {
+	if g.finder == nil {
+		return nil
+	}
+	path := g.finder.FindPath(x1, y1, x2, y2, g)
+	if path == nil {
+		return nil
+	}
+	return g.SmoothenPath(path)
+}
+
+// FindSmoothPathWorld finds a path between two world positions and smooths it.
 func (g *OrthogonalGrid) FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil

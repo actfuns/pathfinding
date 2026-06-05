@@ -178,6 +178,11 @@ func (g *HexGrid) index(x, y int) int { return y*g.width + x }
 // TileIndex returns the flat array index for tile (x, y).
 func (g *HexGrid) TileIndex(x, y int) int { return g.index(x, y) }
 
+// TileXY returns the tile coordinates for a flat array index.
+func (g *HexGrid) TileXY(index int) (int, int) {
+	return index % g.width, index / g.width
+}
+
 // Width returns the number of tiles along the X axis.
 func (g *HexGrid) Width() int { return g.width }
 
@@ -624,6 +629,14 @@ func (g *HexGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, 
 // FindPath finds a path between two world positions through the hex grid.
 // The returned [][2]float32 is backed by an internal buffer and is only
 // valid until the next FindPath/FindSmoothPath call on the same grid.
+// FindPath finds a path between two tile positions.
+func (g *HexGrid) FindPath(x1, y1, x2, y2 int) [][2]int {
+	if g.finder == nil {
+		return nil
+	}
+	return g.finder.FindPath(x1, y1, x2, y2, g)
+}
+
 func (g *HexGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
@@ -661,6 +674,18 @@ func (g *HexGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 
 // FindSmoothPath finds a path between two world positions and smooths it.
 // Same buffer contract as FindPath.
+func (g *HexGrid) FindSmoothPath(x1, y1, x2, y2 int) [][2]int {
+	if g.finder == nil {
+		return nil
+	}
+	path := g.finder.FindPath(x1, y1, x2, y2, g)
+	if path == nil {
+		return nil
+	}
+	return g.SmoothenPath(path)
+}
+
+// FindSmoothPathWorld finds a path between two world positions and smooths it.
 func (g *HexGrid) FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil

@@ -7,16 +7,6 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
-// fastRand returns a pseudo-random uint32 (xorshift).
-var fastRandState uint32 = 1
-
-func fastRand() uint32 {
-	fastRandState ^= fastRandState << 13
-	fastRandState ^= fastRandState >> 17
-	fastRandState ^= fastRandState << 5
-	return fastRandState
-}
-
 // GridType identifies the tile grid layout.
 type GridType int
 
@@ -102,6 +92,9 @@ type Grid interface {
 	// TileIndex returns the flat array index for tile (x, y).
 	// Equivalent to y*Width + x. Panics if outside the grid.
 	TileIndex(x, y int) int
+	// TileXY returns the tile coordinates for a flat array index.
+	// Equivalent to (index % Width, index / Width).
+	TileXY(index int) (int, int)
 
 	// SetWeightAt sets the per-tile movement cost multiplier for tile (x, y).
 	// Weight 1.0 is the default; higher values make movement more expensive.
@@ -132,10 +125,16 @@ type Grid interface {
 
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
+	// FindPath finds a path between two tile positions.
+	// Result is backed by an internal buffer — valid only until the next FindPath call.
+	FindPath(x1, y1, x2, y2 int) [][2]int
 	// FindPathWorld finds a path between two world positions through the grid.
 	// Uses the grid's Finder. Returns the path in world coordinates.
 	// Result is backed by an internal buffer — valid only until the next FindPathWorld call.
 	FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32
+	// FindSmoothPath finds a tile path and smooths it via LOS string-pulling.
+	// Same buffer contract as FindPath.
+	FindSmoothPath(x1, y1, x2, y2 int) [][2]int
 	// FindSmoothPathWorld finds a path and smooths it via LOS string-pulling.
 	// Same buffer contract as FindPath.
 	FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32

@@ -145,6 +145,11 @@ func (g *StaggeredGrid) index(x, y int) int { return y*g.width + x }
 // TileIndex returns the flat array index for tile (x, y).
 func (g *StaggeredGrid) TileIndex(x, y int) int { return g.index(x, y) }
 
+// TileXY returns the tile coordinates for a flat array index.
+func (g *StaggeredGrid) TileXY(index int) (int, int) {
+	return index % g.width, index / g.width
+}
+
 // Width returns the number of tiles horizontally in the staggered grid.
 func (g *StaggeredGrid) Width() int { return g.width }
 
@@ -640,6 +645,14 @@ func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int,
 // FindPath finds a path between two world positions through the staggered grid.
 // The returned [][2]float32 is backed by an internal buffer and is only
 // valid until the next FindPath/FindSmoothPath call on the same grid.
+// FindPath finds a path between two tile positions.
+func (g *StaggeredGrid) FindPath(x1, y1, x2, y2 int) [][2]int {
+	if g.finder == nil {
+		return nil
+	}
+	return g.finder.FindPath(x1, y1, x2, y2, g)
+}
+
 func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
@@ -677,6 +690,18 @@ func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 
 // FindSmoothPath finds a path between two world positions and smooths it.
 // Same buffer contract as FindPath.
+func (g *StaggeredGrid) FindSmoothPath(x1, y1, x2, y2 int) [][2]int {
+	if g.finder == nil {
+		return nil
+	}
+	path := g.finder.FindPath(x1, y1, x2, y2, g)
+	if path == nil {
+		return nil
+	}
+	return g.SmoothenPath(path)
+}
+
+// FindSmoothPathWorld finds a path between two world positions and smooths it.
 func (g *StaggeredGrid) FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
