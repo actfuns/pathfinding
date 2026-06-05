@@ -250,4 +250,8 @@ func TestStaggeredObstacleCount(t *testing.T) {
 	if n := g.ObstacleCount(); n != 0 {
 		t.Errorf("expected 0 obstacles, got %d", n)
 	}
+	g2 := g.Clone()
+	if n := g2.(*StaggeredGrid).ObstacleCount(); n != 0 {
+		t.Errorf("clone: expected 0 obstacles, got %d", n)
+	}
 }

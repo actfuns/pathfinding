@@ -237,7 +237,7 @@ func (g *HexGrid) ObstacleCount() int { return g.obstacleCount }
 // Clone returns a deep copy of the hex grid, including a copy of all nodes with
 // parent references cleared. The clone shares the finder and precomputed layout
 // parameters but owns its own node slice.
-func (g *HexGrid) Clone() Grid {
+func (g *HexGrid) Clone() finder.Grid {
 	ng := &HexGrid{
 		width:         g.width,
 		height:        g.height,

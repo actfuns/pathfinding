@@ -74,19 +74,10 @@ var DefaultSVGOpts = &SVGOpts{
 // queries, pathfinding, and rendering. This is separate from finder.Grid,
 // which only exposes what pathfinding algorithms need.
 type Grid interface {
-	// Width returns the number of tiles horizontally in the grid.
-	Width() int
-	// Height returns the number of tiles vertically in the grid.
-	Height() int
-	// IsInside reports whether the tile (x, y) is within the grid bounds.
-	IsInside(x, y int) bool
-	// IsWalkableAt reports whether the tile (x, y) is walkable.
-	// Tiles outside the grid are reported as not walkable.
-	IsWalkableAt(x, y int) bool
+	finder.Grid
+
 	// SetWalkableAt sets the walkability of the tile (x, y).
 	SetWalkableAt(x, y int, walkable bool)
-	// GetNodeAt returns the node at tile (x, y). Panics if outside the grid.
-	GetNodeAt(x, y int) *finder.Node
 	// ObstacleCount returns the number of non-walkable tiles.
 	ObstacleCount() int
 	// TileIndex returns the flat array index for tile (x, y).
@@ -95,8 +86,6 @@ type Grid interface {
 	// TileXY returns the tile coordinates for a flat array index.
 	// Equivalent to (index % Width, index / Width).
 	TileXY(index int) (int, int)
-	// Clone returns a deep copy of grid with independent node data.
-	Clone() Grid
 
 	// SetWeightAt sets the per-tile movement cost multiplier for tile (x, y).
 	// Weight 1.0 is the default; higher values make movement more expensive.
