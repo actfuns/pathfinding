@@ -130,26 +130,6 @@ type Grid interface {
 	// (0, 0, false) if no walkable tile exists within the search radius.
 	FindNearestWalkableWorld(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool)
 
-	// RandomWalkable returns a random walkable tile coordinate.
-	// Returns (-1, -1) if no walkable tile exists.
-	RandomWalkable() (int, int, bool)
-	// RandomWalkableWorld returns the world center of a random
-	// walkable tile. Returns (0, 0, false) if none found.
-	RandomWalkableWorld() (float32, float32, bool)
-	// RandomWalkableInRadius returns a random walkable tile within
-	// radius tiles of (cx, cy). Returns (-1, -1) if none found.
-	RandomWalkableInRadius(cx, cy, radius int) (int, int, bool)
-	// RandomWalkableInRadiusWorld returns the world center of a
-	// random walkable tile within radius tiles of (wx, wy).
-	// Returns (0, 0, false) if none found.
-	RandomWalkableInRadiusWorld(wx, wy float32, radius int) (float32, float32, bool)
-	// HasLineOfSight reports whether two tiles can see each other —
-	// every tile on the Bresenham line between them is walkable.
-	HasLineOfSight(x1, y1, x2, y2 int) bool
-	// HasLineOfSightWorld reports whether two tiles can see each other —
-	// every tile on the Bresenham line between them is walkable.
-	HasLineOfSightWorld(x1, y1, x2, y2 float32) bool
-
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
 	// FindPathWorld finds a path between two world positions through the grid.
