@@ -140,7 +140,7 @@ func buildChunkPortals(grid finder.Grid, w *HPAWorld, cx, cy int) {
 
 // edgePortals creates compressed portals along a chunk edge.
 // Consecutive walkable cells are merged into a single portal.
-func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, oppDir int, vertical bool) {
+func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, _ int, vertical bool) {
 	pos := 0
 	for pos < cs {
 		var cx, cy int

@@ -68,13 +68,14 @@ func BenchmarkOrthogonal100(b *testing.B) {
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
+		sm := NewOrthogonalGrid(matrix, WithSmoothBresenham())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.FindSmoothPathWorld(0, 0, 99, 99)
+			sm.FindPathWorld(0, 0, 99, 99)
 		}
 	})
 	b.Run("JPS", func(b *testing.B) {
-		jps := NewOrthogonalGrid(matrix, WithOrthogonalFinder(finder.NewJumpPointFinder()))
+		jps := NewOrthogonalGrid(matrix, WithFinder(finder.NewJumpPointFinder()))
 		fj := jps.Finder()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -102,9 +103,10 @@ func BenchmarkOrthogonal500(b *testing.B) {
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
+		sm := NewOrthogonalGrid(matrix, WithSmoothBresenham())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.FindSmoothPathWorld(0, 0, 499, 499)
+			sm.FindPathWorld(0, 0, 499, 499)
 		}
 	})
 	b.Run("HPA", func(b *testing.B) {
@@ -119,7 +121,7 @@ func BenchmarkOrthogonal500(b *testing.B) {
 
 func BenchmarkHex100(b *testing.B) {
 	matrix := generateGrid(100, 100, 0.2)
-	base := NewHexGrid(matrix, WithHexTileSize(55, 64), WithHexSide(32))
+	base := NewHexGrid(matrix, WithTileSize(55, 64), WithHexSide(32))
 	f := base.Finder()
 	sx, sy := base.TileToWorld(5, 5)
 	ex, ey := base.TileToWorld(94, 94)
@@ -130,9 +132,10 @@ func BenchmarkHex100(b *testing.B) {
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
+		sm := NewOrthogonalGrid(matrix, WithSmoothBresenham())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.FindSmoothPathWorld(sx, sy, ex, ey)
+			sm.FindPathWorld(sx, sy, ex, ey)
 		}
 	})
 }
@@ -150,9 +153,10 @@ func BenchmarkStaggered100(b *testing.B) {
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
+		sm := NewOrthogonalGrid(matrix, WithSmoothBresenham())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			base.FindSmoothPathWorld(sx, sy, ex, ey)
+			sm.FindPathWorld(sx, sy, ex, ey)
 		}
 	})
 }

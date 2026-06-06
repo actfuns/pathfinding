@@ -1,0 +1,126 @@
+package grid
+
+import (
+	"fmt"
+	"strings"
+)
+
+// SVGOpts configures SVG rendering behavior. nil means use defaults.
+type SVGOpts struct {
+	// WeightColors maps weight thresholds to tile fill colors.
+	// Each entry is (threshold, color). Applied in order: weight <= threshold → color.
+	// The last entry with a threshold of +Inf catches everything above the second-last.
+	// The second-to-last entry with a threshold of +Inf catches exactly the last threshold.
+	// Example:
+	//   {{"0.3", "#bbdefb"}, {"1.0", "#c8e6c9"}, {"2.0", "#fff9c4"}, {"5.0", "#ffcc80"}, {"+Inf", "#ef5350"}}
+	// Set to nil for defaults: road(0.3)→blue, grass(1.0)→green, sand(2.0)→yellow,
+	// swamp(5.0)→orange, >5.0→red.
+	WeightColors [][2]string
+	// LegendEntries overrides the legend labels. Each entry is (color_hex, label).
+	// If nil, labels are auto-generated from WeightColors as "≤threshold".
+	LegendEntries [][2]string
+}
+
+// DefaultSVGOpts is the default SVG rendering config, used when nil is passed.
+var DefaultSVGOpts = &SVGOpts{
+	WeightColors: [][2]string{
+		{"0.3", "#bbdefb"},
+		{"1.0", "#c8e6c9"},
+		{"2.0", "#fff9c4"},
+		{"5.0", "#ffcc80"},
+		{"+Inf", "#ef5350"},
+	},
+	LegendEntries: [][2]string{
+		{"#bbdefb", "Road ≤0.3"},
+		{"#c8e6c9", "Grass ≤1.0"},
+		{"#fff9c4", "Sand ≤2.0"},
+		{"#ffcc80", "Swamp ≤5.0"},
+		{"#ef5350", ">5.0 Extreme"},
+		{"#555555", "Wall"},
+	},
+}
+
+// drawPathAndMarkers draws path polylines and start/end markers.
+// centerOf returns the SVG pixel coordinates for a tile.
+func drawPathAndMarkers(b *strings.Builder, startX, startY, endX, endY int,
+	centerOf func(tx, ty int) (float64, float64), paths ...[][2]int) {
+
+	pathColors := []string{"#0066cc", "#e53935", "#2e7d32", "#7b1fa2"}
+	for pi, path := range paths {
+		color := pathColors[pi%len(pathColors)]
+		dash := ""
+		if pi == 1 {
+			dash = ` stroke-dasharray="6,4"`
+		}
+		if len(path) > 0 {
+			pts := make([]string, len(path))
+			for i, p := range path {
+				cx, cy := centerOf(p[0], p[1])
+				pts[i] = fmt.Sprintf("%.1f,%.1f", cx, cy)
+			}
+			fmt.Fprintf(b, `<polyline points="%s" fill="none" stroke="%s" stroke-width="3"%s stroke-linejoin="round" stroke-linecap="round"/>`+"\n",
+				strings.Join(pts, " "), color, dash)
+		}
+	}
+
+	sx, sy := centerOf(startX, startY)
+	fmt.Fprintf(b, `<circle cx="%.1f" cy="%.1f" r="7" fill="#00cc44" stroke="#009933" stroke-width="2"/>`+"\n", sx, sy)
+	fmt.Fprintf(b, `<text x="%.1f" y="%.1f" font-size="10" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">S</text>`+"\n", sx, sy+3.5)
+
+	ex, ey := centerOf(endX, endY)
+	fmt.Fprintf(b, `<circle cx="%.1f" cy="%.1f" r="7" fill="#cc0000" stroke="#990000" stroke-width="2"/>`+"\n", ex, ey)
+	fmt.Fprintf(b, `<text x="%.1f" y="%.1f" font-size="10" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">E</text>`+"\n", ex, ey+3.5)
+}
+
+// weightToColor maps a tile weight to a fill color using cfg.WeightColors.
+func weightToColor(w float64, cfg *SVGOpts) string {
+	for _, entry := range cfg.WeightColors {
+		threshold := float64(1 << 62)
+		if entry[0] != "+Inf" {
+			if _, err := fmt.Sscanf(entry[0], "%f", &threshold); err != nil {
+				continue
+			}
+		}
+		if w <= threshold {
+			return entry[1]
+		}
+	}
+	return cfg.WeightColors[len(cfg.WeightColors)-1][1]
+}
+
+// renderLegend draws the terrain color legend in the SVG.
+func renderLegend(b *strings.Builder, legX, legY float64, cfg *SVGOpts) {
+	var entries [][2]string
+	if cfg.LegendEntries != nil {
+		entries = cfg.LegendEntries
+	} else {
+		for _, wc := range cfg.WeightColors {
+			label := ">" + cfg.WeightColors[0][0]
+			if wc[0] != "+Inf" {
+				label = "≤" + wc[0]
+			}
+			entries = append(entries, [2]string{wc[1], label})
+		}
+		entries = append(entries, [2]string{"#555555", "Wall"})
+	}
+	legH := float64(20 + len(entries)*26 + 10)
+	fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="110" height="%.1f" fill="white" stroke="#bbb" stroke-width="1" rx="4"/>`+"\n",
+		legX, legY, legH)
+	fmt.Fprintf(b, `<text x="%.1f" y="%.1f" font-size="12" font-family="sans-serif" font-weight="bold" fill="#333">Terrain</text>`+"\n",
+		legX+8, legY+16)
+
+	for i, e := range entries {
+		ey := legY + 28 + float64(i*26)
+		fmt.Fprintf(b, `<rect x="%.1f" y="%.1f" width="14" height="14" fill="%s" stroke="#999" stroke-width="1" rx="2"/>`+"\n",
+			legX+8, ey, e[0])
+		fmt.Fprintf(b, `<text x="%.1f" y="%.1f" font-size="11" font-family="sans-serif" fill="#333">%s</text>`+"\n",
+			legX+28, ey+12, e[1])
+	}
+}
+
+// xmlHeader returns the SVG declaration and root element.
+func xmlHeader(w, h int) string {
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">
+`, w, h, w, h)
+}

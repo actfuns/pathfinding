@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/actfuns/pathfinding/finder"
+	"github.com/actfuns/pathfinding/gridutil"
 )
 
 // StaggeredGrid is a 45-degree isometric/staggered grid (diamond-shaped tiles).
@@ -28,38 +29,13 @@ type StaggeredGrid struct {
 	cardinalOffsets  [4][2]int
 	diagNormOffsets  [4][2]int // diagonal offsets for non-shifted rows/cols
 	diagShiftOffsets [4][2]int // diagonal offsets for shifted rows/cols
+	smoother         func(path [][2]int) [][2]int
 }
 
 // Finder returns the pathfinder associated with this grid.
 func (g *StaggeredGrid) Finder() finder.Finder { return g.finder }
 
-// StaggerOption configures a StaggeredGrid.
-type StaggerOption func(*StaggeredGrid)
-
-// WithStaggerTileSize sets the pixel dimensions of the staggered tile.
-func WithStaggerTileSize(w, h int) StaggerOption {
-	return func(g *StaggeredGrid) { g.tileW = w; g.tileH = h }
-}
-
-// WithStaggerAxis sets the stagger axis ("x" or "y"). Default is "y".
-func WithStaggerAxis(axis string) StaggerOption {
-	return func(g *StaggeredGrid) { g.staggerAxis = axis }
-}
-
-// WithStaggerEvenIndex configures even-index stagger offset. Default is odd-index.
-func WithStaggerEvenIndex() StaggerOption {
-	return func(g *StaggeredGrid) { g.staggerIndex = "even" }
-}
-
-// WithStaggerFinder sets the pathfinder and returns the grid.
-func WithStaggerFinder(f finder.Finder) StaggerOption {
-	return func(g *StaggeredGrid) { g.finder = f }
-}
-
-// NewStaggeredGrid creates a StaggeredGrid from a matrix (0=walkable, non-zero=obstacle).
-// Default tile size is 64x64. Default stagger axis is "y" (odd rows shift right).
-// Default finder is AStarFinder.
-func NewStaggeredGrid(matrix [][]int, opts ...StaggerOption) *StaggeredGrid {
+func NewStaggeredGrid(matrix [][]int, opts ...GridOption) *StaggeredGrid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]*finder.Node, 0, w*h)
@@ -74,19 +50,35 @@ func NewStaggeredGrid(matrix [][]int, opts ...StaggerOption) *StaggeredGrid {
 			nodes = append(nodes, n)
 		}
 	}
+	var cfg gridOptions
+	cfg.staggerAxis = "y"
+	cfg.staggerIndex = "odd"
+	cfg.tileW = 64
+	cfg.tileH = 64
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	g := &StaggeredGrid{
-		staggerAxis:   "y",
-		staggerIndex:  "odd",
-		tileW:         64,
-		tileH:         64,
+		staggerAxis:   cfg.staggerAxis,
+		staggerIndex:  cfg.staggerIndex,
+		tileW:         cfg.tileW,
+		tileH:         cfg.tileH,
 		width:         w,
 		height:        h,
 		obstacleCount: obs,
 		nodes:         nodes,
-		finder:        finder.NewAStarFinder(),
+		finder:        cfg.finder,
 	}
-	for _, opt := range opts {
-		opt(g)
+	if cfg.finder == nil {
+		g.finder = finder.NewAStarFinder()
+	} else {
+		g.finder = cfg.finder
+	}
+	switch cfg.smoothMode {
+	case SmoothDense:
+		g.smoother = func(path [][2]int) [][2]int {
+			return gridutil.SmoothenDense(g, path)
+		}
 	}
 	g.initNeighbors()
 	return g
@@ -156,6 +148,12 @@ func (g *StaggeredGrid) Width() int { return g.width }
 // Height returns the number of tiles vertically in the staggered grid.
 func (g *StaggeredGrid) Height() int { return g.height }
 
+// TileWidth returns the tile width in world units.
+func (g *StaggeredGrid) TileWidth() int { return g.tileW }
+
+// TileHeight returns the tile height in world units.
+func (g *StaggeredGrid) TileHeight() int { return g.tileH }
+
 // IsInside checks whether the tile coordinates (x, y) are within the grid bounds.
 func (g *StaggeredGrid) IsInside(x, y int) bool {
 	return x >= 0 && x < g.width && y >= 0 && y < g.height
@@ -191,12 +189,16 @@ func (g *StaggeredGrid) SetWeightAt(x, y int, weight float64) {
 	g.nodes[g.index(x, y)].Weight = weight
 }
 
-// GetWeightAt returns the movement cost multiplier for the tile at (x, y).
 func (g *StaggeredGrid) GetWeightAt(x, y int) float64 {
 	if !g.IsInside(x, y) {
 		return 1.0
 	}
 	return g.nodes[g.index(x, y)].Weight
+}
+
+// HasLineOfSight reports whether two tiles can see each other using dense world-space sampling.
+func (g *StaggeredGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
+	return gridutil.HasLineOfSightDense(g, x1, y1, x2, y2)
 }
 
 // ObstacleCount returns the number of non-walkable tiles in the grid.
@@ -216,6 +218,7 @@ func (g *StaggeredGrid) Clone() finder.Grid {
 		height:           g.height,
 		obstacleCount:    g.obstacleCount,
 		finder:           g.finder,
+		smoother:         g.smoother,
 	}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
 	for i, n := range g.nodes {
@@ -642,17 +645,24 @@ func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int,
 	return 0, 0, false
 }
 
-// FindPath finds a path between two world positions through the staggered grid.
-// The returned [][2]float32 is backed by an internal buffer and is only
-// valid until the next FindPath/FindSmoothPath call on the same grid.
 // FindPath finds a path between two tile positions.
 func (g *StaggeredGrid) FindPath(x1, y1, x2, y2 int) [][2]int {
 	if g.finder == nil {
 		return nil
 	}
-	return g.finder.FindPath(x1, y1, x2, y2, g)
+	path := g.finder.FindPath(x1, y1, x2, y2, g)
+	if path == nil {
+		return nil
+	}
+	if g.smoother != nil {
+		path = g.smoother(path)
+	}
+	return path
 }
 
+// FindPathWorld finds a path between two world positions through the staggered grid.
+// The returned [][2]float32 is backed by an internal buffer and is only
+// valid until the next FindPath call on the same grid.
 func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if g.finder == nil {
 		return nil
@@ -675,6 +685,9 @@ func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	if path == nil {
 		return nil
 	}
+	if g.smoother != nil {
+		path = g.smoother(path)
+	}
 	if cap(g.worldBuf) >= len(path) {
 		g.worldBuf = g.worldBuf[:len(path)]
 	} else {
@@ -686,96 +699,6 @@ func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
 	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
 	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
 	return g.worldBuf
-}
-
-// FindSmoothPath finds a path between two world positions and smooths it.
-// Same buffer contract as FindPath.
-func (g *StaggeredGrid) FindSmoothPath(x1, y1, x2, y2 int) [][2]int {
-	if g.finder == nil {
-		return nil
-	}
-	path := g.finder.FindPath(x1, y1, x2, y2, g)
-	if path == nil {
-		return nil
-	}
-	return g.SmoothenPath(path)
-}
-
-// FindSmoothPathWorld finds a path between two world positions and smooths it.
-func (g *StaggeredGrid) FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
-	if g.finder == nil {
-		return nil
-	}
-	sx, sy := g.WorldToTile(wx1, wy1)
-	ex, ey := g.WorldToTile(wx2, wy2)
-	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
-		return nil
-	}
-	if g.obstacleCount == 0 {
-		if cap(g.worldBuf) < 2 {
-			g.worldBuf = make([][2]float32, 2)
-		}
-		g.worldBuf = g.worldBuf[:2]
-		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
-		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
-		return g.worldBuf
-	}
-	path := g.finder.FindPath(sx, sy, ex, ey, g)
-	if path == nil {
-		return nil
-	}
-	path = g.SmoothenPath(path)
-	if cap(g.worldBuf) >= len(path) {
-		g.worldBuf = g.worldBuf[:len(path)]
-	} else {
-		g.worldBuf = make([][2]float32, len(path))
-	}
-	for i, p := range path {
-		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
-	}
-	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
-	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
-	return g.worldBuf
-}
-
-// SmoothenTilePath smooths a tile-coordinate staggered path by removing unnecessary waypoints.
-// Writes the smoothed result in-place over the input (finder's cached pathBuf).
-func (g *StaggeredGrid) SmoothenPath(path [][2]int) [][2]int {
-	if len(path) < 2 {
-		return path
-	}
-	writeIdx := 1
-	for i := 2; i < len(path); i++ {
-		if !g.staggeredLineOfSight(path[writeIdx-1], path[i]) {
-			path[writeIdx] = path[i-1]
-			writeIdx++
-		}
-	}
-	if path[writeIdx-1] != path[len(path)-1] {
-		path[writeIdx] = path[len(path)-1]
-		writeIdx++
-	}
-	return path[:writeIdx]
-}
-
-// staggeredLineOfSight checks if there is a straight pixel line between two staggered tiles with no obstacles.
-func (g *StaggeredGrid) staggeredLineOfSight(a, b [2]int) bool {
-	ax, ay := g.TileToWorld(a[0], a[1])
-	bx, by := g.TileToWorld(b[0], b[1])
-	steps := math.Sqrt(float64((bx-ax)*(bx-ax)+(by-ay)*(by-ay))) / float64(min(g.tileW, g.tileH)) * 2
-	if steps < 1 {
-		steps = 1
-	}
-	for t := 0; t < int(steps); t++ {
-		f := float64(t) / steps
-		wx := float64(ax) + float64(bx-ax)*f
-		wy := float64(ay) + float64(by-ay)*f
-		tx, ty := g.screenToTileCoords(wx, wy)
-		if !g.IsWalkableAt(tx, ty) {
-			return false
-		}
-	}
-	return true
 }
 
 // GetNeighbors returns neighbors for a node on a staggered isometric grid, respecting the

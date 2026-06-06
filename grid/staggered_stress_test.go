@@ -16,8 +16,8 @@ func TestStaggeredStress_AllOpen(t *testing.T) {
 	if path == nil {
 		t.Skip("staggered FindPath: no path (coordinate edge behavior)")
 	}
-	smooth := NewStaggeredGrid(matrix).FindSmoothPath(sx, sy, ex, ey)
+	smooth := NewStaggeredGrid(matrix, WithSmoothDense()).FindPath(sx, sy, ex, ey)
 	if smooth == nil {
-		t.Fatal("FindSmoothPath: expected path on open staggered grid")
+		t.Fatal("FindPath+SmoothDense: expected path on open staggered grid")
 	}
 }

@@ -17,9 +17,9 @@ func TestOrthogonalStress_AllOpen(t *testing.T) {
 		t.Fatal("FindPath: expected path on open grid")
 	}
 
-	smooth := NewOrthogonalGrid(matrix).FindSmoothPath(0, 0, 199, 199)
+	smooth := NewOrthogonalGrid(matrix, WithSmoothBresenham()).FindPath(0, 0, 199, 199)
 	if smooth == nil {
-		t.Fatal("FindSmoothPath: expected path on open grid")
+		t.Fatal("FindPath+SmoothBresenham: expected path on open grid")
 	}
 
 	if len(smooth) > 10 {
@@ -39,22 +39,22 @@ func TestOrthogonalStress_VariousFinders(t *testing.T) {
 		{"JPS", finder.NewJumpPointFinder()},
 		{"HPA", func() finder.Finder {
 			f := hpa.NewHPAFinder(hpa.WithChunkSize(16))
-			g := NewOrthogonalGrid(matrix, WithOrthogonalTileSize(1, 1))
+			g := NewOrthogonalGrid(matrix, WithTileSize(1, 1))
 			f.Build(g)
 			return f
 		}()},
 	} {
 		t.Run(ft.name, func(t *testing.T) {
-			g := NewOrthogonalGrid(matrix, WithOrthogonalTileSize(1, 1))
+			g := NewOrthogonalGrid(matrix, WithTileSize(1, 1))
 			path := g.FindPath(0, 0, 99, 99)
 			if path == nil {
 				t.Skip("FindPath: no path (obstacle layout may block)")
 			}
 		})
 		t.Run(ft.name+"Smooth", func(t *testing.T) {
-			smooth := NewOrthogonalGrid(matrix, WithOrthogonalTileSize(1, 1)).FindSmoothPath(0, 0, 99, 99)
+			smooth := NewOrthogonalGrid(matrix, WithTileSize(1, 1), WithSmoothBresenham()).FindPath(0, 0, 99, 99)
 			if smooth == nil {
-				t.Skip("FindSmoothPath: no path (obstacle layout may block)")
+				t.Skip("FindPath+SmoothBresenham: no path (obstacle layout may block)")
 			}
 		})
 	}
@@ -68,8 +68,8 @@ func TestOrthogonalStress_DenseGrid(t *testing.T) {
 			t.Skip("no path on 500x500 grid with 5% obstacles")
 		}
 	})
-	t.Run("FindSmoothPath", func(t *testing.T) {
-		smooth := NewOrthogonalGrid(matrix).FindSmoothPath(0, 0, 499, 499)
+	t.Run("FindPath+SmoothBresenham", func(t *testing.T) {
+		smooth := NewOrthogonalGrid(matrix, WithSmoothBresenham()).FindPath(0, 0, 499, 499)
 		if smooth == nil {
 			t.Skip("no smooth path on 500x500 grid")
 		}

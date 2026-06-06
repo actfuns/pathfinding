@@ -18,7 +18,7 @@ type soldier struct {
 func main() {
 	// Create a 10×8 grid with 32×32 px tiles
 	matrix := grid.NewMatrix(10, 8)
-	g := grid.NewOrthogonalGrid(matrix, grid.WithOrthogonalTileSize(32, 32))
+	g := grid.NewOrthogonalGrid(matrix, grid.WithTileSize(32, 32))
 
 	// Place obstacles
 	g.SetWalkableAt(3, 3, false)

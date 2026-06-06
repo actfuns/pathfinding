@@ -32,6 +32,10 @@ var svgFinders = []struct {
 	{"JPFAlways", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalAlways))},
 	{"JPFNoObstacles", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalOnlyWhenNoObstacles))},
 	{"JPFAtMostOne", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalIfAtMostOneObstacle))},
+	{"JPSPlus", finder.NewJPSPlusFinder()},
+	{"JPSPlusNever", finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))},
+	{"JPSPlusNoObstacles", finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalOnlyWhenNoObstacles))},
+	{"JPSPlusAtMostOne", finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalIfAtMostOneObstacle))},
 }
 
 // svgScenario defines one scenario for SVG rendering tests.
@@ -60,6 +64,9 @@ func runSVGTest(t *testing.T, gridType string, scenarios []svgScenario, newGrid 
 							}
 						}
 					}
+				}
+				if p, ok := ft.f.(interface{ Precompute(finder.Grid) }); ok {
+					p.Precompute(g.(finder.Grid))
 				}
 				path := ft.f.FindPath(s.startX, s.startY, s.endX, s.endY, g.(finder.Grid))
 				svg := g.RenderSVG(nil, path)

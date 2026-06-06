@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/actfuns/pathfinding/finder"
+	"github.com/actfuns/pathfinding/gridutil"
 )
 
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
@@ -18,27 +19,13 @@ type OrthogonalGrid struct {
 	nodes         []*finder.Node
 	finder        finder.Finder
 	worldBuf      [][2]float32
+	smoother      func(path [][2]int) [][2]int
 }
 
 // Finder returns the pathfinder associated with this grid.
 func (g *OrthogonalGrid) Finder() finder.Finder { return g.finder }
 
-// OrthogonalOption configures an OrthogonalGrid.
-type OrthogonalOption func(*OrthogonalGrid)
-
-// WithOrthogonalTileSize sets the tile dimensions for world coordinate conversion.
-func WithOrthogonalTileSize(w, h int) OrthogonalOption {
-	return func(g *OrthogonalGrid) { g.tileW = w; g.tileH = h }
-}
-
-// WithOrthogonalFinder sets the pathfinder associated with this grid.
-func WithOrthogonalFinder(f finder.Finder) OrthogonalOption {
-	return func(g *OrthogonalGrid) { g.finder = f }
-}
-
-// NewOrthogonalGrid creates an OrthogonalGrid from a matrix (0=walkable, non-zero=obstacle).
-// Default tile size is 1×1 world unit. Default finder is AStarFinder.
-func NewOrthogonalGrid(matrix [][]int, opts ...OrthogonalOption) *OrthogonalGrid {
+func NewOrthogonalGrid(matrix [][]int, opts ...GridOption) *OrthogonalGrid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]*finder.Node, 0, w*h)
@@ -53,9 +40,31 @@ func NewOrthogonalGrid(matrix [][]int, opts ...OrthogonalOption) *OrthogonalGrid
 			nodes = append(nodes, n)
 		}
 	}
-	g := &OrthogonalGrid{width: w, height: h, tileW: 1, tileH: 1, obstacleCount: obs, nodes: nodes, finder: finder.NewAStarFinder()}
+	var cfg gridOptions
+	cfg.tileW = 1
+	cfg.tileH = 1
 	for _, opt := range opts {
-		opt(g)
+		opt(&cfg)
+	}
+	g := &OrthogonalGrid{width: w, height: h, tileW: cfg.tileW, tileH: cfg.tileH, obstacleCount: obs, nodes: nodes, finder: cfg.finder}
+	if cfg.finder == nil {
+		g.finder = finder.NewAStarFinder()
+	} else {
+		g.finder = cfg.finder
+	}
+	switch cfg.smoothMode {
+	case SmoothBresenham:
+		g.smoother = func(path [][2]int) [][2]int {
+			return gridutil.SmoothenBresenham(g, path)
+		}
+	case SmoothBresenhamStrict:
+		g.smoother = func(path [][2]int) [][2]int {
+			return gridutil.SmoothenBresenhamStrict(g, path)
+		}
+	case SmoothDense:
+		g.smoother = func(path [][2]int) [][2]int {
+			return gridutil.SmoothenDense(g, path)
+		}
 	}
 	return g
 }
@@ -134,6 +143,11 @@ func (g *OrthogonalGrid) GetWeightAt(x, y int) float64 {
 		return 1.0
 	}
 	return g.nodes[g.index(x, y)].Weight
+}
+
+// HasLineOfSight reports whether two tiles can see each other using Bresenham.
+func (g *OrthogonalGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
+	return gridutil.HasLineOfSightBresenham(g, x1, y1, x2, y2)
 }
 
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
@@ -365,7 +379,7 @@ func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int
 // slice; each node is copied, but the parent pointer is cleared. The finder
 // reference and tile dimensions are shared from the original.
 func (g *OrthogonalGrid) Clone() finder.Grid {
-	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, finder: g.finder}
+	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, finder: g.finder, smoother: g.smoother}
 	ng.nodes = make([]*finder.Node, len(g.nodes))
 	for i, n := range g.nodes {
 		cp := *n
@@ -412,18 +426,20 @@ func (g *OrthogonalGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 	g.SetWalkableAt(tx, ty, walkable)
 }
 
-// FindPath finds a path between two world positions through the grid.
-// The returned [][2]float32 is backed by an internal buffer and is only
-// valid until the next FindPath/FindSmoothPath call on the same grid.
-// Automatically smooths the path via SmoothenTilePath when smoothing is enabled
-// (default). Disable with WithGridSmoothing(false) when using a finder that
-// already does its own smoothing, such as WaypointFinder.
 // FindPath finds a path between two tile positions.
+// Applies smoothing if configured via WithSmoothBresenham, WithSmoothBresenhamStrict, or WithSmoothDense.
 func (g *OrthogonalGrid) FindPath(x1, y1, x2, y2 int) [][2]int {
 	if g.finder == nil {
 		return nil
 	}
-	return g.finder.FindPath(x1, y1, x2, y2, g)
+	path := g.finder.FindPath(x1, y1, x2, y2, g)
+	if path == nil {
+		return nil
+	}
+	if g.smoother != nil {
+		path = g.smoother(path)
+	}
+	return path
 }
 
 func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
@@ -448,57 +464,9 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 
 	if path == nil {
 		return nil
 	}
-	if cap(g.worldBuf) >= len(path) {
-		g.worldBuf = g.worldBuf[:len(path)]
-	} else {
-		g.worldBuf = make([][2]float32, len(path))
+	if g.smoother != nil {
+		path = g.smoother(path)
 	}
-	for i, p := range path {
-		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
-	}
-	// Use original world coordinates for first and last points
-	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
-	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
-	return g.worldBuf
-}
-
-// FindSmoothPath finds a path between two world positions and smooths it.
-// Same buffer contract as FindPath.
-func (g *OrthogonalGrid) FindSmoothPath(x1, y1, x2, y2 int) [][2]int {
-	if g.finder == nil {
-		return nil
-	}
-	path := g.finder.FindPath(x1, y1, x2, y2, g)
-	if path == nil {
-		return nil
-	}
-	return g.SmoothenPath(path)
-}
-
-// FindSmoothPathWorld finds a path between two world positions and smooths it.
-func (g *OrthogonalGrid) FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32 {
-	if g.finder == nil {
-		return nil
-	}
-	sx, sy := g.WorldToTile(wx1, wy1)
-	ex, ey := g.WorldToTile(wx2, wy2)
-	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
-		return nil
-	}
-	if g.obstacleCount == 0 {
-		if cap(g.worldBuf) < 2 {
-			g.worldBuf = make([][2]float32, 2)
-		}
-		g.worldBuf = g.worldBuf[:2]
-		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
-		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
-		return g.worldBuf
-	}
-	path := g.finder.FindPath(sx, sy, ex, ey, g)
-	if path == nil {
-		return nil
-	}
-	path = g.SmoothenPath(path)
 	if cap(g.worldBuf) >= len(path) {
 		g.worldBuf = g.worldBuf[:len(path)]
 	} else {
@@ -510,68 +478,6 @@ func (g *OrthogonalGrid) FindSmoothPathWorld(wx1, wy1, wx2, wy2 float32) [][2]fl
 	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
 	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
 	return g.worldBuf
-}
-
-// SmoothenTilePath smooths a tile-coordinate path by removing unnecessary waypoints.
-// Writes the result in-place over the input buffer (which is the finder's cached pathBuf),
-// so the smoothed path reuses the same allocation.
-func (g *OrthogonalGrid) SmoothenPath(path [][2]int) [][2]int {
-	if len(path) < 2 {
-		return path
-	}
-	writeIdx := 1
-	for i := 2; i < len(path); i++ {
-		if !g.tileLineOfSight(path[writeIdx-1], path[i]) {
-			path[writeIdx] = path[i-1]
-			writeIdx++
-		}
-	}
-	if path[writeIdx-1] != path[len(path)-1] {
-		path[writeIdx] = path[len(path)-1]
-		writeIdx++
-	}
-	return path[:writeIdx]
-}
-
-// tileLineOfSight checks walkability along a Bresenham line between two tiles without allocating.
-func (g *OrthogonalGrid) tileLineOfSight(a, b [2]int) bool {
-	x0, y0 := a[0], a[1]
-	x1, y1 := b[0], b[1]
-	dx := x1 - x0
-	dy := y1 - y0
-	var sx, sy int
-	if dx < 0 {
-		dx = -dx
-		sx = -1
-	} else {
-		sx = 1
-	}
-	if dy < 0 {
-		dy = -dy
-		sy = -1
-	} else {
-		sy = 1
-	}
-	err := dx - dy
-
-	for {
-		if !g.IsWalkableAt(x0, y0) {
-			return false
-		}
-		if x0 == x1 && y0 == y1 {
-			break
-		}
-		e2 := 2 * err
-		if e2 > -dy {
-			err -= dy
-			x0 += sx
-		}
-		if e2 < dx {
-			err += dx
-			y0 += sy
-		}
-	}
-	return true
 }
 
 // --- neighbors ---
@@ -652,7 +558,7 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 //	weight<1.0 (road):    light blue
 //	weight>1.0 (swamp):   yellow → orange gradient
 //
-// Blocked tiles are shown in dark gray with a hatch pattern.
+// Blocked tiles are shown in dark gray.
 func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 	// Use defaults when nil
 	if cfg == nil {
@@ -698,39 +604,12 @@ func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 		}
 	}
 
-	// Draw each path with a distinct color
-	pathColors := []string{"#0066cc", "#e53935", "#2e7d32", "#7b1fa2"}
-	for pi, path := range paths {
-		color := pathColors[pi%len(pathColors)]
-		strokeWidth := 3.0
-		dashArray := ""
-		if pi == 1 {
-			dashArray = ` stroke-dasharray="6,4"`
-		}
-		if len(path) > 0 {
-			pts := make([]string, len(path))
-			for i, p := range path {
-				pts[i] = fmt.Sprintf("%.1f,%.1f",
-					float64(leftPad+p[0]*cellW+cellW/2),
-					float64(padding+(g.height-1-p[1])*cellH+cellH/2))
-			}
-			fmt.Fprintf(&b, `<polyline points="%s" fill="none" stroke="%s" stroke-width="%.0f"%s stroke-linejoin="round" stroke-linecap="round"/>`+"\n",
-				strings.Join(pts, " "), color, strokeWidth, dashArray)
-		}
-	}
-
-	// Start marker (green circle with "S")
-	sx := float64(leftPad + startX*cellW + cellW/2)
-	sy := float64(padding + (g.height-1-startY)*cellH + cellH/2)
-	fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="7" fill="#00cc44" stroke="#009933" stroke-width="2"/>`+"\n", sx, sy)
-	fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" font-size="10" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">S</text>`+"\n", sx, sy+3.5)
-
-	// End marker (red circle with "E")
-	ex := float64(leftPad + endX*cellW + cellW/2)
-	ey := float64(padding + (g.height-1-endY)*cellH + cellH/2)
-	fmt.Fprintf(&b, `<circle cx="%.1f" cy="%.1f" r="7" fill="#cc0000" stroke="#990000" stroke-width="2"/>`+"\n", ex, ey)
-	fmt.Fprintf(&b, `<text x="%.1f" y="%.1f" font-size="10" font-family="sans-serif" font-weight="bold" fill="white" text-anchor="middle">E</text>`+"\n", ex, ey+3.5)
-
+	// Draw each path with a distinct color and start/end markers
+	drawPathAndMarkers(&b, startX, startY, endX, endY,
+		func(tx, ty int) (float64, float64) {
+			return float64(leftPad + tx*cellW + cellW/2),
+				float64(padding + (g.height-1-ty)*cellH + cellH/2)
+		}, paths...)
 	renderLegend(&b, float64(padding), float64(padding), cfg)
 	b.WriteString("</svg>\n")
 	return b.String()

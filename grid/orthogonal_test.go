@@ -8,7 +8,7 @@ func TestOrthogonalWorldToTile(t *testing.T) {
 	g := NewOrthogonalGrid([][]int{
 		{0, 0, 0},
 		{0, 0, 0},
-	}, WithOrthogonalTileSize(32, 32))
+	}, WithTileSize(32, 32))
 
 	tests := []struct {
 		wx, wy float32
@@ -32,7 +32,7 @@ func TestOrthogonalTileToWorld(t *testing.T) {
 	g := NewOrthogonalGrid([][]int{
 		{0, 0, 0},
 		{0, 0, 0},
-	}, WithOrthogonalTileSize(32, 32))
+	}, WithTileSize(32, 32))
 
 	tests := []struct {
 		tx, ty int
@@ -55,7 +55,7 @@ func TestOrthogonalRoundTrip(t *testing.T) {
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
-	}, WithOrthogonalTileSize(16, 16))
+	}, WithTileSize(16, 16))
 
 	worldPositions := [][2]float32{
 		{0, 0},
@@ -222,7 +222,7 @@ func TestOrthogonalFindNearestWalkableWorld(t *testing.T) {
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 0, 0},
-	}, WithOrthogonalTileSize(32, 32))
+	}, WithTileSize(32, 32))
 
 	x, y, ok := g.FindNearestWalkableWorld(48, 48, 3, 0)
 	if !ok {
