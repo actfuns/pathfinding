@@ -150,6 +150,13 @@ func (g *OrthogonalGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
 	return gridutil.HasLineOfSightBresenham(g, x1, y1, x2, y2)
 }
 
+// HasLineOfSightWorld reports whether two world positions can see each other.
+func (g *OrthogonalGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
+	tx1, ty1 := g.WorldToTile(x1, y1)
+	tx2, ty2 := g.WorldToTile(x2, y2)
+	return g.HasLineOfSight(tx1, ty1, tx2, ty2)
+}
+
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). Returns the world-space center of the
 // nearest walkable tile and true if found; returns (0, 0, false) if no walkable

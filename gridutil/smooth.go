@@ -51,13 +51,6 @@ func HasLineOfSightDense(g GridWorld, x1, y1, x2, y2 int) bool {
 	return denseLineOfSight(g, [2]int{x1, y1}, [2]int{x2, y2})
 }
 
-// HasLineOfSightDenseWorld is like HasLineOfSightDense but takes world coordinates.
-func HasLineOfSightDenseWorld(g GridWorld, wx1, wy1, wx2, wy2 float32) bool {
-	tx1, ty1 := g.WorldToTile(wx1, wy1)
-	tx2, ty2 := g.WorldToTile(wx2, wy2)
-	return HasLineOfSightDense(g, tx1, ty1, tx2, ty2)
-}
-
 // SmoothenBresenham removes unnecessary waypoints from a tile path using
 // Bresenham line-of-sight (greedy string-pulling).
 // Only suitable for orthogonal grids. For hex and staggered grids, use

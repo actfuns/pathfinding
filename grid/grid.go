@@ -39,6 +39,10 @@ func NewMatrix(w, h int) [][]int {
 type Grid interface {
 	finder.Grid
 
+	// TileWidth returns the width of a tile in pixels.
+	TileWidth() int
+	// TileHeight returns the height of a tile in pixels.
+	TileHeight() int
 	// ObstacleCount returns the number of non-walkable tiles.
 	ObstacleCount() int
 	// TileIndex returns the flat array index for tile (x, y).
@@ -70,6 +74,9 @@ type Grid interface {
 	// Uses the appropriate algorithm for the grid type (Bresenham for orthogonal,
 	// world-space dense sampling for hex and staggered).
 	HasLineOfSight(x1, y1, x2, y2 int) bool
+	// HasLineOfSightWorld reports whether two world positions can see
+	// each other. Converts to tile coordinates before checking LOS.
+	HasLineOfSightWorld(x1, y1, x2, y2 float32) bool
 	// FindNearestWalkable is like FindNearestWalkableWorld but returns tile
 	// coordinates instead of edge-clamped world coordinates.
 	FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, bool)

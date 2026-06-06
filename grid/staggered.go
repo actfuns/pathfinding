@@ -201,6 +201,13 @@ func (g *StaggeredGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
 	return gridutil.HasLineOfSightDense(g, x1, y1, x2, y2)
 }
 
+// HasLineOfSightWorld reports whether two world positions can see each other.
+func (g *StaggeredGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
+	tx1, ty1 := g.WorldToTile(x1, y1)
+	tx2, ty2 := g.WorldToTile(x2, y2)
+	return g.HasLineOfSight(tx1, ty1, tx2, ty2)
+}
+
 // ObstacleCount returns the number of non-walkable tiles in the grid.
 func (g *StaggeredGrid) ObstacleCount() int { return g.obstacleCount }
 
