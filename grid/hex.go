@@ -42,7 +42,7 @@ type HexGrid struct {
 	// Precomputed neighbor offsets (indexed by parity)
 	neighborsEven [6][2]int
 	neighborsOdd  [6][2]int
-	smoother      func(path [][2]int) [][2]int
+	smoother      Smoother // smoothing function; nil = default
 }
 
 // Finder returns the pathfinder associated with this grid.

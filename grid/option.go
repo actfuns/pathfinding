@@ -12,6 +12,7 @@ const (
 	SmoothBresenham                         // Bresenham line-of-sight (orthogonal)
 	SmoothBresenhamStrict                   // Bresenham with corner-cutting prevention (orthogonal)
 	SmoothDense                             // world-space dense sampling (hex, staggered)
+	SmoothSupercover                        // supercover line-of-sight (strict, orthogonal)
 )
 
 // gridOptions aggregates all configurable settings for grid construction.

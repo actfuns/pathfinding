@@ -29,7 +29,7 @@ type StaggeredGrid struct {
 	cardinalOffsets  [4][2]int
 	diagNormOffsets  [4][2]int // diagonal offsets for non-shifted rows/cols
 	diagShiftOffsets [4][2]int // diagonal offsets for shifted rows/cols
-	smoother         func(path [][2]int) [][2]int
+	smoother         Smoother  // smoothing function; nil = default
 }
 
 // Finder returns the pathfinder associated with this grid.

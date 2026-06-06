@@ -19,7 +19,7 @@ type OrthogonalGrid struct {
 	nodes         []*finder.Node
 	finder        finder.Finder
 	worldBuf      [][2]float32
-	smoother      func(path [][2]int) [][2]int
+	smoother      Smoother // smoothing function; nil = default
 }
 
 // Finder returns the pathfinder associated with this grid.
@@ -64,6 +64,10 @@ func NewOrthogonalGrid(matrix [][]int, opts ...GridOption) *OrthogonalGrid {
 	case SmoothDense:
 		g.smoother = func(path [][2]int) [][2]int {
 			return gridutil.SmoothenDense(g, path)
+		}
+	case SmoothSupercover:
+		g.smoother = func(path [][2]int) [][2]int {
+			return gridutil.SmoothenSupercover(g, path)
 		}
 	}
 	return g

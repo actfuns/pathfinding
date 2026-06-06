@@ -48,7 +48,76 @@ func HasLineOfSightBresenham(g GridLOS, x1, y1, x2, y2 int) bool {
 // world-space sub-tile sampling. Suitable for all grid types.
 // For orthogonal grids, HasLineOfSightBresenham is more efficient.
 func HasLineOfSightDense(g GridWorld, x1, y1, x2, y2 int) bool {
-	return denseLineOfSight(g, [2]int{x1, y1}, [2]int{x2, y2})
+	ax, ay := g.TileToWorld(x1, y1)
+	bx, by := g.TileToWorld(x2, y2)
+	minDim := minInt(g.TileWidth(), g.TileHeight())
+	if minDim == 0 {
+		minDim = 1
+	}
+	steps := math.Sqrt(float64((bx-ax)*(bx-ax)+(by-ay)*(by-ay))) / float64(minDim) * 2
+	if steps < 1 {
+		steps = 1
+	}
+	for t := 0; t < int(steps); t++ {
+		f := float64(t) / steps
+		wx := float64(ax) + float64(bx-ax)*f
+		wy := float64(ay) + float64(by-ay)*f
+		tx, ty := g.WorldToTile(float32(wx), float32(wy))
+		if !g.IsWalkableAt(tx, ty) {
+			return false
+		}
+	}
+	return true
+}
+
+// HasLineOfSightSupercover checks whether two tiles can see each other
+// using the supercover line algorithm. Unlike Bresenham, supercover detects
+// ALL tiles that the line passes through (including edge-grazing cases).
+func HasLineOfSightSupercover(g GridLOS, x1, y1, x2, y2 int) bool {
+	dx := x2 - x1
+	dy := y2 - y1
+	var sx, sy int
+	if dx > 0 {
+		sx = 1
+	} else {
+		sx = -1
+		dx = -dx
+	}
+	if dy > 0 {
+		sy = 1
+	} else {
+		sy = -1
+		dy = -dy
+	}
+	x, y := x1, y1
+	if dx >= dy {
+		err := 0
+		for x != x2 {
+			if !g.IsWalkableAt(x, y) {
+				return false
+			}
+			err += dy
+			if err > dx/2 {
+				y += sy
+				err -= dx
+			}
+			x += sx
+		}
+	} else {
+		err := 0
+		for y != y2 {
+			if !g.IsWalkableAt(x, y) {
+				return false
+			}
+			err += dx
+			if err > dy/2 {
+				x += sx
+				err -= dy
+			}
+			y += sy
+		}
+	}
+	return g.IsWalkableAt(x2, y2)
 }
 
 // SmoothenBresenham removes unnecessary waypoints from a tile path using
@@ -185,4 +254,25 @@ func denseLineOfSight(g GridWorld, a, b [2]int) bool {
 		}
 	}
 	return true
+}
+
+// SmoothenSupercover removes unnecessary waypoints from a tile path using
+// supercover line-of-sight. It is stricter than Bresenham and catches
+// edge-grazing blocked tiles.
+func SmoothenSupercover(g GridLOS, path [][2]int) [][2]int {
+	if len(path) < 2 {
+		return path
+	}
+	writeIdx := 1
+	for i := 2; i < len(path); i++ {
+		if !HasLineOfSightSupercover(g, path[writeIdx-1][0], path[writeIdx-1][1], path[i][0], path[i][1]) {
+			path[writeIdx] = path[i-1]
+			writeIdx++
+		}
+	}
+	if path[writeIdx-1] != path[len(path)-1] {
+		path[writeIdx] = path[len(path)-1]
+		writeIdx++
+	}
+	return path[:writeIdx]
 }
