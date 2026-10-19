@@ -35,7 +35,11 @@ func main() {
 	}
 
 	f := finder.NewAStarFinder()
-	path := f.FindPath(0, 0, 6, 5, g)
+	path, err := f.FindPath(0, 0, 6, 5, g)
+	if err != nil {
+		fmt.Println("Search failed:", err)
+		return
+	}
 
 	svg := g.RenderSVG(nil, path)
 

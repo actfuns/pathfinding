@@ -1,6 +1,7 @@
 package flowfield
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/actfuns/pathfinding/finder"
@@ -43,7 +44,10 @@ func TestFlowFieldFindPath(t *testing.T) {
 		{0, 0, 0},
 	})
 	ff := New(g, 2, 2)
-	path := ff.FindPath(0, 0)
+	path, err := ff.FindPath(0, 0)
+	if err != nil {
+		t.Fatalf("FindPath: %v", err)
+	}
 	if path == nil {
 		t.Fatal("FindPath returned nil")
 	}
@@ -306,5 +310,42 @@ func BenchmarkFlowFieldDirection(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ff.GetDirection(10, 10)
+	}
+}
+
+// A tile that is not on the map must be reported as such, not folded into the
+// "cannot reach a goal" answer — the two mean different things to a caller.
+func TestFindPathOutOfBounds(t *testing.T) {
+	m := [][]int{
+		{0, 0, 0},
+		{0, 0, 0},
+		{0, 0, 0},
+	}
+	ff := New(grid.NewOrthogonalGrid(m), 2, 2)
+
+	for _, tc := range [][2]int{{-1, 0}, {0, -1}, {99, 99}} {
+		path, err := ff.FindPath(tc[0], tc[1])
+		if !errors.Is(err, finder.ErrOutOfBounds) {
+			t.Errorf("FindPath(%d,%d) err = %v, want ErrOutOfBounds", tc[0], tc[1], err)
+		}
+		if path != nil {
+			t.Errorf("FindPath(%d,%d) must not return a path", tc[0], tc[1])
+		}
+	}
+
+	// A tile that is on the map but walled off is a completed search with no
+	// route: nil path, nil error.
+	walled := [][]int{
+		{0, 1, 0},
+		{0, 1, 0},
+		{0, 1, 0},
+	}
+	fw := New(grid.NewOrthogonalGrid(walled), 2, 0)
+	path, err := fw.FindPath(0, 0)
+	if err != nil {
+		t.Errorf("unreachable tile err = %v, want nil", err)
+	}
+	if path != nil {
+		t.Errorf("unreachable tile must return a nil path, got %v", path)
 	}
 }

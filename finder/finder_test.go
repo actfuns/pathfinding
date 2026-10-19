@@ -1,6 +1,7 @@
 package finder_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/actfuns/pathfinding/finder"
@@ -56,7 +57,7 @@ func testFinderAgainstJS(t *testing.T, name string, newFinder func() finder.Find
 	for i, s := range testScenarios {
 		g := grid.NewOrthogonalGrid(s.matrix)
 		f := newFinder()
-		path := f.FindPath(s.startX, s.startY, s.endX, s.endY, g)
+		path, _ := f.FindPath(s.startX, s.startY, s.endX, s.endY, g)
 		if path == nil {
 			t.Errorf("%s scenario %d: path not found", name, i+1)
 			continue
@@ -99,7 +100,7 @@ func TestFinderUnreachablePath(t *testing.T) {
 	}
 	for _, ft := range finders {
 		t.Run(ft.name, func(t *testing.T) {
-			path := ft.f.FindPath(0, 0, 2, 0, g)
+			path, _ := ft.f.FindPath(0, 0, 2, 0, g)
 			if path != nil {
 				t.Errorf("expected nil for unreachable, got %v", path)
 			}
@@ -115,7 +116,7 @@ func TestFinderSingleCell(t *testing.T) {
 		finder.NewBreadthFirstFinder(),
 	}
 	for i, f := range finders {
-		path := f.FindPath(0, 0, 0, 0, g)
+		path, _ := f.FindPath(0, 0, 0, 0, g)
 		if path == nil {
 			t.Errorf("finder %d (%T): expected path for single cell start==end", i, f)
 		}
@@ -129,9 +130,54 @@ func TestFinder1xN(t *testing.T) {
 		finder.NewBreadthFirstFinder(),
 	} {
 		g := grid.NewOrthogonalGrid([][]int{{0, 0, 0}})
-		path := f.FindPath(0, 0, 2, 0, g)
+		path, _ := f.FindPath(0, 0, 2, 0, g)
 		if path == nil {
 			t.Errorf("finder %d (%T): expected path on 1xN grid", i, f)
 		}
+	}
+}
+
+// Every finder must reject an endpoint outside the grid with ErrOutOfBounds
+// instead of letting GetNodeAt panic on an out-of-range index.
+func TestAllFindersRejectOutOfBounds(t *testing.T) {
+	m := grid.NewMatrix(16, 16)
+	for y := range m {
+		for x := range m[y] {
+			m[y][x] = 0
+		}
+	}
+	g := grid.NewOrthogonalGrid(m)
+
+	jpsPlus := finder.NewJPSPlusFinder()
+	jpsPlus.Precompute(g)
+
+	for name, f := range map[string]finder.Finder{
+		"AStar":          finder.NewAStarFinder(),
+		"BreadthFirst":   finder.NewBreadthFirstFinder(),
+		"Dijkstra":       finder.NewDijkstraFinder(),
+		"BestFirst":      finder.NewBestFirstFinder(),
+		"IDAStar":        finder.NewIDAStarFinder(),
+		"BiAStar":        finder.NewBiAStarFinder(),
+		"BiBreadthFirst": finder.NewBiBreadthFirstFinder(),
+		"JPSNever":       finder.NewJumpPointFinder(),
+		"JPSPlus":        jpsPlus,
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range []struct{ sx, sy, ex, ey int }{
+				{0, 0, 999, 999}, // end out of bounds
+				{999, 999, 0, 0}, // start out of bounds
+				{-1, 0, 1, 1},    // negative start
+				{0, 0, 0, -1},    // negative end
+			} {
+				path, err := f.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g)
+				if !errors.Is(err, finder.ErrOutOfBounds) {
+					t.Errorf("FindPath(%d,%d,%d,%d) = (%v, %v), want ErrOutOfBounds",
+						tc.sx, tc.sy, tc.ex, tc.ey, path, err)
+				}
+				if path != nil {
+					t.Errorf("FindPath(%d,%d,%d,%d) must not return a path", tc.sx, tc.sy, tc.ex, tc.ey)
+				}
+			}
+		})
 	}
 }

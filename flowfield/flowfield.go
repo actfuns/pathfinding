@@ -226,13 +226,17 @@ func (ff *Field) GetCost(x, y int) float64 {
 
 // FindPath backtracks from (x, y) by following the direction chain
 // to the nearest goal. Useful for debugging and visualization.
-func (ff *Field) FindPath(startX, startY int) [][2]int {
+//
+// Like the finders, it separates "you asked about a tile that is not on the
+// map" from "that tile cannot reach any goal": the first is finder.ErrOutOfBounds,
+// the second is a nil path with a nil error.
+func (ff *Field) FindPath(startX, startY int) ([][2]int, error) {
 	w := ff.width
 	if !ff.grid.IsInside(startX, startY) {
-		return nil
+		return nil, finder.ErrOutOfBounds
 	}
 	if ff.cost[startY*w+startX] < 0 {
-		return nil
+		return nil, nil
 	}
 	path := make([][2]int, 0, w)
 	cx, cy := startX, startY
@@ -245,5 +249,5 @@ func (ff *Field) FindPath(startX, startY int) [][2]int {
 		cx += d.dx
 		cy += d.dy
 	}
-	return path
+	return path, nil
 }

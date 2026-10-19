@@ -31,7 +31,12 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 }
 
 // FindPath finds a path using bidirectional BFS.
-func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
+	// GetNodeAt panics on an out-of-range index, so validate up front and
+	// report it as a caller error instead of a crash.
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, ErrOutOfBounds
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
@@ -71,7 +76,7 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 			}
 			if neighbor.Opened != 0 {
 				if neighbor.By == BY_END {
-					return BiBacktrace(node, neighbor)
+					return BiBacktrace(node, neighbor), nil
 				}
 				continue
 			}
@@ -93,7 +98,7 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 			}
 			if neighbor.Opened != 0 {
 				if neighbor.By == BY_START {
-					return BiBacktrace(neighbor, node)
+					return BiBacktrace(neighbor, node), nil
 				}
 				continue
 			}
@@ -104,5 +109,5 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 		}
 	}
 
-	return nil
+	return nil, nil
 }

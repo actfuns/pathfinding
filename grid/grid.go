@@ -89,12 +89,15 @@ type Grid interface {
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
 	// FindPath finds a path between two tile positions.
-	// Result is backed by an internal buffer — valid only until the next FindPath call.
-	FindPath(x1, y1, x2, y2 int) [][2]int
+	// A nil path with a nil error means no route exists; a non-nil error means
+	// the search could not complete (e.g. finder.ErrTimeLimit), so the answer is
+	// unknown. Result is backed by an internal buffer — valid only until the
+	// next FindPath call.
+	FindPath(x1, y1, x2, y2 int) ([][2]int, error)
 	// FindPathWorld finds a path between two world positions through the grid.
-	// Uses the grid's Finder. Returns the path in world coordinates.
+	// Uses the grid's Finder, with the same three result shapes as FindPath.
 	// Result is backed by an internal buffer — valid only until the next FindPathWorld call.
-	FindPathWorld(wx1, wy1, wx2, wy2 float32) [][2]float32
+	FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32, error)
 
 	// RenderSVG renders the grid and paths as an SVG string.
 	// Tiles are coloured by their Weight value with terrain legend.

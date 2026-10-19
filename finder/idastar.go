@@ -53,7 +53,12 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 }
 
 // FindPath finds a path using IDA*.
-func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
+	// GetNodeAt panics on an out-of-range index, so validate up front and
+	// report it as a caller error instead of a crash.
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, ErrOutOfBounds
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
@@ -77,8 +82,17 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 	neighborBuf := f.neighborBuf[:0]
 	var search func(node *Node, g, cutoff float64, route [][2]int, depth int) (float64, bool)
 
+	// Set by search when it bails on the time limit. Without this the outer
+	// loop would keep feeding it an ever smaller cutoff and spin forever: every
+	// call returns (0, false) at once, so cutOff never advances past 0.
+	var timedOut bool
+
 	search = func(node *Node, g, cutoff float64, route [][2]int, depth int) (float64, bool) {
+		if timedOut {
+			return 0, false
+		}
 		if hasTimeLimit && time.Since(startTime).Seconds() > f.TimeLimit {
+			timedOut = true
 			return 0, false
 		}
 
@@ -133,6 +147,12 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 
 		t, found := search(start, 0, cutOff, route, 0)
 
+		// Ran out of time before reaching a verdict: the search never finished,
+		// so say so instead of reporting "no path" or looping forever.
+		if timedOut {
+			return nil, ErrTimeLimit
+		}
+
 		if found {
 			pathLen := 0
 			for i := 0; i < len(route); i++ {
@@ -145,15 +165,15 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 				}
 			}
 			if pathLen == 0 {
-				return nil
+				return nil, nil
 			}
 			path := make([][2]int, pathLen)
 			copy(path, route[:pathLen])
-			return path
+			return path, nil
 		}
 
 		if t >= float64(1<<60) {
-			return nil
+			return nil, nil
 		}
 
 		cutOff = t

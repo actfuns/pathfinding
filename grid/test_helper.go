@@ -9,6 +9,12 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
+// smallFactory builds a fully independent 8x8 orthogonal grid with 32px tiles.
+// Pool tests use it because each call must yield a separate instance.
+func smallFactory() Grid {
+	return NewOrthogonalGrid(NewMatrix(8, 8), WithTileSize(32, 32))
+}
+
 // gridForSVG is any grid type that can render SVG.
 type gridForSVG interface {
 	RenderSVG(cfg *SVGOpts, paths ...[][2]int) string
@@ -68,7 +74,10 @@ func runSVGTest(t *testing.T, gridType string, scenarios []svgScenario, newGrid 
 				if p, ok := ft.f.(interface{ Precompute(finder.Grid) }); ok {
 					p.Precompute(g.(finder.Grid))
 				}
-				path := ft.f.FindPath(s.startX, s.startY, s.endX, s.endY, g.(finder.Grid))
+				path, err := ft.f.FindPath(s.startX, s.startY, s.endX, s.endY, g.(finder.Grid))
+				if err != nil {
+					t.Fatalf("find path: %v", err)
+				}
 				svg := g.RenderSVG(nil, path)
 
 				if os.Getenv("NAVPATH_DUMP_SVG") != "" {

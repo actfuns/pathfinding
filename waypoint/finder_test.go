@@ -1,6 +1,7 @@
 package waypoint
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -69,7 +70,7 @@ func TestFindPathBasic(t *testing.T) {
 	b.Connect(c)
 
 	grid := walkableGrid(20, 20)
-	path := f.FindPath(0, 0, 10, 10, grid)
+	path, _ := f.FindPath(0, 0, 10, 10, grid)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -86,7 +87,7 @@ func TestFindPathDirect(t *testing.T) {
 	a.Connect(b)
 
 	grid := walkableGrid(10, 10)
-	path := f.FindPath(0, 0, 5, 5, grid)
+	path, _ := f.FindPath(0, 0, 5, 5, grid)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -102,7 +103,8 @@ func TestFindPathDisconnected(t *testing.T) {
 	g.AddNode(10, 0)
 
 	grid := walkableGrid(15, 5)
-	if path := f.FindPath(0, 0, 10, 0, grid); path != nil {
+	path, _ := f.FindPath(0, 0, 10, 0, grid)
+	if path != nil {
 		t.Error("expected nil for disconnected graph")
 	}
 }
@@ -110,7 +112,7 @@ func TestFindPathDisconnected(t *testing.T) {
 func TestFindPathEmptyGraph(t *testing.T) {
 	f := NewWaypointFinder()
 	grid := walkableGrid(15, 15)
-	if path := f.FindPath(0, 0, 10, 10, grid); path != nil {
+	if path, _ := f.FindPath(0, 0, 10, 10, grid); path != nil {
 		t.Error("expected nil for empty graph")
 	}
 }
@@ -125,7 +127,7 @@ func TestFindPathBidirectional(t *testing.T) {
 	b.Connect(c)
 
 	grid := walkableGrid(15, 5)
-	forward := f.FindPath(0, 0, 10, 0, grid)
+	forward, _ := f.FindPath(0, 0, 10, 0, grid)
 	if forward == nil {
 		t.Fatal("expected forward path")
 	}
@@ -133,7 +135,7 @@ func TestFindPathBidirectional(t *testing.T) {
 		t.Errorf("forward path wrong: %v", forward)
 	}
 
-	reverse := f.FindPath(10, 0, 0, 0, grid)
+	reverse, _ := f.FindPath(10, 0, 0, 0, grid)
 	if reverse == nil {
 		t.Fatal("expected reverse path")
 	}
@@ -158,7 +160,7 @@ func TestFindPathOptimal(t *testing.T) {
 	a.Connect(c) // direct shortcut
 
 	grid := walkableGrid(15, 15)
-	path := f.FindPath(0, 0, 5, 5, grid)
+	path, _ := f.FindPath(0, 0, 5, 5, grid)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -178,7 +180,7 @@ func TestFindPathStartEndPositions(t *testing.T) {
 	a.Connect(b)
 
 	grid := walkableGrid(20, 20)
-	path := f.FindPath(0, 0, 15, 5, grid)
+	path, _ := f.FindPath(0, 0, 15, 5, grid)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -201,12 +203,12 @@ func TestFindPathDirectedEdges(t *testing.T) {
 	b.ConnectOneWay(c)
 
 	grid := walkableGrid(15, 5)
-	forward := f.FindPath(0, 0, 10, 0, grid)
+	forward, _ := f.FindPath(0, 0, 10, 0, grid)
 	if forward == nil {
 		t.Fatal("expected forward path with directed edges")
 	}
 
-	reverse := f.FindPath(10, 0, 0, 0, grid)
+	reverse, _ := f.FindPath(10, 0, 0, 0, grid)
 	if reverse != nil {
 		t.Error("expected nil for reverse on directed graph")
 	}
@@ -222,7 +224,7 @@ func TestFindPathSkipsNullEdge(t *testing.T) {
 	b.Connect(c, EdgeStateNull) // blocked
 
 	grid := walkableGrid(15, 5)
-	path := f.FindPath(0, 0, 10, 0, grid)
+	path, _ := f.FindPath(0, 0, 10, 0, grid)
 	if path != nil {
 		t.Error("expected nil when path goes through EdgeStateNull")
 	}
@@ -256,7 +258,7 @@ func TestSmoothPathRemovesRedundantNodes(t *testing.T) {
 	b.Connect(c)
 
 	grid := walkableGrid(15, 5)
-	path := f.FindPath(0, 0, 10, 0, grid)
+	path, _ := f.FindPath(0, 0, 10, 0, grid)
 	if path == nil {
 		t.Fatal("expected path")
 	}
@@ -273,5 +275,28 @@ func TestSmoothPathShort(t *testing.T) {
 	result := f.SmoothPath(short, grid)
 	if len(result) != 2 {
 		t.Error("short path should not change")
+	}
+}
+
+// Same contract for the graph finder: a request about a tile that is not on the
+// map must not be answered as "no route".
+func TestWaypointRefusesOutOfBounds(t *testing.T) {
+	f := NewWaypointFinder()
+	g := walkableGrid(32, 32)
+
+	for _, tc := range []struct{ sx, sy, ex, ey int }{
+		{0, 0, 999, 999},
+		{999, 999, 0, 0},
+		{-1, 0, 5, 5},
+		{0, 0, 0, -1},
+	} {
+		path, err := f.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g)
+		if !errors.Is(err, finder.ErrOutOfBounds) {
+			t.Errorf("FindPath(%d,%d,%d,%d) err = %v, want ErrOutOfBounds",
+				tc.sx, tc.sy, tc.ex, tc.ey, err)
+		}
+		if path != nil {
+			t.Errorf("FindPath(%d,%d,%d,%d) must not return a path", tc.sx, tc.sy, tc.ex, tc.ey)
+		}
 	}
 }

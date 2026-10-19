@@ -21,7 +21,7 @@ func BenchmarkWaypointFindPath(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		path := f.FindPath(0, 0, 1000, 0, grid)
+		path, _ := f.FindPath(0, 0, 1000, 0, grid)
 		if path == nil {
 			b.Fatal("path not found")
 		}

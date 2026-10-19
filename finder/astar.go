@@ -53,7 +53,12 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 }
 
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.
-func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
+	// GetNodeAt panics on an out-of-range index, so validate up front and
+	// report it as a caller error instead of a crash.
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, ErrOutOfBounds
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	openList := &MinHeap{nodes: f.heapSlice[:0]}
 	defer func() { f.heapSlice = openList.nodes[:0] }()
@@ -81,7 +86,7 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]i
 			for i, j := 0, len(f.pathBuf)-1; i < j; i, j = i+1, j-1 {
 				f.pathBuf[i], f.pathBuf[j] = f.pathBuf[j], f.pathBuf[i]
 			}
-			return f.pathBuf
+			return f.pathBuf, nil
 		}
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
@@ -117,5 +122,5 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]i
 		}
 	}
 
-	return nil
+	return nil, nil
 }

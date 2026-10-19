@@ -19,7 +19,7 @@ func TestJPSPlusNeverPrecompute(t *testing.T) {
 	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
 	f.Precompute(g)
 
-	path := f.FindPath(0, 0, 4, 4, g)
+	path, _ := f.FindPath(0, 0, 4, 4, g)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -49,7 +49,7 @@ func TestJPSPlusAgainstJS(t *testing.T) {
 		g := grid.NewOrthogonalGrid(s.matrix)
 		f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
 		f.Precompute(g)
-		path := f.FindPath(s.startX, s.startY, s.endX, s.endY, g)
+		path, _ := f.FindPath(s.startX, s.startY, s.endX, s.endY, g)
 		if path == nil {
 			t.Errorf("JPS+ scenario %d: path not found", i+1)
 			continue
@@ -71,7 +71,7 @@ func TestJPSPlusNoPanicPrecompute(t *testing.T) {
 	f := finder.NewJPSPlusFinder()
 	f.Precompute(g)
 
-	path := f.FindPath(0, 0, 2, 2, g)
+	path, _ := f.FindPath(0, 0, 2, 2, g)
 	if path == nil {
 		t.Error("expected path")
 	}
@@ -81,7 +81,7 @@ func TestJPSPlusUnreachable(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int{{0, 1, 0}})
 	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
 	f.Precompute(g)
-	path := f.FindPath(0, 0, 2, 0, g)
+	path, _ := f.FindPath(0, 0, 2, 0, g)
 	if path != nil {
 		t.Errorf("expected nil for unreachable, got %v", path)
 	}
@@ -91,7 +91,7 @@ func TestJPSPlusSingleCell(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int{{0}})
 	f := finder.NewJPSPlusFinder()
 	f.Precompute(g)
-	path := f.FindPath(0, 0, 0, 0, g)
+	path, _ := f.FindPath(0, 0, 0, 0, g)
 	if path == nil {
 		t.Error("expected path for start==end")
 	}
@@ -117,7 +117,7 @@ func TestJPSPlusOpenGrid(t *testing.T) {
 	g := grid.NewOrthogonalGrid(matrix)
 	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
 	f.Precompute(g)
-	path := f.FindPath(0, 0, 99, 99, g)
+	path, _ := f.FindPath(0, 0, 99, 99, g)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}

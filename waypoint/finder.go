@@ -47,24 +47,34 @@ func NewWaypointFinder(opts ...WaypointOption) *WaypointFinder {
 // Graph returns the underlying waypoint graph for node/edge operations.
 func (f *WaypointFinder) Graph() *WaypointGraph { return f.graph }
 
+// WaypointFinder is a Finder over a prebuilt waypoint graph.
+var _ finder.Finder = (*WaypointFinder)(nil)
+
 // FindPath implements finder.Finder by searching the waypoint graph.
 // The grid is used for LOS-based node selection — only nodes with a clear
 // line of sight from the start/end position are considered.
 // Path is automatically smoothed via string pulling to remove redundant waypoints.
-func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [][2]int {
+func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) ([][2]int, error) {
+	// FindClosestWithLOS would fall back to "no node found" for a request that
+	// never pointed at the graph at all.
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, finder.ErrOutOfBounds
+	}
 	f.searchSeq++
 
 	startNode := f.graph.FindClosestWithLOS(startX, startY, grid)
 	endNode := f.graph.FindClosestWithLOS(endX, endY, grid)
 	if startNode == nil || endNode == nil {
-		return nil
+		// No usable endpoint: the closest nodes are unreachable from here, which
+		// is a completed search with no route, not a failure.
+		return nil, nil
 	}
 	if startNode == endNode {
-		return [][2]int{{startX, startY}, {endX, endY}}
+		return [][2]int{{startX, startY}, {endX, endY}}, nil
 	}
 
 	path := f.findPathInternal(startNode, endNode, startX, startY, endX, endY)
-	return f.SmoothPath(path, grid)
+	return f.SmoothPath(path, grid), nil
 }
 
 // SmoothPath removes unnecessary waypoints from a path by checking

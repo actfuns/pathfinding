@@ -42,7 +42,12 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 }
 
 // FindPath finds a path using JPS.
-func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
+	// GetNodeAt panics on an out-of-range index, so validate up front and
+	// report it as a caller error instead of a crash.
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, ErrOutOfBounds
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	b.openList = &MinHeap{nodes: b.heapSlice[:0]}
 	defer func() { b.heapSlice = b.openList.nodes[:0] }()
@@ -109,13 +114,13 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 				}
 			}
 			b.expandBuf = append(b.expandBuf, b.pathBuf[len(b.pathBuf)-1])
-			return b.expandBuf
+			return b.expandBuf, nil
 		}
 
 		b.identifySuccessors(node, searchSeq)
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (b *JumpPointFinderBase) identifySuccessors(node *Node, searchSeq int) {

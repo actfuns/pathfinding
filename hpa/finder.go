@@ -166,9 +166,17 @@ func (f *HPAFinder) recycleNodes() {
 // have been pre-built via Build(grid).
 //
 // It implements finder.Finder. Panics if Build() has not been called.
-func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [][2]int {
+// HPAFinder is a Finder that searches an abstract chunk graph, falling back to
+// a concrete search within a chunk.
+var _ finder.Finder = (*HPAFinder)(nil)
+
+func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) ([][2]int, error) {
 	if f.world == nil {
 		panic("HPAFinder: Build(grid) must be called before FindPath")
+	}
+	// Search would otherwise answer "no route" for a request it never ran.
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, finder.ErrOutOfBounds
 	}
 
 	world := f.world
@@ -180,17 +188,17 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [
 	}
 
 	if !grid.IsWalkableAt(startX, startY) || !grid.IsWalkableAt(endX, endY) {
-		return nil
+		return nil, nil
 	}
 
 	startPortalKeys := f.findReachablePortals(world, startX, startY, startChunk, grid, f.portalKeyBuf)
 	if len(startPortalKeys) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	endPortalKeys := f.findReachablePortals(world, endX, endY, endChunk, grid, f.portalKeyEndBuf)
 	if len(endPortalKeys) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Reuse endSetMap
@@ -282,7 +290,7 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [
 
 		if found == nil {
 			f.recycleNodes()
-			return nil
+			return nil, nil
 		}
 
 		// Build portal path (reversed from found linked list)
@@ -308,29 +316,41 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [
 	f.waypointsBuf = f.waypointsBuf[:0]
 
 	firstPortal := world.Portals[f.portalPathBuf[0]]
-	seg := f.concreteFind(startX, startY, firstPortal.CenterX, firstPortal.CenterY, grid)
+	seg, err := f.concreteFind(startX, startY, firstPortal.CenterX, firstPortal.CenterY, grid)
+	if err != nil {
+		f.recycleNodes()
+		return nil, err
+	}
 	if seg == nil {
 		f.recycleNodes()
-		return nil
+		return nil, nil
 	}
 	f.waypointsBuf = append(f.waypointsBuf, seg[:len(seg)-1]...)
 
 	for i := 0; i < len(f.portalPathBuf)-1; i++ {
 		p1 := world.Portals[f.portalPathBuf[i]]
 		p2 := world.Portals[f.portalPathBuf[i+1]]
-		seg = f.concreteFind(p1.CenterX, p1.CenterY, p2.CenterX, p2.CenterY, grid)
+		seg, err = f.concreteFind(p1.CenterX, p1.CenterY, p2.CenterX, p2.CenterY, grid)
+		if err != nil {
+			f.recycleNodes()
+			return nil, err
+		}
 		if seg == nil {
 			f.recycleNodes()
-			return nil
+			return nil, nil
 		}
 		f.waypointsBuf = append(f.waypointsBuf, seg[1:]...)
 	}
 
 	lastPortal := world.Portals[f.portalPathBuf[len(f.portalPathBuf)-1]]
-	seg = f.concreteFind(lastPortal.CenterX, lastPortal.CenterY, endX, endY, grid)
+	seg, err = f.concreteFind(lastPortal.CenterX, lastPortal.CenterY, endX, endY, grid)
+	if err != nil {
+		f.recycleNodes()
+		return nil, err
+	}
 	if seg == nil {
 		f.recycleNodes()
-		return nil
+		return nil, nil
 	}
 	f.waypointsBuf = append(f.waypointsBuf, seg[1:]...)
 
@@ -348,7 +368,7 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) [
 	copy(f.waypointsResult, f.waypointsBuf)
 
 	f.recycleNodes()
-	return f.waypointsResult
+	return f.waypointsResult, nil
 }
 
 func (f *HPAFinder) relaxEdge(ik int, edgeG float64, portal *Portal, endX, endY int, parent *hpaNode) []*hpaNode {
@@ -421,7 +441,7 @@ func (f *HPAFinder) findReachablePortals(world *HPAWorld, sx, sy int, chunkID in
 	return buf
 }
 
-func (f *HPAFinder) concreteFind(sx, sy, ex, ey int, grid finder.Grid) [][2]int {
+func (f *HPAFinder) concreteFind(sx, sy, ex, ey int, grid finder.Grid) ([][2]int, error) {
 	return f.concreteFinder.FindPath(sx, sy, ex, ey, grid)
 }
 

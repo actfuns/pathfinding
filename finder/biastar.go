@@ -50,7 +50,12 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 }
 
 // FindPath finds a path using bidirectional A*.
-func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
+	// GetNodeAt panics on an out-of-range index, so validate up front and
+	// report it as a caller error instead of a crash.
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, ErrOutOfBounds
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
@@ -89,7 +94,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 				continue
 			}
 			if neighbor.Opened == BY_END {
-				return BiBacktrace(node, neighbor)
+				return BiBacktrace(node, neighbor), nil
 			}
 
 			x, y := neighbor.X, neighbor.Y
@@ -127,7 +132,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 				continue
 			}
 			if neighbor.Opened == BY_START {
-				return BiBacktrace(neighbor, node)
+				return BiBacktrace(neighbor, node), nil
 			}
 
 			x, y := neighbor.X, neighbor.Y
@@ -156,5 +161,5 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 		}
 	}
 
-	return nil
+	return nil, nil
 }

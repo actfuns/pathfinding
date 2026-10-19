@@ -329,7 +329,12 @@ func (j *JPSPlusFinder) PrecomputedSize() int {
 
 // FindPath performs JPS+ pathfinding using the precomputed jump table.
 // Precompute(grid) must have been called first with the same grid.
-func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2]int {
+func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
+	// GetNodeAt panics on an out-of-range index, so validate up front and
+	// report it as a caller error instead of a crash.
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, ErrOutOfBounds
+	}
 	if j.jumpTable == nil {
 		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
 	}
@@ -342,13 +347,13 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 	j.endNode = grid.GetNodeAt(endX, endY)
 
 	if j.startNode == nil || j.endNode == nil {
-		return nil
+		return nil, nil
 	}
 	if !j.startNode.Walkable || !j.endNode.Walkable {
-		return nil
+		return nil, nil
 	}
 	if startX == endX && startY == endY {
-		return [][2]int{{startX, startY}}
+		return [][2]int{{startX, startY}}, nil
 	}
 
 	j.startNode.ResetSearch(searchSeq)
@@ -406,12 +411,12 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) [][2
 				}
 			}
 			j.expandBuf = append(j.expandBuf, j.pathBuf[len(j.pathBuf)-1])
-			return j.expandBuf
+			return j.expandBuf, nil
 		}
 
 		j.identifySuccessors(node, searchSeq)
 	}
-	return nil
+	return nil, nil
 }
 
 func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
