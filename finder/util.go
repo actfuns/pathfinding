@@ -2,6 +2,19 @@ package finder
 
 import "math"
 
+// checkEndpoints handles requests that need no search. It returns a non-nil
+// path for a zero-length request on a walkable tile, and ErrNotWalkable for an
+// unwalkable destination. A nil path with a nil error means "run the search".
+func checkEndpoints(startX, startY, endX, endY int, grid Grid) (path [][2]int, err error) {
+	if !grid.IsWalkableAt(endX, endY) {
+		return nil, ErrNotWalkable
+	}
+	if startX == endX && startY == endY {
+		return [][2]int{{startX, startY}}, nil
+	}
+	return nil, nil
+}
+
 // Backtrace returns the path from start to end node using parent links.
 func Backtrace(node *Node) [][2]int {
 	path := make([][2]int, 0, 16)

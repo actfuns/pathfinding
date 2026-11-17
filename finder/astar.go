@@ -59,6 +59,9 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
+	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return path, err
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	openList := &MinHeap{nodes: f.heapSlice[:0]}
 	defer func() { f.heapSlice = openList.nodes[:0] }()

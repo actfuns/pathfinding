@@ -338,6 +338,9 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	if j.jumpTable == nil {
 		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
 	}
+	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return path, err
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	j.grid = grid
 	j.openList = &MinHeap{nodes: j.heapSlice[:0]}
@@ -345,15 +348,8 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 
 	j.startNode = grid.GetNodeAt(startX, startY)
 	j.endNode = grid.GetNodeAt(endX, endY)
-
 	if j.startNode == nil || j.endNode == nil {
 		return nil, nil
-	}
-	if !j.startNode.Walkable || !j.endNode.Walkable {
-		return nil, nil
-	}
-	if startX == endX && startY == endY {
-		return [][2]int{{startX, startY}}, nil
 	}
 
 	j.startNode.ResetSearch(searchSeq)

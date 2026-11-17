@@ -1,6 +1,7 @@
 package finder_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/actfuns/pathfinding/finder"
@@ -94,6 +95,19 @@ func TestJPSPlusSingleCell(t *testing.T) {
 	path, _ := f.FindPath(0, 0, 0, 0, g)
 	if path == nil {
 		t.Error("expected path for start==end")
+	}
+}
+
+func TestJPSPlusUnwalkableEnd(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int{{0, 1}})
+	f := finder.NewJPSPlusFinder()
+	f.Precompute(g)
+	path, err := f.FindPath(0, 0, 1, 0, g)
+	if !errors.Is(err, finder.ErrNotWalkable) {
+		t.Fatalf("FindPath error = %v, want ErrNotWalkable", err)
+	}
+	if path != nil {
+		t.Errorf("expected nil path for unwalkable end, got %v", path)
 	}
 }
 

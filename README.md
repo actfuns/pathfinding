@@ -145,12 +145,13 @@ g := grid.NewOrthogonalGrid(terrain,
 | :--- | :--- | :--- |
 | `path, nil` | 找到路径 | 正常使用 |
 | `nil, nil` | 搜索完成，**确实没有路** | 换目标点或视为关卡问题 |
-| `nil, err` | 搜索**没能完成** | 瞬时问题，可重试 |
+| `nil, err` | 请求无效，或搜索**没能完成** | 调用方错误要修参数；超时/池忙可重试 |
 
-`err` 目前有三种来源：
+`err` 目前有这些来源：
 
-- `finder.ErrTimeLimit` — 超过 `WithTimeLimit` 设定的时限
+- `finder.ErrTimeLimit` — 超过 `WithTimeLimit` 设定的时限（可重试）
 - `finder.ErrOutOfBounds` — 端点坐标不在网格内（调用方的问题）
+- `finder.ErrNotWalkable` — **终点**瓦片不可走（调用方的问题）；起点不可走不报错，仍允许寻路走出
 - `grid.ErrPoolTimeout` / `grid.ErrPoolClosed` — 池层面的失败（见[并发寻路](#并发寻路)）
 
 关键点：**「没有路」不是错误**。目标不可达是算法的正常结论，所以绝大多数调用方只判断 `len(path)` 就够了，现有代码不检查 error 也依然正确：
@@ -158,7 +159,10 @@ g := grid.NewOrthogonalGrid(terrain,
 ```go
 path, err := g.FindPath(0, 0, 63, 63)
 if err != nil {
-    // 搜索没跑完（超时 / 池忙）—— 换个帧重试
+    if errors.Is(err, finder.ErrOutOfBounds) || errors.Is(err, finder.ErrNotWalkable) {
+        // 请求本身有问题：修起点/终点
+    }
+    // 超时 / 池忙 —— 换个帧重试
 }
 if len(path) == 0 {
     // 真的没路

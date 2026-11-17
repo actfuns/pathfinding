@@ -16,13 +16,20 @@ var ErrTimeLimit = errors.New("finder: search exceeded its time limit")
 // reported as an error instead of the "no route" result.
 var ErrOutOfBounds = errors.New("finder: endpoint is outside the grid")
 
+// ErrNotWalkable is returned when a path request names an unwalkable
+// destination tile. Like ErrOutOfBounds it is a caller mistake rather than a
+// property of the map, so it is reported as an error instead of the "no route"
+// result. An unwalkable start is allowed: the search may still route out of it.
+var ErrNotWalkable = errors.New("finder: destination is not walkable")
+
 // Finder is the interface for all pathfinding algorithms.
 //
 // Results come in three shapes, and the pair (path, err) tells them apart:
 //
 //	path, nil  a route was found
 //	nil, nil   the search completed and no route exists
-//	nil, err   the search could not complete; err is why (e.g. ErrTimeLimit)
+//	nil, err   the search could not complete; err is why (e.g. ErrTimeLimit,
+//	           ErrOutOfBounds, ErrNotWalkable)
 //
 // A nil path with a nil error is the normal answer for an unreachable target,
 // so most callers only need to check len(path).

@@ -187,7 +187,10 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) (
 		return f.concreteFind(startX, startY, endX, endY, grid)
 	}
 
-	if !grid.IsWalkableAt(startX, startY) || !grid.IsWalkableAt(endX, endY) {
+	if !grid.IsWalkableAt(endX, endY) {
+		return nil, finder.ErrNotWalkable
+	}
+	if !grid.IsWalkableAt(startX, startY) {
 		return nil, nil
 	}
 

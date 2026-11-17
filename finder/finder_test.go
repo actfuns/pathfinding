@@ -108,6 +108,35 @@ func TestFinderUnreachablePath(t *testing.T) {
 	}
 }
 
+func TestFinderUnwalkableEnd(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int{{0, 1}})
+	finders := []struct {
+		name string
+		f    finder.Finder
+	}{
+		{"AStar", finder.NewAStarFinder()},
+		{"Dijkstra", finder.NewDijkstraFinder()},
+		{"BreadthFirst", finder.NewBreadthFirstFinder()},
+		{"BestFirst", finder.NewBestFirstFinder()},
+		{"BiAStar", finder.NewBiAStarFinder()},
+		{"BiDijkstra", finder.NewBiDijkstraFinder()},
+		{"BiBreadthFirst", finder.NewBiBreadthFirstFinder()},
+		{"BiBestFirst", finder.NewBiBestFirstFinder()},
+		{"JPFNever", finder.NewJumpPointFinder(finder.WithDiagonal(finder.DiagonalNever))},
+	}
+	for _, ft := range finders {
+		t.Run(ft.name, func(t *testing.T) {
+			path, err := ft.f.FindPath(0, 0, 1, 0, g)
+			if !errors.Is(err, finder.ErrNotWalkable) {
+				t.Fatalf("FindPath error = %v, want ErrNotWalkable", err)
+			}
+			if path != nil {
+				t.Errorf("expected nil path for unwalkable end, got %v", path)
+			}
+		})
+	}
+}
+
 func TestFinderSingleCell(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int{{0}})
 	finders := []finder.Finder{

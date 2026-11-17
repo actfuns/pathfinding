@@ -2,6 +2,7 @@ package grid
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/actfuns/pathfinding/finder"
@@ -406,11 +407,12 @@ func (g *OrthogonalGrid) SupportsJPSCanonicalPruning() bool { return true }
 // --- world coordinate helpers ---
 
 // WorldToTile converts a world-space coordinate to a tile-space coordinate.
-// The conversion uses integer truncation; results outside the grid should be
-// checked with IsInside before use.
+// It floors toward negative infinity, so negative world coordinates map to
+// negative tile coordinates. Results outside the grid should be checked with
+// IsInside before use.
 func (g *OrthogonalGrid) WorldToTile(wx, wy float32) (int, int) {
-	tx := int(wx) / g.tileW
-	ty := int(wy) / g.tileH
+	tx := int(math.Floor(float64(wx) / float64(g.tileW)))
+	ty := int(math.Floor(float64(wy) / float64(g.tileH)))
 	return tx, ty
 }
 

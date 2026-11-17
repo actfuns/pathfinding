@@ -53,12 +53,17 @@ var _ finder.Finder = (*WaypointFinder)(nil)
 // FindPath implements finder.Finder by searching the waypoint graph.
 // The grid is used for LOS-based node selection — only nodes with a clear
 // line of sight from the start/end position are considered.
+// An unwalkable destination returns finder.ErrNotWalkable; an unwalkable start
+// is still snapped to the closest node with line of sight.
 // Path is automatically smoothed via string pulling to remove redundant waypoints.
 func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) ([][2]int, error) {
 	// FindClosestWithLOS would fall back to "no node found" for a request that
 	// never pointed at the graph at all.
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, finder.ErrOutOfBounds
+	}
+	if !grid.IsWalkableAt(endX, endY) {
+		return nil, finder.ErrNotWalkable
 	}
 	f.searchSeq++
 

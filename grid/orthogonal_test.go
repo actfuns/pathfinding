@@ -19,6 +19,10 @@ func TestOrthogonalWorldToTile(t *testing.T) {
 		{32, 0, 1, 0},
 		{64, 32, 2, 1},
 		{95, 63, 2, 1},
+		{-1, -1, -1, -1},
+		{-32, -32, -1, -1},
+		{-33, 0, -2, 0},
+		{0, -64, 0, -2},
 	}
 	for _, tt := range tests {
 		tx, ty := g.WorldToTile(tt.wx, tt.wy)

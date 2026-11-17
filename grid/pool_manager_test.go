@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/actfuns/pathfinding/finder"
 )
 
 func TestPoolManagerEvictsOnRelease(t *testing.T) {
@@ -198,8 +200,8 @@ func TestPoolManagerResetSwapsPool(t *testing.T) {
 	if got := pr.ObstacleCount(); got != 64 {
 		t.Fatalf("proxy must serve the new map, obstacleCount=%d want 64", got)
 	}
-	if _, err := pr.FindPathWorld(0, 0, 7*32, 7*32); err != nil {
-		t.Fatalf("proxy must still search after Reset: %v", err)
+	if _, err := pr.FindPathWorld(0, 0, 7*32, 7*32); !errors.Is(err, finder.ErrNotWalkable) {
+		t.Fatalf("proxy must serve the new blocked map: err = %v, want ErrNotWalkable", err)
 	}
 
 	// A scene that never heard about the change and passes the stale factory
@@ -657,8 +659,8 @@ func TestPoolManagerResetReplacesAfterScenesHoldIt(t *testing.T) {
 			if got := pr.ObstacleCount(); got != 64 {
 				t.Fatalf("trial %d: proxy must serve the new map, obstacleCount=%d", trial, got)
 			}
-			if _, err := pr.FindPath(0, 0, 7, 7); err != nil {
-				t.Fatalf("trial %d: search after reset: %v", trial, err)
+			if _, err := pr.FindPath(0, 0, 7, 7); !errors.Is(err, finder.ErrNotWalkable) {
+				t.Fatalf("trial %d: search after reset error = %v, want ErrNotWalkable", trial, err)
 			}
 		}
 

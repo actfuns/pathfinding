@@ -59,6 +59,9 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
+	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return path, err
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)

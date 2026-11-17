@@ -36,6 +36,9 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid)
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
+	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return path, err
+	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
