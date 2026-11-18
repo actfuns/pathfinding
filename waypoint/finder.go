@@ -75,7 +75,20 @@ func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Gr
 		return nil, nil
 	}
 	if startNode == endNode {
-		return [][2]int{{startX, startY}, {endX, endY}}, nil
+		// Both endpoints snapped to the same node, but they may not see each
+		// other (e.g. a wall between them), so route through the node instead
+		// of returning a straight, possibly wall-crossing segment.
+		raw := make([][2]int, 0, 3)
+		add := func(x, y int) {
+			if len(raw) > 0 && raw[len(raw)-1] == [2]int{x, y} {
+				return
+			}
+			raw = append(raw, [2]int{x, y})
+		}
+		add(startX, startY)
+		add(startNode.X, startNode.Y)
+		add(endX, endY)
+		return f.SmoothPath(raw, grid), nil
 	}
 
 	path := f.findPathInternal(startNode, endNode, startX, startY, endX, endY)

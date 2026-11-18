@@ -115,8 +115,9 @@ func (g *WaypointGraph) FindClosest(x, y int) *WaypointNode {
 	bestD := math.MaxFloat64
 
 	for radius := 0; ; radius++ {
-		minCellDist := radius * g.cellSize
-		if best != nil && float64(minCellDist) >= bestD {
+		// bestD is squared, so compare lengths on the same scale. A node in a
+		// cell at Chebyshev distance r is at least (r-1)*cellSize away.
+		if radius > 0 && best != nil && math.Sqrt(bestD) <= float64((radius-1)*g.cellSize) {
 			break
 		}
 
@@ -192,8 +193,9 @@ func (g *WaypointGraph) FindClosestWithLOS(x, y int, grid GridLOS) *WaypointNode
 	anyBestD := math.MaxFloat64
 
 	for radius := 0; ; radius++ {
-		minCellDist := radius * g.cellSize
-		if best != nil && float64(minCellDist) >= bestD {
+		// bestD is squared, so compare lengths on the same scale. A node in a
+		// cell at Chebyshev distance r is at least (r-1)*cellSize away.
+		if radius > 0 && best != nil && math.Sqrt(bestD) <= float64((radius-1)*g.cellSize) {
 			break
 		}
 
@@ -227,6 +229,23 @@ func (g *WaypointGraph) FindClosestWithLOS(x, y int, grid GridLOS) *WaypointNode
 		}
 		if !found && radius > 16 {
 			break
+		}
+	}
+	if best == nil {
+		// Nothing with line of sight was found in the search window: fall back
+		// to a full scan so distant graphs are not reported as unreachable.
+		bestD = math.MaxFloat64
+		anyBestD = math.MaxFloat64
+		for _, n := range g.Nodes {
+			d := distSq(n.X, n.Y, x, y)
+			if d < anyBestD {
+				anyBestD = d
+				anyBest = n
+			}
+			if hasLineOfSight(x, y, n.X, n.Y, grid) && d < bestD {
+				bestD = d
+				best = n
+			}
 		}
 	}
 	if best == nil {

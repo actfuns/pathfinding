@@ -43,7 +43,7 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 	if opt.Weight > 0 {
 		f.Weight = opt.Weight
 	}
-	if f.DiagonalMovement != DiagonalNever {
+	if f.DiagonalMovement != DiagonalNever && opt.Heuristic == nil {
 		f.Heuristic = Octile
 	}
 	return f

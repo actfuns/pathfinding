@@ -1,6 +1,9 @@
 package finder
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // IDAStarFinder is an Iterative Deepening A* pathfinder.
 type IDAStarFinder struct {
@@ -15,7 +18,10 @@ type IDAStarFinder struct {
 	// TimeLimit is the maximum number of seconds to spend searching before giving up. A value <= 0 means no limit.
 	TimeLimit float64
 
-	neighborBuf []*Node
+	// Reusable search scratch, so repeated FindPath calls avoid allocations.
+	routeBuf     [][2]int
+	neighborBufs [][]*Node
+	onPath       []bool
 }
 
 // NewIDAStarFinder creates a new IDAStarFinder.
@@ -27,7 +33,6 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 		DiagonalMovement: DiagonalNever,
 		TrackRecursion:   false,
 		TimeLimit:        -1,
-		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -46,7 +51,7 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 	}
 	f.TrackRecursion = opt.TrackRecursion
 	f.TimeLimit = opt.TimeLimit
-	if f.DiagonalMovement != DiagonalNever {
+	if f.DiagonalMovement != DiagonalNever && opt.Heuristic == nil {
 		f.Heuristic = Octile
 	}
 	return f
@@ -82,21 +87,46 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	startTime := time.Now()
 	hasTimeLimit := f.TimeLimit > 0
 
-	neighborBuf := f.neighborBuf[:0]
-	var search func(node *Node, g, cutoff float64, route [][2]int, depth int) (float64, bool)
+	width, height := grid.Width(), grid.Height()
+	maxDepth := width * height
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
+	route := f.routeBuf[:0]
+	// onPath prevents revisiting a tile within one depth-first branch. Without
+	// it the search can walk cycles forever and never prove that no path exists.
+	onPath := f.onPath
+	if cap(onPath) < maxDepth {
+		onPath = make([]bool, maxDepth)
+	} else {
+		onPath = onPath[:maxDepth]
+		clear(onPath)
+	}
+	f.onPath = onPath
+	startIdx := start.Y*width + start.X
+	if startIdx >= 0 && startIdx < len(onPath) {
+		onPath[startIdx] = true
+	}
 
-	// Set by search when it bails on the time limit. Without this the outer
-	// loop would keep feeding it an ever smaller cutoff and spin forever: every
-	// call returns (0, false) at once, so cutOff never advances past 0.
+	// Each recursion depth needs its own neighbor buffer: GetNeighbors writes
+	// into the buffer it is given, so sharing one across recursive calls would
+	// overwrite the parent's neighbor list while it is still being iterated.
+	neighborBufs := f.neighborBufs
+	defer func() {
+		f.routeBuf = route
+		f.neighborBufs = neighborBufs
+	}()
+	pathEnd := -1
 	var timedOut bool
 
-	search = func(node *Node, g, cutoff float64, route [][2]int, depth int) (float64, bool) {
+	var search func(node *Node, g, cutoff float64, depth int) (float64, bool)
+	search = func(node *Node, g, cutoff float64, depth int) (float64, bool) {
 		if timedOut {
-			return 0, false
+			return math.Inf(1), false
 		}
 		if hasTimeLimit && time.Since(startTime).Seconds() > f.TimeLimit {
 			timedOut = true
-			return 0, false
+			return math.Inf(1), false
 		}
 
 		fScore := g + h(node, end)*f.Weight
@@ -104,15 +134,27 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 			return fScore, false
 		}
 
+		if depth >= len(route) {
+			route = append(route, [2]int{})
+		}
+		route[depth] = [2]int{node.X, node.Y}
 		if node == end {
-			route[depth] = [2]int{node.X, node.Y}
+			pathEnd = depth
 			return 0, true
 		}
 
-		min := float64(0)
-		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
+		if depth >= len(neighborBufs) {
+			neighborBufs = append(neighborBufs, make([]*Node, 0, 8))
+		}
+		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBufs[depth][:0])
+		neighborBufs[depth] = neighbors[:0]
 
+		min := math.Inf(1)
 		for _, neighbor := range neighbors {
+			idx := neighbor.Y*width + neighbor.X
+			if idx < 0 || idx >= len(onPath) || onPath[idx] {
+				continue
+			}
 			neighbor.ResetSearch(searchSeq)
 			if f.TrackRecursion {
 				neighbor.RetainCount++
@@ -121,10 +163,11 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 				}
 			}
 
-			t, found := search(neighbor, g+cost(node, neighbor), cutoff, route, depth+1)
+			onPath[idx] = true
+			t, found := search(neighbor, g+cost(node, neighbor), cutoff, depth+1)
+			onPath[idx] = false
 
 			if found {
-				route[depth] = [2]int{node.X, node.Y}
 				return 0, true
 			}
 
@@ -135,7 +178,7 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 				}
 			}
 
-			if min == 0 || t < min {
+			if t < min {
 				min = t
 			}
 		}
@@ -143,12 +186,11 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 		return min, false
 	}
 
-	cutOff := h(start, end)
+	cutOff := h(start, end) * f.Weight
 
-	for j := 0; ; j++ {
-		route := make([][2]int, 512)
-
-		t, found := search(start, 0, cutOff, route, 0)
+	for {
+		pathEnd = -1
+		t, found := search(start, 0, cutOff, 0)
 
 		// Ran out of time before reaching a verdict: the search never finished,
 		// so say so instead of reporting "no path" or looping forever.
@@ -157,28 +199,20 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 		}
 
 		if found {
-			pathLen := 0
-			for i := 0; i < len(route); i++ {
-				if route[i] == [2]int{0, 0} {
-					if i > 0 {
-						break
-					}
-				} else {
-					pathLen = i + 1
-				}
-			}
-			if pathLen == 0 {
-				return nil, nil
-			}
-			path := make([][2]int, pathLen)
-			copy(path, route[:pathLen])
+			path := make([][2]int, pathEnd+1)
+			copy(path, route[:pathEnd+1])
 			return path, nil
 		}
 
-		if t >= float64(1<<60) {
+		// All simple paths were exhausted: no route exists.
+		if math.IsInf(t, 1) {
 			return nil, nil
 		}
 
+		// Guarantee progress even if rounding leaves t <= cutOff.
+		if t <= cutOff {
+			t = cutOff + 1
+		}
 		cutOff = t
 	}
 }

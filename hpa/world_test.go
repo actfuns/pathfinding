@@ -100,10 +100,10 @@ func TestHPAPortalKeyEncoding(t *testing.T) {
 		t.Errorf("expected pos 0, got %d", pos)
 	}
 	key = PortalKey(1, 5, DirS, cs)
-	if key != 277 {
-		t.Errorf("expected 277, got %d", key)
+	if key != 53 {
+		t.Errorf("expected 53, got %d", key)
 	}
-	cid := portalKeyChunkID(key)
+	cid := portalKeyChunkID(key, cs)
 	if cid != 1 {
 		t.Errorf("expected chunk 1, got %d", cid)
 	}
@@ -209,4 +209,40 @@ func countPortalsInDir(world *HPAWorld, chunkID, dir int) int {
 		}
 	}
 	return count
+}
+
+// A chunk size above 64 used to overflow the fixed 256-key-per-chunk stride,
+// overlapping chunks and indexing past Portals. The stride must scale with the
+// configured chunk size.
+func TestHPAPortalKeyLargeChunk(t *testing.T) {
+	const cs = 100
+	g := grid.NewOrthogonalGrid(grid.NewMatrix(200, 200))
+	w := BuildWorld(g, cs)
+
+	want := w.ChunkMapX * w.ChunkMapY * cs * 4
+	if len(w.Portals) != want {
+		t.Fatalf("Portals length = %d, want %d", len(w.Portals), want)
+	}
+
+	chunks := w.ChunkMapX * w.ChunkMapY
+	for cid := 0; cid < chunks; cid++ {
+		for pos := 0; pos < cs; pos++ {
+			for dir := 0; dir < 4; dir++ {
+				key := PortalKey(cid, pos, dir, cs)
+				if key < 0 || key >= len(w.Portals) {
+					t.Fatalf("key %d out of range [0,%d) for cid=%d pos=%d dir=%d",
+						key, len(w.Portals), cid, pos, dir)
+				}
+				if got := portalKeyChunkID(key, cs); got != cid {
+					t.Fatalf("chunkID = %d, want %d", got, cid)
+				}
+				if got := portalKeyPos(key, cs); got != pos {
+					t.Fatalf("pos = %d, want %d", got, pos)
+				}
+				if got := portalKeyDir(key, cs); got != dir {
+					t.Fatalf("dir = %d, want %d", got, dir)
+				}
+			}
+		}
+	}
 }

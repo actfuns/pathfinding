@@ -2,6 +2,8 @@ package grid
 
 import (
 	"testing"
+
+	"github.com/actfuns/pathfinding/finder"
 )
 
 // StaggeredGrid (staggerY, odd):
@@ -254,4 +256,68 @@ func TestStaggeredObstacleCount(t *testing.T) {
 	if n := g2.(*StaggeredGrid).ObstacleCount(); n != 0 {
 		t.Errorf("clone: expected 0 obstacles, got %d", n)
 	}
+}
+
+// With diagonals enabled, a staggered node has 6 distinct geometric
+// neighbours: 4 cardinals plus the 2 edge-sharing corners for its row parity.
+// The corner offsets must not duplicate the cardinals.
+func TestStaggeredGetNeighborsNoDuplicates(t *testing.T) {
+	g := NewStaggeredGrid([][]int{
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+	}, WithTileSize(64, 32))
+
+	cases := []struct {
+		x, y     int
+		expected map[[2]int]bool
+	}{
+		{ // odd row (shifted): corners are up-right and down-right
+			x: 1, y: 1,
+			expected: map[[2]int]bool{
+				{1, 0}: true, {1, 2}: true, {2, 1}: true,
+				{0, 1}: true, {2, 0}: true, {2, 2}: true,
+			},
+		},
+		{ // even row: corners are up-left and down-left
+			x: 1, y: 2,
+			expected: map[[2]int]bool{
+				{1, 1}: true, {1, 3}: true, {2, 2}: true,
+				{0, 2}: true, {0, 1}: true, {0, 3}: true,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		node := &finder.Node{X: tc.x, Y: tc.y}
+		neighbors := g.GetNeighbors(node, finder.DiagonalAlways, nil)
+		if len(neighbors) != 6 {
+			t.Errorf("(%d,%d): got %d neighbors, want 6: %v", tc.x, tc.y, len(neighbors), coords(neighbors))
+		}
+		seen := map[[2]int]bool{}
+		for _, n := range neighbors {
+			key := [2]int{n.X, n.Y}
+			if seen[key] {
+				t.Errorf("(%d,%d): duplicate neighbor %v", tc.x, tc.y, key)
+			}
+			seen[key] = true
+			if !tc.expected[key] {
+				t.Errorf("(%d,%d): unexpected neighbor %v", tc.x, tc.y, key)
+			}
+		}
+		for k := range tc.expected {
+			if !seen[k] {
+				t.Errorf("(%d,%d): missing neighbor %v", tc.x, tc.y, k)
+			}
+		}
+	}
+}
+
+func coords(nodes []*finder.Node) [][2]int {
+	out := make([][2]int, len(nodes))
+	for i, n := range nodes {
+		out[i] = [2]int{n.X, n.Y}
+	}
+	return out
 }

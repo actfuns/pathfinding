@@ -26,13 +26,13 @@ func newPortal(cx, cy int) *Portal {
 }
 
 // PortalKey encodes chunk ID, edge position, and direction.
-// key = position + direction*chunkSize + chunkID*MaxPortalsPerChunk
+// key = position + direction*chunkSize + chunkID*chunkSize*4
 func PortalKey(chunkID, pos, dir, chunkSize int) int {
-	return pos + dir*chunkSize + chunkID*MaxPortalsPerChunk
+	return pos + dir*chunkSize + chunkID*chunkSize*4
 }
 
-func portalKeyChunkID(key int) int {
-	return key / MaxPortalsPerChunk
+func portalKeyChunkID(key, chunkSize int) int {
+	return key / (chunkSize * 4)
 }
 
 func portalKeyPos(key, chunkSize int) int {
@@ -42,9 +42,6 @@ func portalKeyPos(key, chunkSize int) int {
 func portalKeyDir(key, chunkSize int) int {
 	return key % (chunkSize * 4) / chunkSize
 }
-
-// MaxPortalsPerChunk = ChunkSize * 4 (N/E/S/W)
-const MaxPortalsPerChunk = 256
 
 // HPAWorld holds the hierarchical portal graph for a Grid.
 type HPAWorld struct {
@@ -86,7 +83,7 @@ func BuildWorld(grid finder.Grid, chunkSize int) *HPAWorld {
 	cmy := ph / cs
 
 	w := &HPAWorld{
-		Portals:      make([]*Portal, cmx*cmy*MaxPortalsPerChunk),
+		Portals:      make([]*Portal, cmx*cmy*cs*4),
 		ChunkMapX:    cmx,
 		ChunkMapY:    cmy,
 		PaddedWidth:  pw,

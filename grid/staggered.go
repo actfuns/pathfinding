@@ -92,29 +92,29 @@ func (g *StaggeredGrid) initNeighbors() {
 	}
 	if g.isStaggerX() {
 		g.diagNormOffsets = [4][2]int{
-			{0, -1},  // NE
-			{-1, -1}, // NW
-			{0, 1},   // SE
-			{-1, 1},  // SW
+			{-1, -1}, // top-left
+			{1, -1},  // top-right
+			{-1, 0},  // bottom-left
+			{1, 0},   // bottom-right
 		}
 		g.diagShiftOffsets = [4][2]int{
-			{1, -1}, // NE
-			{0, -1}, // NW
-			{1, 1},  // SE
-			{0, 1},  // SW
+			{-1, 0}, // top-left
+			{1, 0},  // top-right
+			{-1, 1}, // bottom-left
+			{1, 1},  // bottom-right
 		}
 	} else {
 		g.diagNormOffsets = [4][2]int{
-			{1, -1},  // NE
-			{-1, -1}, // NW
-			{1, 1},   // SE
-			{-1, 1},  // SW
+			{-1, -1}, // top-left
+			{0, -1},  // top-right
+			{-1, 1},  // bottom-left
+			{0, 1},   // bottom-right
 		}
 		g.diagShiftOffsets = [4][2]int{
-			{1, 0},  // NE
-			{-1, 0}, // NW
-			{1, 0},  // SE
-			{-1, 0}, // SW
+			{0, -1}, // top-left
+			{1, -1}, // top-right
+			{0, 1},  // bottom-left
+			{1, 1},  // bottom-right
 		}
 	}
 }
@@ -792,7 +792,22 @@ func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagonal
 	}
 
 	for i, d := range diags {
-		if dFlags[i] && d.nx >= 0 && d.nx < w && d.ny >= 0 && d.ny < h && nodes[d.ny*w+d.nx].Walkable {
+		if !dFlags[i] || d.nx < 0 || d.nx >= w || d.ny < 0 || d.ny >= h {
+			continue
+		}
+		if !nodes[d.ny*w+d.nx].Walkable {
+			continue
+		}
+		// A staggered row's corner offsets can coincide with a cardinal
+		// neighbor; the same tile must not be appended twice.
+		dup := false
+		for _, n := range neighbors {
+			if n.X == d.nx && n.Y == d.ny {
+				dup = true
+				break
+			}
+		}
+		if !dup {
 			neighbors = append(neighbors, &nodes[d.ny*w+d.nx])
 		}
 	}

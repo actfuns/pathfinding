@@ -297,3 +297,20 @@ func BenchmarkConnectNearby(b *testing.B) {
 		g.ConnectNearby(30, grid)
 	}
 }
+
+// The ring search must not prune an adjacent spatial cell just because a node
+// was already found in the query cell: a node across the cell boundary can be
+// closer. bestD is a squared distance, so comparisons must use lengths.
+func TestFindClosestDoesNotPruneAdjacentCell(t *testing.T) {
+	g := NewWaypointGraph()
+	g.AddNode(60, 0)
+	g.AddNode(64, 0)
+
+	got := g.FindClosest(63, 0)
+	if got == nil {
+		t.Fatal("FindClosest returned nil")
+	}
+	if got.X != 64 || got.Y != 0 {
+		t.Errorf("FindClosest(63,0) = (%d,%d), want (64,0)", got.X, got.Y)
+	}
+}

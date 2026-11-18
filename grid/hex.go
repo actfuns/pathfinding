@@ -116,37 +116,37 @@ func (g *HexGrid) initNeighbors() {
 		// Flat-top hex: stagger on X axis
 		g.neighborsEven = [6][2]int{
 			{-1, -1}, // NW
-			{0, -1},  // NE
+			{0, -1},  // N
+			{1, -1},  // NE
 			{1, 0},   // E
-			{0, 1},   // SE
-			{-1, 1},  // SW
+			{0, 1},   // S
 			{-1, 0},  // W
 		}
 		g.neighborsOdd = [6][2]int{
-			{0, -1}, // NW
-			{1, -1}, // NE
+			{0, -1}, // N
+			{-1, 1}, // NW
 			{1, 0},  // E
 			{1, 1},  // SE
-			{0, 1},  // SW
+			{0, 1},  // S
 			{-1, 0}, // W
 		}
 	} else {
 		// Pointy-top hex: stagger on Y axis
 		g.neighborsEven = [6][2]int{
-			{1, -1}, // NE
-			{0, -1}, // NW
-			{-1, 0}, // W
-			{-1, 1}, // SW
-			{0, 1},  // SE
-			{1, 0},  // E
+			{-1, -1}, // NW
+			{0, -1},  // NE
+			{-1, 0},  // W
+			{-1, 1},  // SW
+			{0, 1},   // SE
+			{1, 0},   // E
 		}
 		g.neighborsOdd = [6][2]int{
-			{1, 0},   // NE
-			{0, -1},  // NW
-			{-1, -1}, // W
-			{-1, 0},  // SW
-			{0, 1},   // SE
-			{1, 1},   // E
+			{1, 0},  // E
+			{0, -1}, // NW
+			{1, -1}, // NE
+			{-1, 0}, // W
+			{0, 1},  // SE
+			{1, 1},  // SW
 		}
 	}
 }
@@ -702,7 +702,13 @@ func (g *HexGrid) GetNeighbors(node *finder.Node, _ finder.DiagonalMovement, buf
 	nodes := g.nodes
 
 	var dirs [6][2]int
-	if (g.staggerX && x&1 == 1) || (!g.staggerX && y&1 == 1) {
+	shifted := false
+	if g.staggerX {
+		shifted = g.doStaggerX(x)
+	} else {
+		shifted = g.doStaggerY(y)
+	}
+	if shifted {
 		dirs = g.neighborsOdd
 	} else {
 		dirs = g.neighborsEven

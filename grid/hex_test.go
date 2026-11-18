@@ -2,6 +2,7 @@ package grid
 
 import (
 	"math"
+	"sort"
 	"testing"
 
 	"github.com/actfuns/pathfinding/finder"
@@ -150,9 +151,9 @@ func TestHexGetNeighborsPointyEvenRow(t *testing.T) {
 		t.Fatalf("expected 6 neighbors, got %d", len(neighbors))
 	}
 
-	// Even row pointy: NE(1,-1), NW(0,-1), W(-1,0), SW(-1,1), SE(0,1), E(1,0)
+	// Even row pointy: NW(-1,-1), NE(0,-1), W(-1,0), SW(-1,1), SE(0,1), E(1,0)
 	expected := map[[2]int]bool{
-		{3, 1}: true, {2, 1}: true, {1, 2}: true,
+		{1, 1}: true, {2, 1}: true, {1, 2}: true,
 		{1, 3}: true, {2, 3}: true, {3, 2}: true,
 	}
 	for _, n := range neighbors {
@@ -187,7 +188,7 @@ func TestHexGetNeighborsPointyOddRow(t *testing.T) {
 	// In hex.go GetNeighbors, pointy-top, odd y:
 	// NE(1,0), NW(0,-1), W(-1,-1), SW(-1,0), SE(0,1), E(1,1)
 	expected := map[[2]int]bool{
-		{3, 1}: true, {2, 0}: true, {1, 0}: true,
+		{3, 1}: true, {2, 0}: true, {3, 0}: true,
 		{1, 1}: true, {2, 2}: true, {3, 2}: true,
 	}
 	for _, n := range neighbors {
@@ -218,10 +219,10 @@ func TestHexGetNeighborsFlatEvenCol(t *testing.T) {
 		t.Fatalf("expected 6 neighbors, got %d", len(neighbors))
 	}
 
-	// Even col flat: NW(-1,-1), NE(0,-1), E(1,0), SE(0,1), SW(-1,1), W(-1,0)
+	// Even col flat: NW(-1,-1), N(0,-1), NE(1,-1), E(1,0), S(0,1), W(-1,0)
 	expected := map[[2]int]bool{
-		{1, 1}: true, {2, 1}: true, {3, 2}: true,
-		{2, 3}: true, {1, 3}: true, {1, 2}: true,
+		{1, 1}: true, {2, 1}: true, {3, 1}: true,
+		{3, 2}: true, {2, 3}: true, {1, 2}: true,
 	}
 	for _, n := range neighbors {
 		key := [2]int{n.X, n.Y}
@@ -384,5 +385,99 @@ func TestHexObstacleCount(t *testing.T) {
 	g2 := g.Clone()
 	if n := g2.(*HexGrid).ObstacleCount(); n != 0 {
 		t.Errorf("clone: expected 0 obstacles, got %d", n)
+	}
+}
+
+// Even-row staggering flips which neighbor table applies: an even row now uses
+// the "odd" offsets and vice versa.
+func TestHexGetNeighborsPointyEvenStagger(t *testing.T) {
+	g := NewHexGrid([][]int{
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
+	}, WithTileSize(64, 64), WithHexSide(32), WithHexEvenStagger())
+
+	nb := make([]*finder.Node, 0, 8)
+	node := &finder.Node{X: 2, Y: 2} // even row, but even-stagger uses odd offsets
+	neighbors := g.GetNeighbors(node, finder.DiagonalNever, nb)
+	if len(neighbors) != 6 {
+		t.Fatalf("expected 6 neighbors, got %d", len(neighbors))
+	}
+
+	expected := map[[2]int]bool{
+		{3, 2}: true, {2, 1}: true, {3, 1}: true,
+		{1, 2}: true, {2, 3}: true, {3, 3}: true,
+	}
+	for _, n := range neighbors {
+		key := [2]int{n.X, n.Y}
+		if !expected[key] {
+			t.Errorf("unexpected (%d,%d)", n.X, n.Y)
+		}
+		delete(expected, key)
+	}
+	for k := range expected {
+		t.Errorf("missing (%d,%d)", k[0], k[1])
+	}
+}
+
+// Every hex neighbor must be one of the six closest tile centres. This guards
+// against offset-table typos that put a two-step tile in the neighborhood.
+func TestHexNeighborsMatchGeometry(t *testing.T) {
+	configs := []struct {
+		name string
+		opts []GridOption
+	}{
+		{"pointy-odd", []GridOption{WithTileSize(55, 64), WithHexSide(32)}},
+		{"pointy-even", []GridOption{WithTileSize(55, 64), WithHexSide(32), WithHexEvenStagger()}},
+		{"flat-odd", []GridOption{WithTileSize(64, 55), WithHexSide(32), WithHexFlatTop()}},
+		{"flat-even", []GridOption{WithTileSize(64, 55), WithHexSide(32), WithHexFlatTop(), WithHexEvenStagger()}},
+	}
+
+	for _, c := range configs {
+		g := NewHexGrid(NewMatrix(5, 5), c.opts...)
+
+		for y := 1; y < 4; y++ {
+			for x := 1; x < 4; x++ {
+				cx, cy := g.TileToWorld(x, y)
+
+				type candidate struct {
+					x, y int
+					dist float64
+				}
+				var all []candidate
+				for ty := 0; ty < 5; ty++ {
+					for tx := 0; tx < 5; tx++ {
+						if tx == x && ty == y {
+							continue
+						}
+						ax, ay := g.TileToWorld(tx, ty)
+						all = append(all, candidate{tx, ty, math.Hypot(float64(ax-cx), float64(ay-cy))})
+					}
+				}
+				sort.Slice(all, func(i, j int) bool { return all[i].dist < all[j].dist })
+				limit := all[5].dist + 1e-6
+
+				nbs := g.GetNeighbors(&finder.Node{X: x, Y: y}, finder.DiagonalNever, nil)
+				if len(nbs) != 6 {
+					t.Fatalf("%s (%d,%d): got %d neighbors, want 6", c.name, x, y, len(nbs))
+				}
+				seen := make(map[[2]int]bool, 6)
+				for _, n := range nbs {
+					key := [2]int{n.X, n.Y}
+					if seen[key] {
+						t.Errorf("%s (%d,%d): duplicate neighbor %v", c.name, x, y, key)
+					}
+					seen[key] = true
+
+					ax, ay := g.TileToWorld(n.X, n.Y)
+					d := math.Hypot(float64(ax-cx), float64(ay-cy))
+					if d > limit {
+						t.Errorf("%s (%d,%d): neighbor (%d,%d) dist=%.2f exceeds 6th-nearest %.2f",
+							c.name, x, y, n.X, n.Y, d, all[5].dist)
+					}
+				}
+			}
+		}
 	}
 }

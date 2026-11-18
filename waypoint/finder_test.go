@@ -300,3 +300,36 @@ func TestWaypointRefusesOutOfBounds(t *testing.T) {
 		}
 	}
 }
+
+// When both endpoints snap to the same waypoint, the path must still go
+// through that waypoint: the endpoints themselves may be separated by a wall.
+func TestFindPathSameNodeDoesNotCrossWalls(t *testing.T) {
+	f := NewWaypointFinder()
+	g := f.Graph()
+	mid := g.AddNode(1, 2)
+
+	grid := walkableGrid(3, 3)
+	grid.SetWalkableAt(1, 0, false)
+	grid.SetWalkableAt(1, 1, false)
+
+	if got := g.FindClosestWithLOS(0, 0, grid); got != mid {
+		t.Fatalf("start snapped to %v, want node at (1,2)", got)
+	}
+	if got := g.FindClosestWithLOS(2, 0, grid); got != mid {
+		t.Fatalf("end snapped to %v, want node at (1,2)", got)
+	}
+
+	path, err := f.FindPath(0, 0, 2, 0, grid)
+	if err != nil {
+		t.Fatalf("FindPath error: %v", err)
+	}
+	want := [][2]int{{0, 0}, {1, 2}, {2, 0}}
+	if len(path) != len(want) {
+		t.Fatalf("path = %v, want %v", path, want)
+	}
+	for i := range want {
+		if path[i] != want[i] {
+			t.Fatalf("path = %v, want %v", path, want)
+		}
+	}
+}

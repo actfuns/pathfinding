@@ -55,11 +55,12 @@ func HasLineOfSightDense(g GridWorld, x1, y1, x2, y2 int) bool {
 		minDim = 1
 	}
 	steps := math.Sqrt(float64((bx-ax)*(bx-ax)+(by-ay)*(by-ay))) / float64(minDim) * 2
-	if steps < 1 {
-		steps = 1
+	n := int(math.Ceil(steps))
+	if n < 1 {
+		n = 1
 	}
-	for t := 0; t < int(steps); t++ {
-		f := float64(t) / steps
+	for t := 0; t <= n; t++ {
+		f := float64(t) / float64(n)
 		wx := float64(ax) + float64(bx-ax)*f
 		wy := float64(ay) + float64(by-ay)*f
 		tx, ty := g.WorldToTile(float32(wx), float32(wy))
@@ -241,11 +242,12 @@ func denseLineOfSight(g GridWorld, a, b [2]int) bool {
 		minDim = 1
 	}
 	steps := math.Sqrt(float64((bx-ax)*(bx-ax)+(by-ay)*(by-ay))) / float64(minDim) * 2
-	if steps < 1 {
-		steps = 1
+	n := int(math.Ceil(steps))
+	if n < 1 {
+		n = 1
 	}
-	for t := 0; t < int(steps); t++ {
-		f := float64(t) / steps
+	for t := 0; t <= n; t++ {
+		f := float64(t) / float64(n)
 		wx := float64(ax) + float64(bx-ax)*f
 		wy := float64(ay) + float64(by-ay)*f
 		tx, ty := g.WorldToTile(float32(wx), float32(wy))
