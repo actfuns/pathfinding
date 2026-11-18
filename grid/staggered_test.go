@@ -20,14 +20,14 @@ func TestStaggeredTileToWorld(t *testing.T) {
 		{0, 0, 0},
 	}, WithTileSize(64, 32))
 
-	// tileToScreenCoords from Tiled test
+	// TileToWorld returns the tile centre: origin + half a tile.
 	tests := []struct {
 		tx, ty int
 		px, py float32
 	}{
-		{0, 0, 0, 0},
-		{1, 0, 64, 0},
-		{0, 1, 32, 16},
+		{0, 0, 32, 16},
+		{1, 0, 96, 16},
+		{0, 1, 64, 32},
 	}
 	for _, tt := range tests {
 		px, py := g.TileToWorld(tt.tx, tt.ty)

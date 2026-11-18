@@ -8,7 +8,7 @@ type JPFMoveDiagonallyIfAtMostOneObstacle struct {
 // NewJPFMoveDiagonallyIfAtMostOneObstacle creates a new JPFMoveDiagonallyIfAtMostOneObstacle.
 func NewJPFMoveDiagonallyIfAtMostOneObstacle(opts ...Option) *JPFMoveDiagonallyIfAtMostOneObstacle {
 	f := &JPFMoveDiagonallyIfAtMostOneObstacle{}
-	f.JumpPointFinderBase = *NewJumpPointFinderBase(opts...)
+	f.JumpPointFinderBase = *NewJumpPointFinderBase(withDiagonal(opts, DiagonalIfAtMostOneObstacle)...)
 	f.jumpFn = atMostOneJump
 	f.findNeighborsFn = atMostOneFindNeighbors
 	return f

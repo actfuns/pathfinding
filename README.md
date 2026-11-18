@@ -56,7 +56,9 @@ g := grid.NewOrthogonalGrid(m)
 
 ### 瓦片权重（Tile Weight Cost）
 
-v0.5.0+ 支持每个瓦片的移动成本权重。A*、Dijkstra、IDA*、JPS、JPS+ 在计算步进成本时自动乘以目标瓦片的 Weight 值。
+v0.5.0+ 支持每个瓦片的移动成本权重。A*、Dijkstra、IDA* 会逐格累加目标瓦片的 `Weight` 值。
+
+> **JPS / JPS+ 假设所有步进成本相同，会忽略瓦片权重。** 需要按权重选择最优路径时请使用 `A*` 或 `Dijkstra`。
 
 ```go
 g := grid.NewOrthogonalGrid(matrix)
@@ -71,7 +73,7 @@ path, _ := f.FindPath(0, 0, 7, 7, g)
 // A* 会自动选择总成本最低的路径，而非步骤最少的路径
 ```
 
-默认权重为 `1.0`，设为 `0` 表示不可通行。所有成本感知算法（A*、Dijkstra、IDA*、JPS、JPS+）都支持。BFS 和 Best-First Search 不使用成本计算，因此不受权重影响。
+默认权重为 `1.0`。成本感知算法是 `A*`、`Dijkstra`、`IDA*`；`JPS` / `JPS+` 忽略权重，`BFS` 和 `Best-First Search` 也不使用成本。
 
 ### SVG 可视化
 
@@ -319,6 +321,8 @@ pr.FindPathWorld(...)        // 用新地图，同一个 pr
 | **Always** | 始终允许对角线 | 开阔地形 |
 | **NoObstacles** | 无障碍时允许对角线 | 半开阔地形 |
 | **AtMostOne** | 最多一个障碍时允许对角线 | 复杂障碍布局 |
+
+> JPS / JPS+ 仅适用于**等成本网格**（所有瓦片 `Weight == 1`）；瓦片权重会被忽略。加权地图请使用 `A*` 或 `Dijkstra`。
 
 ### JPS+ (Jump Point Search Plus)
 

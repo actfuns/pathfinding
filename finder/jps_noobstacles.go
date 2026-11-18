@@ -8,7 +8,7 @@ type JPFMoveDiagonallyIfNoObstacles struct {
 // NewJPFMoveDiagonallyIfNoObstacles creates a new JPFMoveDiagonallyIfNoObstacles.
 func NewJPFMoveDiagonallyIfNoObstacles(opts ...Option) *JPFMoveDiagonallyIfNoObstacles {
 	f := &JPFMoveDiagonallyIfNoObstacles{}
-	f.JumpPointFinderBase = *NewJumpPointFinderBase(opts...)
+	f.JumpPointFinderBase = *NewJumpPointFinderBase(withDiagonal(opts, DiagonalOnlyWhenNoObstacles)...)
 	f.jumpFn = noObstaclesJump
 	f.findNeighborsFn = noObstaclesFindNeighbors
 	return f

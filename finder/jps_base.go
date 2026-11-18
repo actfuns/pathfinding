@@ -1,9 +1,13 @@
 package finder
 
 // JumpPointFinderBase is the base implementation for Jump Point Search.
+//
+// JPS assumes every step has the same cost (tile Weight == 1). Tile weights are
+// ignored; use A* or Dijkstra for weighted grids.
 type JumpPointFinderBase struct {
 	Heuristic        HeuristicFunc
 	DiagonalMovement DiagonalMovement
+	Weight           float64
 	TrackRecursion   bool
 	grid             Grid
 	startNode        *Node
@@ -30,12 +34,18 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 	opt := ApplyOptions(opts)
 	f := &JumpPointFinderBase{
 		Heuristic:        Manhattan,
-		DiagonalMovement: opt.DiagonalMovement,
+		DiagonalMovement: resolveDiagonalMovement(opt),
+		Weight:           1,
 		TrackRecursion:   false,
 		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic
+	} else if f.DiagonalMovement != DiagonalNever {
+		f.Heuristic = Octile
+	}
+	if opt.Weight > 0 {
+		f.Weight = opt.Weight
 	}
 	f.TrackRecursion = opt.TrackRecursion
 	return f
@@ -161,14 +171,14 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node, searchSeq int) {
 		}
 
 		d := Octile(float64(AbsInt(jx-x)), float64(AbsInt(jy-y)))
-		ng := node.G + d*jumpNode.Weight
+		ng := node.G + d
 
 		if jumpNode.Opened == 0 || ng < jumpNode.G {
 			jumpNode.G = ng
 			if jumpNode.Opened == 0 {
 				jumpNode.H = heuristic(float64(AbsInt(jx-endX)), float64(AbsInt(jy-endY)))
 			}
-			jumpNode.F = jumpNode.G + jumpNode.H
+			jumpNode.F = jumpNode.G + jumpNode.H*b.Weight
 			jumpNode.Parent = node
 
 			if jumpNode.Opened == 0 {
@@ -183,8 +193,7 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node, searchSeq int) {
 
 // NewJumpPointFinder creates a JPS finder based on the diagonal movement setting.
 func NewJumpPointFinder(opts ...Option) Finder {
-	opt := ApplyOptions(opts)
-	switch opt.DiagonalMovement {
+	switch resolveDiagonalMovement(ApplyOptions(opts)) {
 	case DiagonalNever:
 		return NewJPFNeverMoveDiagonally(opts...)
 	case DiagonalAlways:

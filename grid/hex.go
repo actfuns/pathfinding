@@ -398,7 +398,10 @@ func (g *HexGrid) WorldToTile(wx, wy float32) (int, int) {
 // TileToWorld converts hex tile coordinates to world (pixel) position (tile center).
 func (g *HexGrid) TileToWorld(tx, ty int) (float32, float32) {
 	px, py := g.tileToScreenCoords(tx, ty)
-	return float32(px), float32(py)
+	if g.staggerX {
+		return float32(px + float64(g.tileW)/2), float32(py + float64(g.renH)/2)
+	}
+	return float32(px + float64(g.renW)/2), float32(py + float64(g.tileH)/2)
 }
 
 // IsWalkableAtWorld checks walkability at a world position.

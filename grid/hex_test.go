@@ -19,6 +19,8 @@ import (
 //   px = tileX * (renW + sideLenX) + colW/2 = tileX*64 + 16
 //   if doStaggerY(tileY): px += colW = 32
 //   py = tileY * rowH = tileY * 48
+//
+// TileToWorld adds the half-tile centre offset: (renW/2, tileH/2).
 
 func TestHexPointyTileToWorld(t *testing.T) {
 	g := NewHexGrid([][]int{{0}}, WithTileSize(64, 64), WithHexSide(32))
@@ -27,11 +29,11 @@ func TestHexPointyTileToWorld(t *testing.T) {
 		tx, ty int
 		px, py float32
 	}{
-		{0, 0, 16, 0},
-		{1, 0, 80, 0},
-		{2, 0, 144, 0},
-		{0, 1, 48, 48},
-		{1, 1, 112, 48},
+		{0, 0, 48, 32},
+		{1, 0, 112, 32},
+		{2, 0, 176, 32},
+		{0, 1, 80, 80},
+		{1, 1, 144, 80},
 	}
 	for _, tt := range tests {
 		px, py := g.TileToWorld(tt.tx, tt.ty)
@@ -95,6 +97,8 @@ func TestHexPointyConsistent(t *testing.T) {
 //   px = tileX * colW = tileX * 48
 //   py = tileY * (renH + sideLenY) + rowH/2 = tileY*64 + 16
 //   if doStaggerX(tileX): py += rowH = 32
+//
+// TileToWorld adds the half-tile centre offset: (tileW/2, renH/2).
 
 func TestHexFlatTileToWorld(t *testing.T) {
 	g := NewHexGrid([][]int{{0}}, WithTileSize(64, 64), WithHexSide(32), WithHexFlatTop())
@@ -103,10 +107,10 @@ func TestHexFlatTileToWorld(t *testing.T) {
 		tx, ty int
 		px, py float32
 	}{
-		{0, 0, 0, 16},
-		{1, 0, 48, 48},
-		{0, 1, 0, 80},
-		{1, 1, 48, 112},
+		{0, 0, 32, 48},
+		{1, 0, 80, 80},
+		{0, 1, 32, 112},
+		{1, 1, 80, 144},
 	}
 	for _, tt := range tests {
 		px, py := g.TileToWorld(tt.tx, tt.ty)

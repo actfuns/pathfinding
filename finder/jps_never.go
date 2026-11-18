@@ -8,7 +8,7 @@ type JPFNeverMoveDiagonally struct {
 // NewJPFNeverMoveDiagonally creates a new JPFNeverMoveDiagonally.
 func NewJPFNeverMoveDiagonally(opts ...Option) *JPFNeverMoveDiagonally {
 	f := &JPFNeverMoveDiagonally{}
-	f.JumpPointFinderBase = *NewJumpPointFinderBase(opts...)
+	f.JumpPointFinderBase = *NewJumpPointFinderBase(withDiagonal(opts, DiagonalNever)...)
 	f.jumpFn = neverJump
 	f.findNeighborsFn = neverFindNeighbors
 	return f

@@ -65,3 +65,26 @@ func ApplyOptions(opts []Option) *FinderOptions {
 	}
 	return o
 }
+
+// resolveDiagonalMovement normalizes WithDiagonal / WithAllowDiagonal into a
+// concrete rule, defaulting to DiagonalNever.
+func resolveDiagonalMovement(o *FinderOptions) DiagonalMovement {
+	if o.DiagonalMovement != 0 {
+		return o.DiagonalMovement
+	}
+	if o.AllowDiagonal {
+		if o.DontCrossCorners {
+			return DiagonalOnlyWhenNoObstacles
+		}
+		return DiagonalIfAtMostOneObstacle
+	}
+	return DiagonalNever
+}
+
+// withDiagonal appends an explicit diagonal rule without mutating the caller's
+// option slice.
+func withDiagonal(opts []Option, d DiagonalMovement) []Option {
+	out := make([]Option, 0, len(opts)+1)
+	out = append(out, opts...)
+	return append(out, WithDiagonal(d))
+}

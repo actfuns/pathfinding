@@ -19,6 +19,12 @@ const (
 	dirNW = 7
 )
 
+// Jump-table format magics: JPS (int8) and JPS2 (int16).
+const (
+	jpsPlusMagic8  uint32 = 0x4A5053
+	jpsPlusMagic16 uint32 = 0x4A505332
+)
+
 var jpsCardinalDirs = [4][2]int{
 	{0, -1}, // N
 	{1, 0},  // E
@@ -55,6 +61,14 @@ var jpsDiagonalIdx = map[[2]int]int{
 //
 // Call Precompute(grid) before FindPath. The grid is assumed to be static;
 // changes to the grid require calling Precompute again.
+//
+// The static table cannot encode jump points that depend on the goal, so the
+// search also relaxes one-step moves from every expanded node. This keeps the
+// result identical to A* for all diagonal modes while retaining the jump-table
+// acceleration on open maps.
+//
+// JPS+ assumes every step has the same cost (tile Weight == 1). Tile weights are
+// ignored; use A* or Dijkstra for weighted grids.
 type JPSPlusFinder struct {
 	Heuristic        HeuristicFunc
 	DiagonalMovement DiagonalMovement
@@ -62,10 +76,13 @@ type JPSPlusFinder struct {
 
 	width, height int
 
-	// jumpTable stores precomputed jump distances per cell per direction.
-	// Layout: jumpTable[(y*width + x)*8 + dir]
+	// jump8/jump16 store precomputed jump distances per cell per direction.
+	// Layout: (y*width + x)*8 + dir
 	// Positive = jump point at that distance; negative = obstacle at abs(distance).
-	jumpTable []int8
+	// int8 is used when both dimensions are <= 128; int16 otherwise.
+	jump8  []int8
+	jump16 []int16
+	wide   bool
 
 	// Runtime state
 	grid      Grid
@@ -83,20 +100,26 @@ type JPSPlusFinder struct {
 // NewJPSPlusFinder creates a JPS+ finder with the given options.
 func NewJPSPlusFinder(opts ...Option) *JPSPlusFinder {
 	opt := ApplyOptions(opts)
+	diagonal := resolveDiagonalMovement(opt)
 	var dirs []int
-	if opt.DiagonalMovement == DiagonalNever {
+	if diagonal == DiagonalNever {
 		dirs = []int{dirN, dirE, dirS, dirW}
 	} else {
 		dirs = []int{dirN, dirNE, dirE, dirSE, dirS, dirSW, dirW, dirNW}
 	}
 	f := &JPSPlusFinder{
 		Heuristic:        Manhattan,
-		DiagonalMovement: opt.DiagonalMovement,
+		DiagonalMovement: diagonal,
 		Weight:           1,
 		dirs:             dirs,
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic
+	} else if diagonal != DiagonalNever {
+		f.Heuristic = Octile
+	}
+	if opt.Weight > 0 {
+		f.Weight = opt.Weight
 	}
 	return f
 }
@@ -104,16 +127,32 @@ func NewJPSPlusFinder(opts ...Option) *JPSPlusFinder {
 // Precompute builds the jump distance table for the given grid.
 // Must be called before FindPath. The grid is assumed static.
 func (j *JPSPlusFinder) Precompute(grid Grid) {
+	j.precompute(grid, grid.Width() > 128 || grid.Height() > 128)
+}
+
+// precompute builds the table with an explicit cell width. It is split out so
+// tests can compare the int8 and int16 encodings of the same grid.
+func (j *JPSPlusFinder) precompute(grid Grid, wide bool) {
 	j.width = grid.Width()
 	j.height = grid.Height()
+	j.wide = wide
 	size := j.width * j.height * 8
-	if cap(j.jumpTable) < size {
-		j.jumpTable = make([]int8, size)
-	} else {
-		j.jumpTable = j.jumpTable[:size]
-		for i := range j.jumpTable {
-			j.jumpTable[i] = 0
+	if j.wide {
+		if cap(j.jump16) < size {
+			j.jump16 = make([]int16, size)
+		} else {
+			j.jump16 = j.jump16[:size]
+			clear(j.jump16)
 		}
+		j.jump8 = nil
+	} else {
+		if cap(j.jump8) < size {
+			j.jump8 = make([]int8, size)
+		} else {
+			j.jump8 = j.jump8[:size]
+			clear(j.jump8)
+		}
+		j.jump16 = nil
 	}
 
 	// Phase 1: detect primary jump points (forced neighbors)
@@ -177,15 +216,15 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs map[[2]int]uint8)
 	w, h := j.width, j.height
 
 	// Helper: get distance to obstacle or jump point in a cardinal direction
-	scanCardinal := func(x, y int, dx, dy int, dirIdx int) int8 {
+	scanCardinal := func(x, y int, dx, dy int, dirIdx int) int16 {
 		dist := 0
 		for {
 			nx, ny := x+dx*(dist+1), y+dy*(dist+1)
 			if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
-				return int8(-dist)
+				return int16(-dist)
 			}
 			if primaryJPs[[2]int{nx, ny}]&(1<<dirIdx) != 0 {
-				return int8(dist + 1)
+				return int16(dist + 1)
 			}
 			dist++
 		}
@@ -200,7 +239,7 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs map[[2]int]uint8)
 			base := (y*w + x) * 8
 			for _, dir := range jpsCardinalDirs {
 				dirIdx := jpsCardinalIdx[dir]
-				j.jumpTable[base+dirIdx] = scanCardinal(x, y, dir[0], dir[1], dirIdx)
+				j.setTable(base+dirIdx, scanCardinal(x, y, dir[0], dir[1], dirIdx))
 			}
 		}
 	}
@@ -224,15 +263,15 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs map[[2]int]uint8)
 				for {
 					cx, cy := x+ddir[0]*dist, y+ddir[1]*dist
 					if !grid.IsInside(cx, cy) || !grid.IsWalkableAt(cx, cy) {
-						j.jumpTable[base+ddirIdx] = int8(-dist)
+						j.setTable(base+ddirIdx, int16(-dist))
 						break
 					}
 
 					if dist > 0 {
 						// Check cardinal neighbors at this diagonal position
 						cb := (cy*w + cx) * 8
-						if j.jumpTable[cb+hDirIdx] > 0 || j.jumpTable[cb+vDirIdx] > 0 {
-							j.jumpTable[base+ddirIdx] = int8(dist)
+						if j.getTable(cb+hDirIdx) > 0 || j.getTable(cb+vDirIdx) > 0 {
+							j.setTable(base+ddirIdx, int16(dist))
 							break
 						}
 					}
@@ -241,18 +280,18 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs map[[2]int]uint8)
 					hnx, hny := cx+hdx, cy+hdy
 					vnx, vny := cx+vdx, cy+vdy
 					if !grid.IsInside(hnx, hny) || !grid.IsWalkableAt(hnx, hny) {
-						j.jumpTable[base+ddirIdx] = int8(-dist)
+						j.setTable(base+ddirIdx, int16(-dist))
 						break
 					}
 					if !grid.IsInside(vnx, vny) || !grid.IsWalkableAt(vnx, vny) {
-						j.jumpTable[base+ddirIdx] = int8(-dist)
+						j.setTable(base+ddirIdx, int16(-dist))
 						break
 					}
 
 					// Next diagonal step
 					nx, ny := cx+ddir[0], cy+ddir[1]
 					if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
-						j.jumpTable[base+ddirIdx] = int8(-(dist + 1))
+						j.setTable(base+ddirIdx, int16(-(dist + 1)))
 						break
 					}
 					dist++
@@ -262,29 +301,63 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs map[[2]int]uint8)
 	}
 }
 
+// hasTable reports whether Precompute (or LoadPrecomputed) has run.
+func (j *JPSPlusFinder) hasTable() bool { return j.jump8 != nil || j.jump16 != nil }
+
+func (j *JPSPlusFinder) getTable(i int) int16 {
+	if j.wide {
+		return j.jump16[i]
+	}
+	return int16(j.jump8[i])
+}
+
+func (j *JPSPlusFinder) setTable(i int, v int16) {
+	if j.wide {
+		j.jump16[i] = v
+	} else {
+		j.jump8[i] = int8(v)
+	}
+}
+
 // getDist returns the precomputed jump distance for cell (x,y) in direction dirIdx.
-func (j *JPSPlusFinder) getDist(x, y, dirIdx int) int8 {
+func (j *JPSPlusFinder) getDist(x, y, dirIdx int) int16 {
 	if !j.grid.IsInside(x, y) {
 		return 0
 	}
-	return j.jumpTable[(y*j.width+x)*8+dirIdx]
+	i := (y*j.width+x)*8 + dirIdx
+	if j.wide {
+		return j.jump16[i]
+	}
+	return int16(j.jump8[i])
 }
 
 // PrecomputedData serializes the jump table to binary data.
 // The returned slice can be saved to a file and loaded later with LoadPrecomputed,
 // avoiding the cost of re-running Precompute on server restart.
 func (j *JPSPlusFinder) PrecomputedData() ([]byte, error) {
-	if j.jumpTable == nil {
+	if !j.hasTable() {
 		return nil, errors.New("JPSPlusFinder: Precompute must be called before Export")
 	}
-	// Format: magic(4) + width(4) + height(4) + jumpTable(n)
-	size := 12 + len(j.jumpTable)
+	magic := jpsPlusMagic8
+	cellBytes := 1
+	if j.wide {
+		magic = jpsPlusMagic16
+		cellBytes = 2
+	}
+	// Format: magic(4) + width(4) + height(4) + table
+	size := 12 + j.width*j.height*8*cellBytes
 	buf := make([]byte, size)
-	binary.LittleEndian.PutUint32(buf[0:4], 0x4A5053) // "JPS" magic
+	binary.LittleEndian.PutUint32(buf[0:4], magic)
 	binary.LittleEndian.PutUint32(buf[4:8], uint32(j.width))
 	binary.LittleEndian.PutUint32(buf[8:12], uint32(j.height))
-	for i, v := range j.jumpTable {
-		buf[12+i] = byte(v)
+	if j.wide {
+		for i, v := range j.jump16 {
+			binary.LittleEndian.PutUint16(buf[12+i*2:], uint16(v))
+		}
+	} else {
+		for i, v := range j.jump8 {
+			buf[12+i] = byte(v)
+		}
 	}
 	return buf, nil
 }
@@ -296,24 +369,47 @@ func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 		return errors.New("JPSPlusFinder: precomputed data too short")
 	}
 	magic := binary.LittleEndian.Uint32(data[0:4])
-	if magic != 0x4A5053 {
+	var wide bool
+	switch magic {
+	case jpsPlusMagic8:
+	case jpsPlusMagic16:
+		wide = true
+	default:
 		return fmt.Errorf("JPSPlusFinder: invalid magic 0x%X", magic)
 	}
 	w := int(binary.LittleEndian.Uint32(data[4:8]))
 	h := int(binary.LittleEndian.Uint32(data[8:12]))
 	tableSize := w * h * 8
-	if len(data[12:]) < tableSize {
-		return fmt.Errorf("JPSPlusFinder: precomputed data too short, need %d bytes", tableSize)
+	cellBytes := 1
+	if wide {
+		cellBytes = 2
+	}
+	if len(data)-12 < tableSize*cellBytes {
+		return fmt.Errorf("JPSPlusFinder: precomputed data too short, need %d bytes", tableSize*cellBytes)
 	}
 	j.width = w
 	j.height = h
-	if cap(j.jumpTable) < tableSize {
-		j.jumpTable = make([]int8, tableSize)
+	j.wide = wide
+	if wide {
+		if cap(j.jump16) < tableSize {
+			j.jump16 = make([]int16, tableSize)
+		} else {
+			j.jump16 = j.jump16[:tableSize]
+		}
+		j.jump8 = nil
+		for i := 0; i < tableSize; i++ {
+			j.jump16[i] = int16(binary.LittleEndian.Uint16(data[12+i*2:]))
+		}
 	} else {
-		j.jumpTable = j.jumpTable[:tableSize]
-	}
-	for i := range tableSize {
-		j.jumpTable[i] = int8(data[12+i])
+		if cap(j.jump8) < tableSize {
+			j.jump8 = make([]int8, tableSize)
+		} else {
+			j.jump8 = j.jump8[:tableSize]
+		}
+		j.jump16 = nil
+		for i := 0; i < tableSize; i++ {
+			j.jump8[i] = int8(data[12+i])
+		}
 	}
 	return nil
 }
@@ -321,10 +417,14 @@ func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 // PrecomputedSize returns the byte size of the serialized jump table.
 // Useful for estimating storage or memory before exporting.
 func (j *JPSPlusFinder) PrecomputedSize() int {
-	if j.jumpTable == nil {
+	if !j.hasTable() {
 		return 0
 	}
-	return 12 + len(j.jumpTable)
+	cellBytes := 1
+	if j.wide {
+		cellBytes = 2
+	}
+	return 12 + j.width*j.height*8*cellBytes
 }
 
 // FindPath performs JPS+ pathfinding using the precomputed jump table.
@@ -335,7 +435,7 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
-	if j.jumpTable == nil {
+	if !j.hasTable() {
 		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
 	}
 	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
@@ -425,6 +525,43 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 	// Use diagonal movement setting to determine which directions to check
 	dirs := j.dirs
 
+	// relaxAdjacent offers a one-step move in (dx,dy). It keeps the search
+	// complete and optimal when the static jump table cannot encode every
+	// goal-dependent jump point.
+	relaxAdjacent := func(dx, dy int) {
+		if dx != 0 && dy != 0 && !j.diagonalStepAllowed(x, y, dx, dy) {
+			return
+		}
+		nx, ny := x+dx, y+dy
+		if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
+			return
+		}
+		adjNode := grid.GetNodeAt(nx, ny)
+		adjNode.ResetSearch(searchSeq)
+		if adjNode.Closed {
+			return
+		}
+		var moveCost float64 = 1
+		if dx != 0 && dy != 0 {
+			moveCost = SQRT2
+		}
+		ng := node.G + moveCost
+		if adjNode.Opened == 0 || ng < adjNode.G {
+			adjNode.G = ng
+			if adjNode.Opened == 0 {
+				adjNode.H = heuristic(float64(AbsInt(nx-endX)), float64(AbsInt(ny-endY)))
+			}
+			adjNode.F = adjNode.G + adjNode.H*j.Weight
+			adjNode.Parent = node
+			if adjNode.Opened == 0 {
+				openList.Push(adjNode)
+				adjNode.Opened = 1
+			} else {
+				openList.UpdateItem(adjNode)
+			}
+		}
+	}
+
 	for _, dirIdx := range dirs {
 		dist := j.getDist(x, y, dirIdx)
 		dx, dy := dirToVec(dirIdx)
@@ -437,7 +574,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 				// End is reachable in this direction, add it as successor
 				gd := octileDist(AbsInt(endX-x), AbsInt(endY-y))
 				endNode := j.endNode
-				ng := node.G + gd*endNode.Weight
+				ng := node.G + gd
 				endNode.ResetSearch(searchSeq)
 				if !endNode.Closed && (endNode.Opened == 0 || ng < endNode.G) {
 					endNode.G = ng
@@ -456,37 +593,8 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 		}
 
 		if dist <= 0 {
-			// No jump point in this direction — add the adjacent cell as a
-			// regular successor (A* fallback). This lets the search fan out
-			// through open space when no forced neighbors exist.
-			nx, ny := x+dx, y+dy
-			if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
-				continue
-			}
-			adjNode := grid.GetNodeAt(nx, ny)
-			adjNode.ResetSearch(searchSeq)
-			if adjNode.Closed {
-				continue
-			}
-			var moveCost float64 = 1
-			if dx != 0 && dy != 0 {
-				moveCost = SQRT2
-			}
-			ng := node.G + moveCost*adjNode.Weight
-			if adjNode.Opened == 0 || ng < adjNode.G {
-				adjNode.G = ng
-				if adjNode.Opened == 0 {
-					adjNode.H = heuristic(float64(AbsInt(nx-endX)), float64(AbsInt(ny-endY)))
-				}
-				adjNode.F = adjNode.G + adjNode.H*j.Weight
-				adjNode.Parent = node
-				if adjNode.Opened == 0 {
-					openList.Push(adjNode)
-					adjNode.Opened = 1
-				} else {
-					openList.UpdateItem(adjNode)
-				}
-			}
+			// No jump point in this direction — take a normal step.
+			relaxAdjacent(dx, dy)
 			continue
 		}
 
@@ -505,7 +613,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 		}
 
 		gd := octileDist(AbsInt(jx-x), AbsInt(jy-y))
-		ng := node.G + gd*jumpNode.Weight
+		ng := node.G + gd
 
 		if jumpNode.Opened == 0 || ng < jumpNode.G {
 			jumpNode.G = ng
@@ -522,6 +630,28 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 				openList.UpdateItem(jumpNode)
 			}
 		}
+
+		// Also allow turning at the intermediate cell; the static table cannot
+		// represent jump points that only exist because of the current goal.
+		if dist > 1 {
+			relaxAdjacent(dx, dy)
+		}
+	}
+}
+
+// diagonalStepAllowed applies the configured diagonal movement rule to a
+// one-step diagonal move from (x, y).
+func (j *JPSPlusFinder) diagonalStepAllowed(x, y, dx, dy int) bool {
+	grid := j.grid
+	switch j.DiagonalMovement {
+	case DiagonalNever:
+		return false
+	case DiagonalOnlyWhenNoObstacles:
+		return grid.IsWalkableAt(x+dx, y) && grid.IsWalkableAt(x, y+dy)
+	case DiagonalIfAtMostOneObstacle:
+		return grid.IsWalkableAt(x+dx, y) || grid.IsWalkableAt(x, y+dy)
+	default: // DiagonalAlways
+		return true
 	}
 }
 

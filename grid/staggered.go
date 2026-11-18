@@ -416,10 +416,10 @@ func (g *StaggeredGrid) WorldToTile(wx, wy float32) (int, int) {
 	return g.screenToTileCoords(float64(wx), float64(wy))
 }
 
-// TileToWorld converts tile coordinates to world position.
+// TileToWorld converts tile coordinates to world position (tile centre).
 func (g *StaggeredGrid) TileToWorld(tx, ty int) (float32, float32) {
 	px, py := g.tileToScreenCoords(tx, ty)
-	return float32(px), float32(py)
+	return float32(px + float64(g.tileW)/2), float32(py + float64(g.tileH)/2)
 }
 
 // IsWalkableAtWorld checks walkability at a world position.
