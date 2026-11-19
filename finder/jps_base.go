@@ -18,12 +18,11 @@ type JumpPointFinderBase struct {
 	openList         *MinHeap
 	neighborBuf      []*Node
 	neighborPosBuf   [][2]int
-	heapSlice        []*Node
+	heapSlice        []heapEntry
 	pathBuf          [][2]int
 	expandBuf        [][2]int
-
-	jumpFn          func(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool)
-	findNeighborsFn func(b *JumpPointFinderBase, node *Node, buf [][2]int) [][2]int
+	jumpFn           func(b *JumpPointFinderBase, states *searchStates, x, y, px, py int) (int, int, bool)
+	findNeighborsFn  func(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int) [][2]int
 }
 
 // GridWithJPSSupport is optionally implemented by Grid types that support
@@ -76,33 +75,32 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return path, err
 	}
-	searchSeq := int(globalSearchSeq.Add(1))
-	b.openList = &MinHeap{nodes: b.heapSlice[:0]}
-	defer func() { b.heapSlice = b.openList.nodes[:0] }()
+	searchSeq := globalSearchSeq.Add(1)
+	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	defer releaseStates(states)
+	b.openList = &MinHeap{nodes: b.heapSlice[:0], state: states}
+	defer func() {
+		clear(b.openList.nodes[:cap(b.openList.nodes)])
+		b.heapSlice = b.openList.nodes[:0]
+		b.openList = nil
+	}()
 	b.startNode = grid.GetNodeAt(startX, startY)
 	b.endNode = grid.GetNodeAt(endX, endY)
 	b.grid = grid
 	b.neighborBuf = b.neighborBuf[:0]
 
-	b.startNode.ResetSearch(searchSeq)
-	b.endNode.ResetSearch(searchSeq)
-	b.startNode.G = 0
-	b.startNode.F = 0
+	startState := states.get(b.startNode)
+	startState.G = 0
+	startState.F = 0
 	b.openList.Push(b.startNode)
-	b.startNode.Opened = 1
+	startState.Opened = 1
 
 	for !b.openList.Empty() {
 		node := b.openList.Pop()
-		node.Closed = true
+		states.get(node).Closed = true
 
 		if node == b.endNode {
-			b.pathBuf = b.pathBuf[:0]
-			for n := b.endNode; n != nil; n = n.Parent {
-				b.pathBuf = append(b.pathBuf, [2]int{n.X, n.Y})
-			}
-			for i, j := 0, len(b.pathBuf)-1; i < j; i, j = i+1, j-1 {
-				b.pathBuf[i], b.pathBuf[j] = b.pathBuf[j], b.pathBuf[i]
-			}
+			b.pathBuf = states.backtrace(b.endNode, b.pathBuf)
 			// Jump point paths skip intermediate tiles, so expand inline.
 			// Uses expandBuf instead of ExpandPath to avoid allocation.
 			b.expandBuf = b.expandBuf[:0]
@@ -145,13 +143,13 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 			return b.expandBuf, nil
 		}
 
-		b.identifySuccessors(node, searchSeq)
+		b.identifySuccessors(node, states)
 	}
 
 	return nil, nil
 }
 
-func (b *JumpPointFinderBase) identifySuccessors(node *Node, searchSeq int) {
+func (b *JumpPointFinderBase) identifySuccessors(node *Node, states *searchStates) {
 	grid := b.grid
 	heuristic := b.Heuristic
 	openList := b.openList
@@ -160,34 +158,33 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node, searchSeq int) {
 	x, y := node.X, node.Y
 
 	// FindPath guarantees supportsJPS(grid), so canonical pruning is safe.
-	neighbors := b.findNeighborsFn(b, node, b.neighborPosBuf[:0])
+	neighbors := b.findNeighborsFn(b, states, node, b.neighborPosBuf[:0])
 	b.neighborPosBuf = neighbors[:0]
 	for _, neighbor := range neighbors {
-		jx, jy, ok := b.jumpFn(b, neighbor[0], neighbor[1], x, y)
+		jx, jy, ok := b.jumpFn(b, states, neighbor[0], neighbor[1], x, y)
 		if !ok {
 			continue
 		}
 		jumpNode := grid.GetNodeAt(jx, jy)
-		jumpNode.ResetSearch(searchSeq)
-
-		if jumpNode.Closed {
+		ns := states.get(jumpNode)
+		if ns.Closed {
 			continue
 		}
 
 		d := Octile(float64(AbsInt(jx-x)), float64(AbsInt(jy-y)))
-		ng := node.G + d
+		ng := states.get(node).G + d
 
-		if jumpNode.Opened == 0 || ng < jumpNode.G {
-			jumpNode.G = ng
-			if jumpNode.Opened == 0 {
-				jumpNode.H = heuristic(float64(AbsInt(jx-endX)), float64(AbsInt(jy-endY)))
+		if ns.Opened == 0 || ng < ns.G {
+			ns.G = ng
+			if ns.Opened == 0 {
+				ns.H = heuristic(float64(AbsInt(jx-endX)), float64(AbsInt(jy-endY)))
 			}
-			jumpNode.F = jumpNode.G + jumpNode.H*b.Weight
-			jumpNode.Parent = node
+			ns.F = ns.G + ns.H*b.Weight
+			ns.Parent = states.index(node)
 
-			if jumpNode.Opened == 0 {
+			if ns.Opened == 0 {
 				openList.Push(jumpNode)
-				jumpNode.Opened = 1
+				ns.Opened = 1
 			} else {
 				openList.UpdateItem(jumpNode)
 			}

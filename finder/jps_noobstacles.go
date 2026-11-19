@@ -14,7 +14,7 @@ func NewJPFMoveDiagonallyIfNoObstacles(opts ...Option) *JPFMoveDiagonallyIfNoObs
 	return f
 }
 
-func noObstaclesJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
+func noObstaclesJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int) (int, int, bool) {
 	grid := b.grid
 	dx := x - px
 	dy := y - py
@@ -24,7 +24,7 @@ func noObstaclesJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) 
 	}
 
 	if b.TrackRecursion {
-		grid.GetNodeAt(x, y).Tested = true
+		states.get(grid.GetNodeAt(x, y)).Tested = true
 	}
 
 	if grid.GetNodeAt(x, y) == b.endNode {
@@ -32,10 +32,10 @@ func noObstaclesJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) 
 	}
 
 	if dx != 0 && dy != 0 {
-		if _, _, ok := noObstaclesJump(b, x+dx, y, x, y); ok {
+		if _, _, ok := noObstaclesJump(b, states, x+dx, y, x, y); ok {
 			return x, y, true
 		}
-		if _, _, ok := noObstaclesJump(b, x, y+dy, x, y); ok {
+		if _, _, ok := noObstaclesJump(b, states, x, y+dy, x, y); ok {
 			return x, y, true
 		}
 	} else {
@@ -53,18 +53,18 @@ func noObstaclesJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) 
 	}
 
 	if grid.IsWalkableAt(x+dx, y) && grid.IsWalkableAt(x, y+dy) {
-		return noObstaclesJump(b, x+dx, y+dy, x, y)
+		return noObstaclesJump(b, states, x+dx, y+dy, x, y)
 	}
 	return 0, 0, false
 }
 
-func noObstaclesFindNeighbors(b *JumpPointFinderBase, node *Node, buf [][2]int) [][2]int {
-	parent := node.Parent
+func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int) [][2]int {
+	parent := states.get(node).Parent
 	x, y := node.X, node.Y
 	grid := b.grid
 
-	if parent != nil {
-		px, py := parent.X, parent.Y
+	if parent >= 0 {
+		px, py := states.xy(parent)
 		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
 		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 

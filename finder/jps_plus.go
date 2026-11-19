@@ -95,7 +95,7 @@ type JPSPlusFinder struct {
 	startNode        *Node
 	endNode          *Node
 	openList         *MinHeap
-	heapSlice        []*Node
+	heapSlice        []heapEntry
 	pathBuf          [][2]int
 	expandBuf        [][2]int
 	adaptiveFallback *AStarFinder
@@ -488,10 +488,16 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	if j.Adaptive && j.useAStar(grid) {
 		return j.newAdaptiveFallback().FindPath(startX, startY, endX, endY, grid)
 	}
-	searchSeq := int(globalSearchSeq.Add(1))
+	searchSeq := globalSearchSeq.Add(1)
+	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	defer releaseStates(states)
 	j.grid = grid
-	j.openList = &MinHeap{nodes: j.heapSlice[:0]}
-	defer func() { j.heapSlice = j.openList.nodes[:0] }()
+	j.openList = &MinHeap{nodes: j.heapSlice[:0], state: states}
+	defer func() {
+		clear(j.openList.nodes[:cap(j.openList.nodes)])
+		j.heapSlice = j.openList.nodes[:0]
+		j.openList = nil
+	}()
 
 	j.startNode = grid.GetNodeAt(startX, startY)
 	j.endNode = grid.GetNodeAt(endX, endY)
@@ -499,24 +505,18 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 		return nil, nil
 	}
 
-	j.startNode.ResetSearch(searchSeq)
-	j.endNode.ResetSearch(searchSeq)
-	j.startNode.G = 0
-	j.startNode.F = 0
+	startState := states.get(j.startNode)
+	states.get(j.endNode)
+	startState.G = 0
+	startState.F = 0
 	j.openList.Push(j.startNode)
 
 	for !j.openList.Empty() {
 		node := j.openList.Pop()
-		node.Closed = true
+		states.get(node).Closed = true
 
 		if node.X == endX && node.Y == endY {
-			j.pathBuf = j.pathBuf[:0]
-			for n := node; n != nil; n = n.Parent {
-				j.pathBuf = append(j.pathBuf, [2]int{n.X, n.Y})
-			}
-			for i, k := 0, len(j.pathBuf)-1; i < k; i, k = i+1, k-1 {
-				j.pathBuf[i], j.pathBuf[k] = j.pathBuf[k], j.pathBuf[i]
-			}
+			j.pathBuf = states.backtrace(node, j.pathBuf)
 			j.expandBuf = j.expandBuf[:0]
 			for i := 0; i < len(j.pathBuf)-1; i++ {
 				x0, y0 := j.pathBuf[i][0], j.pathBuf[i][1]
@@ -557,17 +557,18 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 			return j.expandBuf, nil
 		}
 
-		j.identifySuccessors(node, searchSeq)
+		j.identifySuccessors(node, states)
 	}
 	return nil, nil
 }
 
-func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
+func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates) {
 	x, y := node.X, node.Y
 	endX, endY := j.endNode.X, j.endNode.Y
 	heuristic := j.Heuristic
 	grid := j.grid
 	openList := j.openList
+	nodeState := states.get(node)
 
 	// Use diagonal movement setting to determine which directions to check
 	dirs := j.dirs
@@ -584,25 +585,25 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 			return
 		}
 		adjNode := grid.GetNodeAt(nx, ny)
-		adjNode.ResetSearch(searchSeq)
-		if adjNode.Closed {
+		ns := states.get(adjNode)
+		if ns.Closed {
 			return
 		}
 		var moveCost float64 = 1
 		if dx != 0 && dy != 0 {
 			moveCost = SQRT2
 		}
-		ng := node.G + moveCost
-		if adjNode.Opened == 0 || ng < adjNode.G {
-			adjNode.G = ng
-			if adjNode.Opened == 0 {
-				adjNode.H = heuristic(float64(AbsInt(nx-endX)), float64(AbsInt(ny-endY)))
+		ng := nodeState.G + moveCost
+		if ns.Opened == 0 || ng < ns.G {
+			ns.G = ng
+			if ns.Opened == 0 {
+				ns.H = heuristic(float64(AbsInt(nx-endX)), float64(AbsInt(ny-endY)))
 			}
-			adjNode.F = adjNode.G + adjNode.H*j.Weight
-			adjNode.Parent = node
-			if adjNode.Opened == 0 {
+			ns.F = ns.G + ns.H*j.Weight
+			ns.Parent = states.index(node)
+			if ns.Opened == 0 {
 				openList.Push(adjNode)
-				adjNode.Opened = 1
+				ns.Opened = 1
 			} else {
 				openList.UpdateItem(adjNode)
 			}
@@ -621,18 +622,18 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 				// End is reachable in this direction, add it as successor
 				gd := octileDist(AbsInt(endX-x), AbsInt(endY-y))
 				endNode := j.endNode
-				ng := node.G + gd
-				endNode.ResetSearch(searchSeq)
-				if !endNode.Closed && (endNode.Opened == 0 || ng < endNode.G) {
-					endNode.G = ng
-					if endNode.Opened == 0 {
-						endNode.H = 0
+				ens := states.get(endNode)
+				ng := nodeState.G + gd
+				if !ens.Closed && (ens.Opened == 0 || ng < ens.G) {
+					ens.G = ng
+					if ens.Opened == 0 {
+						ens.H = 0
 					}
-					endNode.F = ng
-					endNode.Parent = node
-					if endNode.Opened == 0 {
+					ens.F = ng
+					ens.Parent = states.index(node)
+					if ens.Opened == 0 {
 						openList.Push(endNode)
-						endNode.Opened = 1
+						ens.Opened = 1
 					}
 				}
 				continue
@@ -653,26 +654,25 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, searchSeq int) {
 		}
 
 		jumpNode := grid.GetNodeAt(jx, jy)
-		jumpNode.ResetSearch(searchSeq)
-
-		if jumpNode.Closed {
+		ns := states.get(jumpNode)
+		if ns.Closed {
 			continue
 		}
 
 		gd := octileDist(AbsInt(jx-x), AbsInt(jy-y))
-		ng := node.G + gd
+		ng := nodeState.G + gd
 
-		if jumpNode.Opened == 0 || ng < jumpNode.G {
-			jumpNode.G = ng
-			if jumpNode.Opened == 0 {
-				jumpNode.H = heuristic(float64(AbsInt(jx-endX)), float64(AbsInt(jy-endY)))
+		if ns.Opened == 0 || ng < ns.G {
+			ns.G = ng
+			if ns.Opened == 0 {
+				ns.H = heuristic(float64(AbsInt(jx-endX)), float64(AbsInt(jy-endY)))
 			}
-			jumpNode.F = jumpNode.G + jumpNode.H*j.Weight
-			jumpNode.Parent = node
+			ns.F = ns.G + ns.H*j.Weight
+			ns.Parent = states.index(node)
 
-			if jumpNode.Opened == 0 {
+			if ns.Opened == 0 {
 				openList.Push(jumpNode)
-				jumpNode.Opened = 1
+				ns.Opened = 1
 			} else {
 				openList.UpdateItem(jumpNode)
 			}

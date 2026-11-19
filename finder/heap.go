@@ -1,28 +1,29 @@
 package finder
 
+// heapEntry caches the node's external state for the duration of one search so
+// heap operations do not have to look it up by coordinate.
+type heapEntry struct {
+	node *Node
+	st   *nodeState
+}
+
 // MinHeap is a binary heap for A* open list, ordered by F value. When
 // tieBreak is set, equal F values are ordered by H so the search advances
 // toward the goal instead of expanding an equal-cost plateau.
 type MinHeap struct {
-	nodes    []*Node
+	nodes    []heapEntry
 	tieBreak bool // on equal F, prefer the node closer to the goal (lower H)
+	state    *searchStates
 }
 
-func (h *MinHeap) less(a, b *Node) bool {
-	if a.F != b.F {
-		return a.F < b.F
+func (h *MinHeap) less(a, b heapEntry) bool {
+	if a.st.F != b.st.F {
+		return a.st.F < b.st.F
 	}
 	if h.tieBreak {
-		return a.H < b.H
+		return a.st.H < b.st.H
 	}
 	return false
-}
-
-// NewMinHeap creates a new MinHeap with an initial capacity of 64.
-func NewMinHeap() *MinHeap {
-	return &MinHeap{
-		nodes: make([]*Node, 0, 64),
-	}
 }
 
 // Len returns the number of nodes in the heap.
@@ -33,8 +34,9 @@ func (h *MinHeap) Empty() bool { return len(h.nodes) == 0 }
 
 // Push inserts a node into the heap and maintains the min-heap invariant.
 func (h *MinHeap) Push(n *Node) {
-	n.HeapIndex = len(h.nodes)
-	h.nodes = append(h.nodes, n)
+	st := h.state.get(n)
+	st.HeapIndex = int32(len(h.nodes))
+	h.nodes = append(h.nodes, heapEntry{node: n, st: st})
 	h.siftDownFrom(len(h.nodes)-1, 0)
 }
 
@@ -46,23 +48,23 @@ func (h *MinHeap) Pop() *Node {
 	last := h.nodes[n-1]
 	h.nodes = h.nodes[:n-1]
 	if len(h.nodes) == 0 {
-		last.HeapIndex = -1
-		return last
+		last.st.HeapIndex = -1
+		return last.node
 	}
 	root := h.nodes[0]
 	h.nodes[0] = last
-	last.HeapIndex = 0
-	root.HeapIndex = -1
+	last.st.HeapIndex = 0
+	root.st.HeapIndex = -1
 	h.siftUpFrom(0)
-	return root
+	return root.node
 }
 
 // UpdateItem restores the heap invariant after a node's F value has decreased.
 // In the A* algorithm this is only called when G (and thus F) strictly decreases,
 // so the node can only move upward toward the root — the sift-down pass is unnecessary.
 func (h *MinHeap) UpdateItem(node *Node) {
-	pos := node.HeapIndex
-	if pos < 0 || pos >= len(h.nodes) || h.nodes[pos] != node {
+	pos := int(h.state.get(node).HeapIndex)
+	if pos < 0 || pos >= len(h.nodes) || h.nodes[pos].node != node {
 		return
 	}
 	h.siftDownFrom(pos, 0)
@@ -90,17 +92,17 @@ func (h *MinHeap) siftUpFrom(pos int) {
 			child = right
 		}
 		h.nodes[pos] = h.nodes[child]
-		h.nodes[pos].HeapIndex = pos
+		h.nodes[pos].st.HeapIndex = int32(pos)
 		pos = child
 		child = 2*pos + 1
 	}
 	h.nodes[pos] = node
-	node.HeapIndex = pos
+	h.nodes[pos].st.HeapIndex = int32(pos)
 	h.siftDownFrom(pos, start)
 }
 
 func (h *MinHeap) swap(i, j int) {
 	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
-	h.nodes[i].HeapIndex = i
-	h.nodes[j].HeapIndex = j
+	h.nodes[i].st.HeapIndex = int32(i)
+	h.nodes[j].st.HeapIndex = int32(j)
 }

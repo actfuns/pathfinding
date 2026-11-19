@@ -40,11 +40,11 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return path, err
 	}
-	searchSeq := int(globalSearchSeq.Add(1))
+	searchSeq := globalSearchSeq.Add(1)
+	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	defer releaseStates(states)
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
-	startNode.ResetSearch(searchSeq)
-	endNode.ResetSearch(searchSeq)
 
 	const (
 		BY_START = 1
@@ -54,61 +54,61 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 	startOpenList := make([]*Node, 0, 64)
 	endOpenList := make([]*Node, 0, 64)
 
+	startState := states.get(startNode)
 	startOpenList = append(startOpenList, startNode)
-	startNode.Opened = 1
-	startNode.Parent = nil
-	startNode.By = BY_START
+	startState.Opened = BY_START
+	startState.Parent = -1
 
+	endState := states.get(endNode)
 	endOpenList = append(endOpenList, endNode)
-	endNode.Opened = 1
-	endNode.Parent = nil
-	endNode.By = BY_END
+	endState.Opened = BY_END
+	endState.Parent = -1
 
 	neighborBuf := f.neighborBuf[:0]
 
 	for len(startOpenList) > 0 && len(endOpenList) > 0 {
 		node := startOpenList[0]
 		startOpenList = startOpenList[1:]
-		node.Closed = true
+		states.get(node).Closed = true
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(searchSeq)
-			if neighbor.Closed {
+			ns := states.get(neighbor)
+			if ns.Closed {
 				continue
 			}
-			if neighbor.Opened != 0 {
-				if neighbor.By == BY_END {
-					return BiBacktrace(node, neighbor), nil
+			if ns.Opened != 0 {
+				if ns.Opened == BY_END {
+					f.pathBuf = states.biBacktrace(node, neighbor, f.pathBuf)
+					return f.pathBuf, nil
 				}
 				continue
 			}
 			startOpenList = append(startOpenList, neighbor)
-			neighbor.Parent = node
-			neighbor.Opened = 1
-			neighbor.By = BY_START
+			ns.Parent = states.index(node)
+			ns.Opened = BY_START
 		}
 
 		node = endOpenList[0]
 		endOpenList = endOpenList[1:]
-		node.Closed = true
+		states.get(node).Closed = true
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(searchSeq)
-			if neighbor.Closed {
+			ns := states.get(neighbor)
+			if ns.Closed {
 				continue
 			}
-			if neighbor.Opened != 0 {
-				if neighbor.By == BY_START {
-					return BiBacktrace(neighbor, node), nil
+			if ns.Opened != 0 {
+				if ns.Opened == BY_START {
+					f.pathBuf = states.biBacktrace(neighbor, node, f.pathBuf)
+					return f.pathBuf, nil
 				}
 				continue
 			}
 			endOpenList = append(endOpenList, neighbor)
-			neighbor.Parent = node
-			neighbor.Opened = 1
-			neighbor.By = BY_END
+			ns.Parent = states.index(node)
+			ns.Opened = BY_END
 		}
 	}
 

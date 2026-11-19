@@ -272,7 +272,6 @@ func (g *HexGrid) Clone() finder.Grid {
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	for i := range g.nodes {
 		ng.nodes[i] = g.nodes[i]
-		ng.nodes[i].Parent = nil
 	}
 	return ng
 }

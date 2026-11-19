@@ -20,7 +20,7 @@ type AStarFinder struct {
 
 	customHeuristic bool
 	neighborBuf     []*Node
-	heapSlice       []*Node
+	heapSlice       []heapEntry
 	pathBuf         [][2]int
 }
 
@@ -67,64 +67,63 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]
 	}
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
-	searchSeq := int(globalSearchSeq.Add(1))
-	openList := &MinHeap{nodes: f.heapSlice[:0], tieBreak: true}
-	defer func() { f.heapSlice = openList.nodes[:0] }()
+	searchSeq := globalSearchSeq.Add(1)
+	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	defer releaseStates(states)
+	openList := &MinHeap{nodes: f.heapSlice[:0], tieBreak: true, state: states}
+	defer func() {
+		clear(openList.nodes[:cap(openList.nodes)])
+		f.heapSlice = openList.nodes[:0]
+	}()
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 
-	startNode.ResetSearch(searchSeq)
-	endNode.ResetSearch(searchSeq)
-	startNode.G = 0
-	startNode.F = 0
+	startState := states.get(startNode)
+	startState.G = 0
+	startState.F = 0
 	openList.Push(startNode)
-	startNode.Opened = 1
+	startState.Opened = 1
 
 	neighborBuf := f.neighborBuf[:0]
 
 	for !openList.Empty() {
 		node := openList.Pop()
-		node.Closed = true
+		nodeState := states.get(node)
+		nodeState.Closed = true
 
 		if node == endNode {
-			f.pathBuf = f.pathBuf[:0]
-			for n := endNode; n != nil; n = n.Parent {
-				f.pathBuf = append(f.pathBuf, [2]int{n.X, n.Y})
-			}
-			for i, j := 0, len(f.pathBuf)-1; i < j; i, j = i+1, j-1 {
-				f.pathBuf[i], f.pathBuf[j] = f.pathBuf[j], f.pathBuf[i]
-			}
+			f.pathBuf = states.backtrace(endNode, f.pathBuf)
 			return f.pathBuf, nil
 		}
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(searchSeq)
-			if neighbor.Closed {
+			ns := states.get(neighbor)
+			if ns.Closed {
 				continue
 			}
 
 			x, y := neighbor.X, neighbor.Y
 			var ng float64
 			if stepCost != nil {
-				ng = node.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
+				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
 			} else if x-node.X == 0 || y-node.Y == 0 {
-				ng = node.G + neighbor.Weight
+				ng = nodeState.G + neighbor.Weight
 			} else {
-				ng = node.G + SQRT2*neighbor.Weight
+				ng = nodeState.G + SQRT2*neighbor.Weight
 			}
 
-			if neighbor.Opened == 0 || ng < neighbor.G {
-				neighbor.G = ng
-				if neighbor.Opened == 0 {
-					neighbor.H = f.Weight * heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
+			if ns.Opened == 0 || ng < ns.G {
+				ns.G = ng
+				if ns.Opened == 0 {
+					ns.H = f.Weight * heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
 				}
-				neighbor.F = neighbor.G + neighbor.H
-				neighbor.Parent = node
+				ns.F = ns.G + ns.H
+				ns.Parent = states.index(node)
 
-				if neighbor.Opened == 0 {
+				if ns.Opened == 0 {
 					openList.Push(neighbor)
-					neighbor.Opened = 1
+					ns.Opened = 1
 				} else {
 					openList.UpdateItem(neighbor)
 				}

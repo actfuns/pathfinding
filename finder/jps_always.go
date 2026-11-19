@@ -14,7 +14,7 @@ func NewJPFAlwaysMoveDiagonally(opts ...Option) *JPFAlwaysMoveDiagonally {
 	return f
 }
 
-func alwaysJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
+func alwaysJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int) (int, int, bool) {
 	grid := b.grid
 	dx := x - px
 	dy := y - py
@@ -24,7 +24,7 @@ func alwaysJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
 	}
 
 	if b.TrackRecursion {
-		grid.GetNodeAt(x, y).Tested = true
+		states.get(grid.GetNodeAt(x, y)).Tested = true
 	}
 
 	if grid.GetNodeAt(x, y) == b.endNode {
@@ -36,10 +36,10 @@ func alwaysJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
 			(grid.IsWalkableAt(x+dx, y-dy) && !grid.IsWalkableAt(x, y-dy)) {
 			return x, y, true
 		}
-		if _, _, ok := alwaysJump(b, x+dx, y, x, y); ok {
+		if _, _, ok := alwaysJump(b, states, x+dx, y, x, y); ok {
 			return x, y, true
 		}
-		if _, _, ok := alwaysJump(b, x, y+dy, x, y); ok {
+		if _, _, ok := alwaysJump(b, states, x, y+dy, x, y); ok {
 			return x, y, true
 		}
 	} else {
@@ -56,16 +56,16 @@ func alwaysJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
 		}
 	}
 
-	return alwaysJump(b, x+dx, y+dy, x, y)
+	return alwaysJump(b, states, x+dx, y+dy, x, y)
 }
 
-func alwaysFindNeighbors(b *JumpPointFinderBase, node *Node, buf [][2]int) [][2]int {
-	parent := node.Parent
+func alwaysFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int) [][2]int {
+	parent := states.get(node).Parent
 	x, y := node.X, node.Y
 	grid := b.grid
 
-	if parent != nil {
-		px, py := parent.X, parent.Y
+	if parent >= 0 {
+		px, py := states.xy(parent)
 		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
 		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 

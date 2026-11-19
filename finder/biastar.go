@@ -15,8 +15,8 @@ type BiAStarFinder struct {
 
 	customHeuristic bool
 	neighborBuf     []*Node
-	startHeapSlice  []*Node
-	endHeapSlice    []*Node
+	startHeapSlice  []heapEntry
+	endHeapSlice    []heapEntry
 	pathBuf         [][2]int
 }
 
@@ -63,68 +63,77 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	}
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
-	searchSeq := int(globalSearchSeq.Add(1))
+	searchSeq := globalSearchSeq.Add(1)
+	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	defer releaseStates(states)
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
-	startNode.ResetSearch(searchSeq)
-	endNode.ResetSearch(searchSeq)
 
 	const (
 		BY_START = 1
 		BY_END   = 2
 	)
 
-	startOpenList := &MinHeap{nodes: f.startHeapSlice[:0], tieBreak: true}
-	endOpenList := &MinHeap{nodes: f.endHeapSlice[:0], tieBreak: true}
-	defer func() { f.startHeapSlice = startOpenList.nodes[:0]; f.endHeapSlice = endOpenList.nodes[:0] }()
+	startOpenList := &MinHeap{nodes: f.startHeapSlice[:0], tieBreak: true, state: states}
+	endOpenList := &MinHeap{nodes: f.endHeapSlice[:0], tieBreak: true, state: states}
+	defer func() {
+		clear(startOpenList.nodes[:cap(startOpenList.nodes)])
+		clear(endOpenList.nodes[:cap(endOpenList.nodes)])
+		f.startHeapSlice = startOpenList.nodes[:0]
+		f.endHeapSlice = endOpenList.nodes[:0]
+	}()
 
-	startNode.G = 0
-	startNode.F = 0
+	startState := states.get(startNode)
+	startState.G = 0
+	startState.F = 0
 	startOpenList.Push(startNode)
-	startNode.Opened = BY_START
+	startState.Opened = BY_START
 
-	endNode.G = 0
-	endNode.F = 0
+	endState := states.get(endNode)
+	endState.G = 0
+	endState.F = 0
 	endOpenList.Push(endNode)
-	endNode.Opened = BY_END
+	endState.Opened = BY_END
 
 	neighborBuf := f.neighborBuf[:0]
 
 	for !startOpenList.Empty() && !endOpenList.Empty() {
 		node := startOpenList.Pop()
-		node.Closed = true
+		nodeState := states.get(node)
+		nodeState.Closed = true
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(searchSeq)
-			if neighbor.Closed {
+			ns := states.get(neighbor)
+			if ns.Closed {
 				continue
 			}
-			if neighbor.Opened == BY_END {
-				return BiBacktrace(node, neighbor), nil
+			if ns.Opened == BY_END {
+				f.pathBuf = states.biBacktrace(node, neighbor, f.pathBuf)
+				return f.pathBuf, nil
 			}
 
 			x, y := neighbor.X, neighbor.Y
 			var ng float64
 			if stepCost != nil {
-				ng = node.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
+				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
 			} else if x-node.X == 0 || y-node.Y == 0 {
-				ng = node.G + neighbor.Weight
+				ng = nodeState.G + neighbor.Weight
 			} else {
-				ng = node.G + SQRT2*neighbor.Weight
+				ng = nodeState.G + SQRT2*neighbor.Weight
 			}
 
-			if neighbor.Opened == 0 || ng < neighbor.G {
-				neighbor.G = ng
-				if neighbor.Opened == 0 {
-					neighbor.H = f.Weight * heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
+			if ns.Opened == 0 || ng < ns.G {
+				ns.G = ng
+				if ns.Opened == 0 {
+					ns.H = f.Weight * heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
 				}
-				neighbor.F = neighbor.G + neighbor.H
-				neighbor.Parent = node
+				ns.F = ns.G + ns.H
+				ns.Parent = states.index(node)
 
-				if neighbor.Opened == 0 {
+				if ns.Opened == 0 {
 					startOpenList.Push(neighbor)
-					neighbor.Opened = BY_START
+					ns.Opened = BY_START
 				} else {
 					startOpenList.UpdateItem(neighbor)
 				}
@@ -132,39 +141,41 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 		}
 
 		node = endOpenList.Pop()
-		node.Closed = true
+		nodeState = states.get(node)
+		nodeState.Closed = true
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(searchSeq)
-			if neighbor.Closed {
+			ns := states.get(neighbor)
+			if ns.Closed {
 				continue
 			}
-			if neighbor.Opened == BY_START {
-				return BiBacktrace(neighbor, node), nil
+			if ns.Opened == BY_START {
+				f.pathBuf = states.biBacktrace(neighbor, node, f.pathBuf)
+				return f.pathBuf, nil
 			}
 
 			x, y := neighbor.X, neighbor.Y
 			var ng float64
 			if stepCost != nil {
-				ng = node.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
+				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
 			} else if x-node.X == 0 || y-node.Y == 0 {
-				ng = node.G + neighbor.Weight
+				ng = nodeState.G + neighbor.Weight
 			} else {
-				ng = node.G + SQRT2*neighbor.Weight
+				ng = nodeState.G + SQRT2*neighbor.Weight
 			}
 
-			if neighbor.Opened == 0 || ng < neighbor.G {
-				neighbor.G = ng
-				if neighbor.Opened == 0 {
-					neighbor.H = f.Weight * heuristic(float64(AbsInt(x-startX)), float64(AbsInt(y-startY)))
+			if ns.Opened == 0 || ng < ns.G {
+				ns.G = ng
+				if ns.Opened == 0 {
+					ns.H = f.Weight * heuristic(float64(AbsInt(x-startX)), float64(AbsInt(y-startY)))
 				}
-				neighbor.F = neighbor.G + neighbor.H
-				neighbor.Parent = node
+				ns.F = ns.G + ns.H
+				ns.Parent = states.index(node)
 
-				if neighbor.Opened == 0 {
+				if ns.Opened == 0 {
 					endOpenList.Push(neighbor)
-					neighbor.Opened = BY_END
+					ns.Opened = BY_END
 				} else {
 					endOpenList.UpdateItem(neighbor)
 				}

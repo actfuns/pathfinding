@@ -72,11 +72,11 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	}
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
-	searchSeq := int(globalSearchSeq.Add(1))
+	searchSeq := globalSearchSeq.Add(1)
+	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	defer releaseStates(states)
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
-	start.ResetSearch(searchSeq)
-	end.ResetSearch(searchSeq)
 
 	h := func(a, b *Node) float64 {
 		return heuristic(float64(AbsInt(b.X-a.X)), float64(AbsInt(b.Y-a.Y)))
@@ -164,11 +164,11 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 			if idx < 0 || idx >= len(onPath) || onPath[idx] {
 				continue
 			}
-			neighbor.ResetSearch(searchSeq)
+			ns := states.get(neighbor)
 			if f.TrackRecursion {
-				neighbor.RetainCount++
-				if !neighbor.Tested {
-					neighbor.Tested = true
+				ns.RetainCount++
+				if !ns.Tested {
+					ns.Tested = true
 				}
 			}
 
@@ -181,9 +181,9 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 			}
 
 			if f.TrackRecursion {
-				neighbor.RetainCount--
-				if neighbor.RetainCount == 0 {
-					neighbor.Tested = false
+				ns.RetainCount--
+				if ns.RetainCount == 0 {
+					ns.Tested = false
 				}
 			}
 

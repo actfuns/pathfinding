@@ -15,37 +15,6 @@ func checkEndpoints(startX, startY, endX, endY int, grid Grid) (path [][2]int, e
 	return nil, nil
 }
 
-// Backtrace returns the path from start to end node using parent links.
-func Backtrace(node *Node) [][2]int {
-	path := make([][2]int, 0, 16)
-	for node != nil {
-		path = append(path, [2]int{node.X, node.Y})
-		node = node.Parent
-	}
-	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
-		path[i], path[j] = path[j], path[i]
-	}
-	return path
-}
-
-// BiBacktrace returns the path from start to end node using bidirectional parent links.
-func BiBacktrace(nodeA, nodeB *Node) [][2]int {
-	pathA := make([][2]int, 0, 16)
-	for nodeA != nil {
-		pathA = append(pathA, [2]int{nodeA.X, nodeA.Y})
-		nodeA = nodeA.Parent
-	}
-	pathB := make([][2]int, 0, 16)
-	for nodeB != nil {
-		pathB = append(pathB, [2]int{nodeB.X, nodeB.Y})
-		nodeB = nodeB.Parent
-	}
-	for i, j := 0, len(pathA)-1; i < j; i, j = i+1, j-1 {
-		pathA[i], pathA[j] = pathA[j], pathA[i]
-	}
-	return append(pathA, pathB...)
-}
-
 // PathLength computes the total length of a path.
 func PathLength(path [][2]int) float64 {
 	var sum float64

@@ -14,7 +14,7 @@ func NewJPFNeverMoveDiagonally(opts ...Option) *JPFNeverMoveDiagonally {
 	return f
 }
 
-func neverJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
+func neverJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int) (int, int, bool) {
 	grid := b.grid
 	dx := x - px
 	dy := y - py
@@ -24,7 +24,7 @@ func neverJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
 	}
 
 	if b.TrackRecursion {
-		grid.GetNodeAt(x, y).Tested = true
+		states.get(grid.GetNodeAt(x, y)).Tested = true
 	}
 
 	if grid.GetNodeAt(x, y) == b.endNode {
@@ -41,26 +41,26 @@ func neverJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
 			(grid.IsWalkableAt(x+1, y) && !grid.IsWalkableAt(x+1, y-dy)) {
 			return x, y, true
 		}
-		if _, _, ok := neverJump(b, x+1, y, x, y); ok {
+		if _, _, ok := neverJump(b, states, x+1, y, x, y); ok {
 			return x, y, true
 		}
-		if _, _, ok := neverJump(b, x-1, y, x, y); ok {
+		if _, _, ok := neverJump(b, states, x-1, y, x, y); ok {
 			return x, y, true
 		}
 	} else {
 		panic("Only horizontal and vertical movements are allowed")
 	}
 
-	return neverJump(b, x+dx, y+dy, x, y)
+	return neverJump(b, states, x+dx, y+dy, x, y)
 }
 
-func neverFindNeighbors(b *JumpPointFinderBase, node *Node, buf [][2]int) [][2]int {
-	parent := node.Parent
+func neverFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int) [][2]int {
+	parent := states.get(node).Parent
 	x, y := node.X, node.Y
 	grid := b.grid
 
-	if parent != nil {
-		px, py := parent.X, parent.Y
+	if parent >= 0 {
+		px, py := states.xy(parent)
 		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
 		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 

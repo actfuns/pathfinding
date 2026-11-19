@@ -37,7 +37,6 @@ func (g *testGrid) Clone() finder.Grid {
 	ng := &testGrid{width: g.width, height: g.height, nodes: make([]*finder.Node, len(g.nodes))}
 	for i, n := range g.nodes {
 		cp := *n
-		cp.Parent = nil
 		ng.nodes[i] = &cp
 	}
 	return ng

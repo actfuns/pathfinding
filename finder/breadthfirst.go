@@ -39,42 +39,38 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid)
 	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return path, err
 	}
-	searchSeq := int(globalSearchSeq.Add(1))
+	searchSeq := globalSearchSeq.Add(1)
+	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	defer releaseStates(states)
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
-	startNode.ResetSearch(searchSeq)
-	endNode.ResetSearch(searchSeq)
+	startState := states.get(startNode)
 	openList := make([]*Node, 0, 64)
 	openList = append(openList, startNode)
-	startNode.Opened = 1
+	startState.Opened = 1
 
 	neighborBuf := f.neighborBuf[:0]
 
 	for len(openList) > 0 {
 		node := openList[0]
 		openList = openList[1:]
-		node.Closed = true
+		nodeState := states.get(node)
+		nodeState.Closed = true
 
 		if node == endNode {
-			f.pathBuf = f.pathBuf[:0]
-			for n := endNode; n != nil; n = n.Parent {
-				f.pathBuf = append(f.pathBuf, [2]int{n.X, n.Y})
-			}
-			for i, j := 0, len(f.pathBuf)-1; i < j; i, j = i+1, j-1 {
-				f.pathBuf[i], f.pathBuf[j] = f.pathBuf[j], f.pathBuf[i]
-			}
+			f.pathBuf = states.backtrace(endNode, f.pathBuf)
 			return f.pathBuf, nil
 		}
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		for _, neighbor := range neighbors {
-			neighbor.ResetSearch(searchSeq)
-			if neighbor.Closed || neighbor.Opened != 0 {
+			ns := states.get(neighbor)
+			if ns.Closed || ns.Opened != 0 {
 				continue
 			}
 			openList = append(openList, neighbor)
-			neighbor.Opened = 1
-			neighbor.Parent = node
+			ns.Opened = 1
+			ns.Parent = states.index(node)
 		}
 	}
 
