@@ -54,7 +54,7 @@ func BenchmarkCompare(b *testing.B) {
 
 			b.Run(name+"/"+d.name+"/JPSPlus", func(b *testing.B) {
 				f := finder.NewJPSPlusFinder()
-				f.Precompute(base)
+				_ = f.Precompute(base)
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {

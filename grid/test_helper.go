@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"errors"
 	"math/rand"
 	"os"
 	"strings"
@@ -71,10 +72,20 @@ func runSVGTest(t *testing.T, gridType string, scenarios []svgScenario, newGrid 
 						}
 					}
 				}
-				if p, ok := ft.f.(interface{ Precompute(finder.Grid) }); ok {
-					p.Precompute(g.(finder.Grid))
+				fg := g.(finder.Grid)
+				if p, ok := ft.f.(interface{ Precompute(finder.Grid) error }); ok {
+					gs, ok := fg.(interface{ SupportsJPSCanonicalPruning() bool })
+					if !ok || !gs.SupportsJPSCanonicalPruning() {
+						t.Skipf("%s does not support this grid topology", ft.name)
+					}
+					if err := p.Precompute(fg); err != nil {
+						t.Skipf("%s: %v", ft.name, err)
+					}
 				}
-				path, err := ft.f.FindPath(s.startX, s.startY, s.endX, s.endY, g.(finder.Grid))
+				path, err := ft.f.FindPath(s.startX, s.startY, s.endX, s.endY, fg)
+				if errors.Is(err, finder.ErrUnsupportedGrid) {
+					t.Skipf("%s does not support this grid topology", ft.name)
+				}
 				if err != nil {
 					t.Fatalf("find path: %v", err)
 				}

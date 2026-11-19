@@ -4,7 +4,7 @@ package finder
 type BiAStarFinder struct {
 	// Heuristic is the heuristic function used to estimate the cost from the
 	// current node to the goal. Defaults to Manhattan (or Octile when diagonal
-	// movement is enabled).
+	// movement is enabled); topology-specific grids may override the default.
 	Heuristic HeuristicFunc
 	// Weight is the heuristic weight multiplier. Higher values make the
 	// pathfinder more greedy. Defaults to 1.
@@ -13,10 +13,11 @@ type BiAStarFinder struct {
 	// what conditions. Defaults to DiagonalNever.
 	DiagonalMovement DiagonalMovement
 
-	neighborBuf    []*Node
-	startHeapSlice []*Node
-	endHeapSlice   []*Node
-	pathBuf        [][2]int
+	customHeuristic bool
+	neighborBuf     []*Node
+	startHeapSlice  []*Node
+	endHeapSlice    []*Node
+	pathBuf         [][2]int
 }
 
 // NewBiAStarFinder creates a new BiAStarFinder.
@@ -26,6 +27,7 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 		Heuristic:        Manhattan,
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
+		customHeuristic:  opt.Heuristic != nil,
 		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
@@ -59,6 +61,8 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return path, err
 	}
+	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
+	stepCost := gridStepCost(grid)
 	searchSeq := int(globalSearchSeq.Add(1))
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
@@ -70,8 +74,8 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 		BY_END   = 2
 	)
 
-	startOpenList := &MinHeap{nodes: f.startHeapSlice[:0]}
-	endOpenList := &MinHeap{nodes: f.endHeapSlice[:0]}
+	startOpenList := &MinHeap{nodes: f.startHeapSlice[:0], tieBreak: true}
+	endOpenList := &MinHeap{nodes: f.endHeapSlice[:0], tieBreak: true}
 	defer func() { f.startHeapSlice = startOpenList.nodes[:0]; f.endHeapSlice = endOpenList.nodes[:0] }()
 
 	startNode.G = 0
@@ -102,8 +106,10 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 
 			x, y := neighbor.X, neighbor.Y
 			var ng float64
-			if x-node.X == 0 || y-node.Y == 0 {
-				ng = node.G + 1*neighbor.Weight
+			if stepCost != nil {
+				ng = node.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
+			} else if x-node.X == 0 || y-node.Y == 0 {
+				ng = node.G + neighbor.Weight
 			} else {
 				ng = node.G + SQRT2*neighbor.Weight
 			}
@@ -111,7 +117,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 			if neighbor.Opened == 0 || ng < neighbor.G {
 				neighbor.G = ng
 				if neighbor.Opened == 0 {
-					neighbor.H = f.Weight * f.Heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
+					neighbor.H = f.Weight * heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
 				}
 				neighbor.F = neighbor.G + neighbor.H
 				neighbor.Parent = node
@@ -140,8 +146,10 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 
 			x, y := neighbor.X, neighbor.Y
 			var ng float64
-			if x-node.X == 0 || y-node.Y == 0 {
-				ng = node.G + 1*neighbor.Weight
+			if stepCost != nil {
+				ng = node.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
+			} else if x-node.X == 0 || y-node.Y == 0 {
+				ng = node.G + neighbor.Weight
 			} else {
 				ng = node.G + SQRT2*neighbor.Weight
 			}
@@ -149,7 +157,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 			if neighbor.Opened == 0 || ng < neighbor.G {
 				neighbor.G = ng
 				if neighbor.Opened == 0 {
-					neighbor.H = f.Weight * f.Heuristic(float64(AbsInt(x-startX)), float64(AbsInt(y-startY)))
+					neighbor.H = f.Weight * heuristic(float64(AbsInt(x-startX)), float64(AbsInt(y-startY)))
 				}
 				neighbor.F = neighbor.G + neighbor.H
 				neighbor.Parent = node

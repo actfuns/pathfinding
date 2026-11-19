@@ -107,11 +107,13 @@ func (m *PoolManager) Reset(key string, factory Factory) error {
 		return ErrNilFactory
 	}
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	p := m.pools[key]
-	m.mu.Unlock()
 	if p == nil {
 		return ErrNoPool
 	}
+	// Hold the manager lock so the pool cannot be released and replaced
+	// between the lookup and the reset (check-then-act race).
 	p.reset(factory)
 	return nil
 }

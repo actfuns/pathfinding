@@ -121,15 +121,29 @@ func NewHPAFinder(opts ...HPAOption) *HPAFinder {
 	return f
 }
 
-// Build pre-builds the hierarchical portal graph (HPAWorld) from the
-// given grid. Must be called before FindPath. Can be called again to
-// rebuild after grid changes. Clears the portal path cache on rebuild.
-func (f *HPAFinder) Build(grid finder.Grid) {
-	f.world = BuildWorld(grid, f.chunkSize)
+// Build pre-builds the hierarchical portal graph (HPAWorld) from the given
+// grid. Must be called before FindPath. Can be called again to rebuild after
+// grid changes. Clears the portal path cache on rebuild.
+//
+// HPA assumes an axis-aligned (orthogonal) grid and uniform tile weights. It
+// returns finder.ErrUnsupportedGrid for hex/staggered grids; use A*/Dijkstra
+// for weighted maps.
+func (f *HPAFinder) Build(grid finder.Grid) error {
+	if !supportsHPA(grid) {
+		return finder.ErrUnsupportedGrid
+	}
+	f.world = BuildWorldWithDiagonal(grid, f.chunkSize, f.DiagonalMovement)
 	// Invalidate path cache on rebuild
 	for k := range f.pathCache {
 		delete(f.pathCache, k)
 	}
+	return nil
+}
+
+// supportsHPA reports whether the grid has the axis-aligned topology HPA uses.
+func supportsHPA(grid finder.Grid) bool {
+	g, ok := grid.(interface{ SupportsJPSCanonicalPruning() bool })
+	return ok && g.SupportsJPSCanonicalPruning()
 }
 
 // hpaNode is a node in the abstract portal graph.
@@ -173,6 +187,9 @@ var _ finder.Finder = (*HPAFinder)(nil)
 func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) ([][2]int, error) {
 	if f.world == nil {
 		panic("HPAFinder: Build(grid) must be called before FindPath")
+	}
+	if !supportsHPA(grid) {
+		return nil, finder.ErrUnsupportedGrid
 	}
 	// Search would otherwise answer "no route" for a request it never ran.
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
@@ -276,7 +293,7 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) (
 				if ep == nil {
 					continue
 				}
-				edgeG := cur.g + 10
+				edgeG := cur.g + float64(cp.ExternalCosts[i])
 				f.openSlice = f.relaxEdge(ek, edgeG, ep, endX, endY, cur)
 			}
 
@@ -409,7 +426,7 @@ func (f *HPAFinder) heuristicCost(ax, ay, bx, by int) float64 {
 	if dy < 0 {
 		dy = -dy
 	}
-	return f.Heuristic(dx, dy)
+	return f.Heuristic(dx, dy) * 10
 }
 
 func (f *HPAFinder) findReachablePortals(world *HPAWorld, sx, sy int, chunkID int, grid finder.Grid, buf []int) []int {
@@ -418,7 +435,7 @@ func (f *HPAFinder) findReachablePortals(world *HPAWorld, sx, sy int, chunkID in
 	cy := (sy / cs) * cs
 
 	f.neighborBuf = f.neighborBuf[:0]
-	costs, qBuf := bfsCostsInChunk(grid, sx, sy, cx, cy, cs, f.neighborBuf, f.bfsCostsBuf, f.bfsQueueBuf, f.tmpNode)
+	costs, qBuf := bfsCostsInChunk(grid, sx, sy, cx, cy, cs, world.Diagonal, f.neighborBuf, f.bfsCostsBuf, f.bfsQueueBuf, f.tmpNode)
 	if cap(costs) > cap(f.bfsCostsBuf) {
 		f.bfsCostsBuf = costs
 	}

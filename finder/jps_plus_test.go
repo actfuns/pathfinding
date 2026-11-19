@@ -18,8 +18,7 @@ func TestJPSPlusNeverPrecompute(t *testing.T) {
 	}
 	g := grid.NewOrthogonalGrid(matrix)
 	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
-	f.Precompute(g)
-
+	_ = f.Precompute(g)
 	path, _ := f.FindPath(0, 0, 4, 4, g)
 	if path == nil {
 		t.Fatal("expected path, got nil")
@@ -49,7 +48,7 @@ func TestJPSPlusAgainstJS(t *testing.T) {
 	for i, s := range testScenarios {
 		g := grid.NewOrthogonalGrid(s.matrix)
 		f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
-		f.Precompute(g)
+		_ = f.Precompute(g)
 		path, _ := f.FindPath(s.startX, s.startY, s.endX, s.endY, g)
 		if path == nil {
 			t.Errorf("JPS+ scenario %d: path not found", i+1)
@@ -70,8 +69,7 @@ func TestJPSPlusNoPanicPrecompute(t *testing.T) {
 	}
 	g := grid.NewOrthogonalGrid(matrix)
 	f := finder.NewJPSPlusFinder()
-	f.Precompute(g)
-
+	_ = f.Precompute(g)
 	path, _ := f.FindPath(0, 0, 2, 2, g)
 	if path == nil {
 		t.Error("expected path")
@@ -81,7 +79,7 @@ func TestJPSPlusNoPanicPrecompute(t *testing.T) {
 func TestJPSPlusUnreachable(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int{{0, 1, 0}})
 	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
-	f.Precompute(g)
+	_ = f.Precompute(g)
 	path, _ := f.FindPath(0, 0, 2, 0, g)
 	if path != nil {
 		t.Errorf("expected nil for unreachable, got %v", path)
@@ -91,7 +89,7 @@ func TestJPSPlusUnreachable(t *testing.T) {
 func TestJPSPlusSingleCell(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int{{0}})
 	f := finder.NewJPSPlusFinder()
-	f.Precompute(g)
+	_ = f.Precompute(g)
 	path, _ := f.FindPath(0, 0, 0, 0, g)
 	if path == nil {
 		t.Error("expected path for start==end")
@@ -101,7 +99,7 @@ func TestJPSPlusSingleCell(t *testing.T) {
 func TestJPSPlusUnwalkableEnd(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int{{0, 1}})
 	f := finder.NewJPSPlusFinder()
-	f.Precompute(g)
+	_ = f.Precompute(g)
 	path, err := f.FindPath(0, 0, 1, 0, g)
 	if !errors.Is(err, finder.ErrNotWalkable) {
 		t.Fatalf("FindPath error = %v, want ErrNotWalkable", err)
@@ -130,7 +128,7 @@ func TestJPSPlusOpenGrid(t *testing.T) {
 	}
 	g := grid.NewOrthogonalGrid(matrix)
 	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
-	f.Precompute(g)
+	_ = f.Precompute(g)
 	path, _ := f.FindPath(0, 0, 99, 99, g)
 	if path == nil {
 		t.Fatal("expected path, got nil")
@@ -152,7 +150,7 @@ func TestJPSPlusExportImport(t *testing.T) {
 
 	// Precompute and export
 	f1 := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
-	f1.Precompute(g)
+	_ = f1.Precompute(g)
 	data, err := f1.PrecomputedData()
 	if err != nil {
 		t.Fatal(err)

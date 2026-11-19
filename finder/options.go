@@ -9,6 +9,7 @@ type FinderOptions struct {
 	Weight           float64
 	TrackRecursion   bool
 	TimeLimit        float64 // in seconds, <= 0 for infinite
+	Adaptive         bool    // JPS+: switch to A* on dense maps
 }
 
 // Option configures a finder.
@@ -47,6 +48,14 @@ func WithHeuristic(h HeuristicFunc) Option {
 func WithTrackRecursion() Option {
 	return func(o *FinderOptions) {
 		o.TrackRecursion = true
+	}
+}
+
+// WithAdaptive lets JPS+ fall back to A* on dense maps, where the jump table
+// is usually not faster.
+func WithAdaptive() Option {
+	return func(o *FinderOptions) {
+		o.Adaptive = true
 	}
 }
 

@@ -13,5 +13,6 @@ func NewBiDijkstraFinder(opts ...Option) *BiDijkstraFinder {
 	f.Heuristic = func(dx, dy float64) float64 {
 		return 0
 	}
+	f.customHeuristic = true
 	return f
 }

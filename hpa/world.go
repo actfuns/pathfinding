@@ -1,6 +1,8 @@
 package hpa
 
 import (
+	"math"
+
 	"github.com/actfuns/pathfinding/finder"
 )
 
@@ -13,12 +15,13 @@ type Portal struct {
 
 	// External connections to neighboring chunks (portal keys)
 	ExternalCount   int
-	ExternalPortals [5]int
+	ExternalPortals []int
+	ExternalCosts   []int
 
 	// Internal connections to other portals in the same chunk
 	InternalCount   int
-	InternalPortals [255]int // portal key of connected portal
-	InternalCosts   [255]int // movement cost (octile * 10)
+	InternalPortals []int // portal key of connected portal
+	InternalCosts   []int // movement cost (octile * 10)
 }
 
 func newPortal(cx, cy int) *Portal {
@@ -60,6 +63,8 @@ type HPAWorld struct {
 	PaddedHeight int
 	// ChunkSize is the edge length of a single chunk in cells.
 	ChunkSize int
+	// Diagonal is the movement rule used for portal connectivity.
+	Diagonal finder.DiagonalMovement
 }
 
 // Cardinal direction constants used for portal orientation.
@@ -74,6 +79,12 @@ const (
 // portals (compressed — one per run of consecutive walkable cells), connect
 // external portals (adjacent chunk), and connect internal portals (BFS within chunk).
 func BuildWorld(grid finder.Grid, chunkSize int) *HPAWorld {
+	return BuildWorldWithDiagonal(grid, chunkSize, finder.DiagonalNever)
+}
+
+// BuildWorldWithDiagonal builds the portal graph using the given diagonal
+// movement rule for cross-chunk and intra-chunk connectivity.
+func BuildWorldWithDiagonal(grid finder.Grid, chunkSize int, diagonal finder.DiagonalMovement) *HPAWorld {
 	cs := chunkSize
 	if cs < 2 {
 		cs = 16
@@ -89,6 +100,7 @@ func BuildWorld(grid finder.Grid, chunkSize int) *HPAWorld {
 		PaddedWidth:  pw,
 		PaddedHeight: ph,
 		ChunkSize:    cs,
+		Diagonal:     diagonal,
 	}
 
 	neighborBuf := make([]*finder.Node, 0, 8)
@@ -239,7 +251,7 @@ func connectExternals(grid finder.Grid, w *HPAWorld, nb []*finder.Node) {
 					}
 
 					tmpNode := &finder.Node{X: cx, Y: cy, Walkable: true}
-					neighbors := grid.GetNeighbors(tmpNode, finder.DiagonalNever, nb)
+					neighbors := grid.GetNeighbors(tmpNode, w.Diagonal, nb)
 					for _, n := range neighbors {
 						nx, ny := n.X, n.Y
 						if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
@@ -250,7 +262,14 @@ func connectExternals(grid finder.Grid, w *HPAWorld, nb []*finder.Node) {
 							continue
 						}
 
-						ekey := findPortalAtEdgeOffset(w, nChunk, cellPos, oppDir)
+						// Use the neighbour's offset on the opposite edge.
+						// For diagonal crossings this differs from cellPos.
+						nCx, nCy := nx/cs, ny/cs
+						nOffset := nx - nCx*cs
+						if oppDir == DirE || oppDir == DirW {
+							nOffset = ny - nCy*cs
+						}
+						ekey := findPortalAtEdgeOffset(w, nChunk, nOffset, oppDir)
 						if ekey < 0 {
 							continue
 						}
@@ -263,10 +282,15 @@ func connectExternals(grid finder.Grid, w *HPAWorld, nb []*finder.Node) {
 								break
 							}
 						}
-						if dup || p.ExternalCount >= len(p.ExternalPortals) {
+						if dup {
 							continue
 						}
-						p.ExternalPortals[p.ExternalCount] = ekey
+						ep := w.Portals[ekey]
+						if ep == nil {
+							continue
+						}
+						p.ExternalPortals = append(p.ExternalPortals, ekey)
+						p.ExternalCosts = append(p.ExternalCosts, octile10(ep.CenterX-p.CenterX, ep.CenterY-p.CenterY))
 						p.ExternalCount++
 					}
 				}
@@ -296,24 +320,24 @@ func connectInternals(grid finder.Grid, w *HPAWorld, cx, cy int, nb []*finder.No
 
 	for i := 0; i < len(keys)-1; i++ {
 		pi := w.Portals[keys[i]]
-		costs, _ := bfsCostsInChunk(grid, pi.CenterX, pi.CenterY, ox, oy, cs, nb, nil, nil, tmpNode)
+		costs, _ := bfsCostsInChunk(grid, pi.CenterX, pi.CenterY, ox, oy, cs, w.Diagonal, nb, nil, nil, tmpNode)
 		for j := i + 1; j < len(keys); j++ {
 			pj := w.Portals[keys[j]]
 			cost := getBfsCost(costs, pj.CenterX, pj.CenterY, ox, oy, cs)
 			if cost < 0 {
 				continue
 			}
-			pi.InternalPortals[pi.InternalCount] = keys[j]
-			pi.InternalCosts[pi.InternalCount] = cost
+			pi.InternalPortals = append(pi.InternalPortals, keys[j])
+			pi.InternalCosts = append(pi.InternalCosts, cost)
 			pi.InternalCount++
-			pj.InternalPortals[pj.InternalCount] = keys[i]
-			pj.InternalCosts[pj.InternalCount] = cost
+			pj.InternalPortals = append(pj.InternalPortals, keys[i])
+			pj.InternalCosts = append(pj.InternalCosts, cost)
 			pj.InternalCount++
 		}
 	}
 }
 
-func bfsCostsInChunk(grid finder.Grid, sx, sy, ox, oy, cs int,
+func bfsCostsInChunk(grid finder.Grid, sx, sy, ox, oy, cs int, diagonal finder.DiagonalMovement,
 	nb []*finder.Node, costsBuf []int, queueBuf [][2]int, tmpNode *finder.Node) ([]int, [][2]int) {
 	if !grid.IsWalkableAt(sx, sy) {
 		return nil, nil
@@ -350,30 +374,50 @@ func bfsCostsInChunk(grid finder.Grid, sx, sy, ox, oy, cs int,
 	costs[sKey] = 0
 	queue = append(queue, [2]int{sx, sy})
 
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
+	for head := 0; head < len(queue); head++ {
+		cur := queue[head]
 		cx, cy := cur[0], cur[1]
 		ck := toKey(cx, cy)
 		cc := costs[ck]
 
 		n.X = cx
 		n.Y = cy
-		neighbors := grid.GetNeighbors(n, finder.DiagonalNever, nb)
+		neighbors := grid.GetNeighbors(n, diagonal, nb)
 		for _, neighbor := range neighbors {
 			nx, ny := neighbor.X, neighbor.Y
 			if !inside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
 				continue
 			}
 			nk := toKey(nx, ny)
-			nc := cc + 10
+			nc := cc + stepCost10(nx-cx, ny-cy)
 			if costs[nk] < 0 || nc < costs[nk] {
 				costs[nk] = nc
 				queue = append(queue, [2]int{nx, ny})
 			}
 		}
 	}
-	return costs, queue[:cap(queue)]
+	return costs, queue[:0]
+}
+
+func stepCost10(dx, dy int) int {
+	if dx != 0 && dy != 0 {
+		return 14
+	}
+	return 10
+}
+
+// octile10 returns the octile distance between two points in HPA cost units.
+func octile10(dx, dy int) int {
+	if dx < 0 {
+		dx = -dx
+	}
+	if dy < 0 {
+		dy = -dy
+	}
+	if dx < dy {
+		dx, dy = dy, dx
+	}
+	return int(math.Round((float64(dx) + (finder.SQRT2-1)*float64(dy)) * 10))
 }
 
 func getBfsCost(costs []int, wx, wy, ox, oy, cs int) int {

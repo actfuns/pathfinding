@@ -73,7 +73,9 @@ path, _ := f.FindPath(0, 0, 7, 7, g)
 // A* 会自动选择总成本最低的路径，而非步骤最少的路径
 ```
 
-默认权重为 `1.0`。成本感知算法是 `A*`、`Dijkstra`、`IDA*`；`JPS` / `JPS+` 忽略权重，`BFS` 和 `Best-First Search` 也不使用成本。
+默认权重为 `1.0`。`Weight` 必须是**有限正数**（`> 0`）；传入 `0`、负数、`NaN` 或 `Inf` 会 panic。不可通行请用 `SetWalkableAt(false)`，不要用 0 权重表示墙。
+
+成本感知算法是 `A*`、`Dijkstra`、`IDA*`；`JPS` / `JPS+` 忽略权重，`BFS` 和 `Best-First Search` 也不使用成本。
 
 ### SVG 可视化
 
@@ -147,13 +149,15 @@ g := grid.NewOrthogonalGrid(terrain,
 | :--- | :--- | :--- |
 | `path, nil` | 找到路径 | 正常使用 |
 | `nil, nil` | 搜索完成，**确实没有路** | 换目标点或视为关卡问题 |
-| `nil, err` | 请求无效，或搜索**没能完成** | 调用方错误要修参数；超时/池忙可重试 |
+| `nil, err` | 请求无效，或搜索**没能完成** | 调用方错误要修参数；超时/池忙可重试；不支持的网格要换算法 |
 
 `err` 目前有这些来源：
 
 - `finder.ErrTimeLimit` — 超过 `WithTimeLimit` 设定的时限（可重试）
 - `finder.ErrOutOfBounds` — 端点坐标不在网格内（调用方的问题）
 - `finder.ErrNotWalkable` — **终点**瓦片不可走（调用方的问题）；起点不可走不报错，仍允许寻路走出
+- `finder.ErrUnsupportedGrid` — 该算法不支持当前网格拓扑（如 JPS/JPS+、HPA 用于 hex/staggered）
+- `finder.ErrPrecomputedMismatch` — JPS+ 预计算数据与当前网格尺寸不一致
 - `grid.ErrPoolTimeout` / `grid.ErrPoolClosed` — 池层面的失败（见[并发寻路](#并发寻路)）
 
 关键点：**「没有路」不是错误**。目标不可达是算法的正常结论，所以绝大多数调用方只判断 `len(path)` 就够了，现有代码不检查 error 也依然正确：
@@ -181,10 +185,11 @@ if len(path) == 0 {
 
 ### 方案：PoolManager 按场景发放代理
 
-多个场景共用同一张地图时，每个场景从 `PoolManager` 取一个 `Proxy`（代理）。代理把访问分成两类：
+多个场景共用同一张地图时，每个场景从 `PoolManager` 取一个 `Proxy`（代理）。代理是**只读视图**：
 
 - **寻路** — 从 `Pool` 租借一个独占实例执行，用完立即归还，跨场景的并发搜索因此永不共享 finder 状态
-- **其余方法** — 转发给池里常驻的 `Base` 实例，只读调用不需要租借、不会被寻路阻塞
+- **其余读方法** — 转发给池里常驻的只读 `Base` 实例，不需要租借、不会被寻路阻塞
+- **修改地图** — 不再通过 `Proxy`；构造新的 `Factory` 后调用 `PoolManager.Reset`
 
 ```go
 mgr := grid.NewPoolManager()
@@ -217,10 +222,10 @@ path, err := mapProxy.FindPathWorld(0, 0, 200, 200)
 | :--- | :--- |
 | **一个 Proxy 一个 goroutine** | **最硬的约束。** Proxy 缓存了读取用的 Base，并持有每个结果的写入缓冲 —— 两个 goroutine 驱动同一个 Proxy 会同时破坏这两样，**静默返回错乱的路径，不会 panic、没有任何报错**。检测代码不存在，也**不应该**加：一次原子操作会让只读路径从 4.2ns 涨到 9.5ns（2.3 倍），换来的是一个你已经能保证的约束。并发请**取多个 Proxy**，那才是 `Pool` 的用途。<br>**安全的**：多个 Proxy、任意多 goroutine ✅　**不安全**：一个 Proxy、多个 goroutine ❌ |
 | **工厂必须造完全独立的实例** | 每个实例需要自己的瓦片存储和自己的 Finder。**不要用 `Grid.Clone()`** —— 它复制节点但共享 Finder，两个克隆体并发搜索会损坏 |
-| **寻路只读** | `SetWalkableAt` / `SetWeightAt` 走的是只读用的 `Base` 实例，**对寻路不生效**。本设计面向静态地图 |
+| **Proxy 只读** | `Proxy` 不再暴露 `SetWalkableAt` / `SetWeightAt`。要改地图，构造新 `Factory` 后调用 `Reset`，否则租借实例看不到修改。本设计面向静态地图 |
 | **必须 Release** | 场景销毁时调用一次。最后一个场景释放后池自动回收；重复调用安全 |
 | **校验不靠运气** | `Acquire` / `Reset` 对 nil 工厂返回 `ErrNilFactory`，`Reset` 目标无人持有时返回 `ErrNoPool` —— 不会静默"成功" |
-| **Release 后即失效** | 对已释放的 Proxy 调用任何 Grid 方法会 **panic**，而不是静默返回旧数据（`Reset` 不会让 Proxy 失效） |
+| **Release 后即失效** | 对已释放的 Proxy 调用任何 Proxy 方法会 **panic**，而不是静默返回旧数据（`Reset` 不会让 Proxy 失效）；释放时会清掉 Base/缓冲引用，便于回收 |
 | **池满有上限** | `WithCapacity` 是并发上限（默认 CPU 核数），到顶后 `FindPath` 等待实例归还，但不会超过池的获取超时（默认 `DefaultAcquireTimeout`） |
 | **容量不影响空闲内存** | 一轮突发结束后池会缩回场景数，所以 `capacity` 只决定峰值，按最繁忙值给即可 |
 
@@ -308,7 +313,7 @@ pr.FindPathWorld(...)        // 用新地图，同一个 pr
 | **IDA\*** | ❌ | 迭代加深 A\*，内存占用极低 |
 | **JPS (Jump Point Search)** | ❌ | 跳点搜索，利用网格对称性加速 |
 | **JPS+ (Jump Point Search Plus)** | ❌ | JPS 优化变体，Precompute 跳点表，O(1) 查表替换递归扫描 |
-| **HPA\*** | ❌ | 层级寻路，分块抽象加速大地图 |
+| **HPA\*** | ❌ | 层级寻路，分块抽象加速大地图（仅正交、等成本） |
 | **Flow Field** | ❌ | 流场群体寻路，一次 Dijkstra 所有人 O(1) 查方向 |
 
 ### JPS 变体
@@ -322,7 +327,7 @@ pr.FindPathWorld(...)        // 用新地图，同一个 pr
 | **NoObstacles** | 无障碍时允许对角线 | 半开阔地形 |
 | **AtMostOne** | 最多一个障碍时允许对角线 | 复杂障碍布局 |
 
-> JPS / JPS+ 仅适用于**等成本网格**（所有瓦片 `Weight == 1`）；瓦片权重会被忽略。加权地图请使用 `A*` 或 `Dijkstra`。
+> JPS / JPS+ 仅适用于**正交网格**（`OrthogonalGrid`）和**等成本网格**（所有瓦片 `Weight == 1`）。hex/staggered 会返回 `finder.ErrUnsupportedGrid`；瓦片权重会被忽略，加权地图请使用 `A*` 或 `Dijkstra`。
 
 ### JPS+ (Jump Point Search Plus)
 
@@ -333,6 +338,7 @@ JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `ju
 | **Precompute** | 两阶段预计算：Phase 1 检测 Primary Jump Points，Phase 2 计算 8 方向距离表 |
 | **export/import** | `PrecomputedData()` / `LoadPrecomputed()` 支持烘焙数据导出为文件，服务端启动直接加载 |
 | **searchSeq 全局唯一** | 所有 finder 的 `searchSeq` 通过全局原子计数器初始化，不同 finder 可安全共享同一 grid |
+| **Adaptive** | `finder.WithAdaptive()`：障碍密度 ≥10% 时自动改用 A*，避免密集图上的退化 |
 
 适用场景：**障碍物密集的静态小地图**（如游戏房间内布局固定的障碍地图）。开阔地形下利用预计算距离表可直接跳跃到目标，反而是 JPS+ 最快的场景（100×100 仅 0.6µs）。
 
@@ -346,7 +352,9 @@ matrix := [][]int{{0, 0, 0}, {0, 1, 0}, {0, 0, 0}}
 g := grid.NewOrthogonalGrid(matrix)
 
 f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
-f.Precompute(g)
+if err := f.Precompute(g); err != nil {
+    // ErrUnsupportedGrid: JPS+ 只支持正交网格
+}
 
 path, _ := f.FindPath(0, 0, 2, 2, g)
 
@@ -381,7 +389,9 @@ f := hpa.NewHPAFinder(
     hpa.WithChunkSize(32),
     hpa.WithStringPulling(true),
 )
-f.Build(g)
+if err := f.Build(g); err != nil {
+    // ErrUnsupportedGrid: HPA 只支持正交网格
+}
 
 path, _ := f.FindPath(0, 0, 499, 499, g)
 ```
@@ -560,7 +570,7 @@ go run examples/flowfield/
 - `grid.PoolManager` / `Pool` / `Proxy` / `Lease` / `Factory`
 - 多场景共用一张地图时并发寻路：寻路独占租借实例，只读走常驻 Base 实例
 - 场景引用计数，最后一个场景释放后自动回收池
-- `Reset(key, factory)` 只换地图数据：池与引用计数不变，活跃 `Proxy` 继续有效且自动切到新地图
+- `Reset(key, factory)` 只换地图数据：池与引用计数不变，活跃 `Proxy` 继续有效且自动切到新地图；`Proxy` 本身只读
 - 释放后的 Proxy 调用任何方法直接 panic，不静默返回旧数据（`Reset` 不会让 Proxy 失效）
 - 结果缓冲复用，寻路热路径仅剩 1 次分配（48 B，来自 `Lease`）
 - 网格节点存储改为连续数组，构造分配从 40,006 次降到 7 次（三种网格类型）

@@ -222,7 +222,7 @@ func TestPoolManagerResetSwapsPool(t *testing.T) {
 	}
 }
 
-// A released Proxy is dead: every Grid method has to panic instead of quietly
+// A released Proxy is dead: every Proxy method has to panic instead of quietly
 // serving a map that is gone.
 func TestProxyPanicsAfterRelease(t *testing.T) {
 	m := NewPoolManager()
@@ -246,7 +246,6 @@ func TestProxyPanicsAfterRelease(t *testing.T) {
 		"Height":        func() { _ = pr.Height() },
 		"IsInside":      func() { _ = pr.IsInside(0, 0) },
 		"IsWalkableAt":  func() { _ = pr.IsWalkableAt(0, 0) },
-		"SetWalkableAt": func() { pr.SetWalkableAt(0, 0, false) },
 		"GetNodeAt":     func() { _ = pr.GetNodeAt(0, 0) },
 		"Clone":         func() { _ = pr.Clone() },
 		"TileWidth":     func() { _ = pr.TileWidth() },
@@ -254,15 +253,13 @@ func TestProxyPanicsAfterRelease(t *testing.T) {
 		"ObstacleCount": func() { _ = pr.ObstacleCount() },
 		"TileIndex":     func() { _ = pr.TileIndex(0, 0) },
 		"TileXY":        func() { _, _ = pr.TileXY(0) },
-		"SetWeightAt":   func() { pr.SetWeightAt(0, 0, 2) },
 		"GetWeightAt":   func() { _ = pr.GetWeightAt(0, 0) },
 		"WorldToTile":   func() { _, _ = pr.WorldToTile(0, 0) },
 		"TileToWorld":   func() { _, _ = pr.TileToWorld(0, 0) },
 		"IsWalkableAtWorld": func() {
 			_ = pr.IsWalkableAtWorld(0, 0)
 		},
-		"SetWalkableAtWorld": func() { pr.SetWalkableAtWorld(0, 0, false) },
-		"HasLineOfSight":     func() { _ = pr.HasLineOfSight(0, 0, 1, 1) },
+		"HasLineOfSight": func() { _ = pr.HasLineOfSight(0, 0, 1, 1) },
 		"HasLineOfSightWorld": func() {
 			_ = pr.HasLineOfSightWorld(0, 0, 1, 1)
 		},

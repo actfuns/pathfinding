@@ -184,7 +184,11 @@ func (g *StaggeredGrid) SetWalkableAt(x, y int, walkable bool) {
 }
 
 // SetWeightAt sets the movement cost multiplier for the tile at (x, y).
+// Panics if weight is not a finite positive number.
 func (g *StaggeredGrid) SetWeightAt(x, y int, weight float64) {
+	if !validWeight(weight) {
+		panic("grid: weight must be a finite positive number")
+	}
 	g.nodes[g.index(x, y)].Weight = weight
 }
 

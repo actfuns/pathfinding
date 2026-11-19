@@ -213,7 +213,11 @@ func (g *HexGrid) SetWalkableAt(x, y int, walkable bool) {
 }
 
 // SetWeightAt sets the movement cost multiplier for the tile at (x, y).
+// Panics if weight is not a finite positive number.
 func (g *HexGrid) SetWeightAt(x, y int, weight float64) {
+	if !validWeight(weight) {
+		panic("grid: weight must be a finite positive number")
+	}
 	g.nodes[g.index(x, y)].Weight = weight
 }
 
@@ -402,6 +406,16 @@ func (g *HexGrid) TileToWorld(tx, ty int) (float32, float32) {
 		return float32(px + float64(g.tileW)/2), float32(py + float64(g.renH)/2)
 	}
 	return float32(px + float64(g.renW)/2), float32(py + float64(g.tileH)/2)
+}
+
+// StepCost returns the cost of one hex step. Every hex neighbour costs 1
+// regardless of whether it changes one or both offset coordinates.
+func (g *HexGrid) StepCost(dx, dy int) float64 { return 1 }
+
+// DefaultHeuristic returns Chebyshev distance, which is admissible and
+// consistent for unit-cost hex movement.
+func (g *HexGrid) DefaultHeuristic(_ finder.DiagonalMovement) finder.HeuristicFunc {
+	return finder.Chebyshev
 }
 
 // IsWalkableAtWorld checks walkability at a world position.

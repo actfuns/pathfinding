@@ -1,10 +1,21 @@
 package finder
 
-// MinHeap is a binary heap for A* open list, ordered by F value.
-// The less function pointer is intentionally NOT used — the comparison is
-// hardcoded as a.F < b.F to enable compiler inlining of the hot path.
+// MinHeap is a binary heap for A* open list, ordered by F value. When
+// tieBreak is set, equal F values are ordered by H so the search advances
+// toward the goal instead of expanding an equal-cost plateau.
 type MinHeap struct {
-	nodes []*Node
+	nodes    []*Node
+	tieBreak bool // on equal F, prefer the node closer to the goal (lower H)
+}
+
+func (h *MinHeap) less(a, b *Node) bool {
+	if a.F != b.F {
+		return a.F < b.F
+	}
+	if h.tieBreak {
+		return a.H < b.H
+	}
+	return false
 }
 
 // NewMinHeap creates a new MinHeap with an initial capacity of 64.
@@ -60,7 +71,7 @@ func (h *MinHeap) UpdateItem(node *Node) {
 func (h *MinHeap) siftDownFrom(pos, start int) {
 	for pos > start {
 		parent := (pos - 1) >> 1
-		if !(h.nodes[pos].F < h.nodes[parent].F) {
+		if !h.less(h.nodes[pos], h.nodes[parent]) {
 			break
 		}
 		h.swap(pos, parent)
@@ -75,7 +86,7 @@ func (h *MinHeap) siftUpFrom(pos int) {
 	child := 2*pos + 1
 	for child < n {
 		right := child + 1
-		if right < n && !(h.nodes[child].F < h.nodes[right].F) {
+		if right < n && !h.less(h.nodes[child], h.nodes[right]) {
 			child = right
 		}
 		h.nodes[pos] = h.nodes[child]

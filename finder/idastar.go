@@ -18,6 +18,8 @@ type IDAStarFinder struct {
 	// TimeLimit is the maximum number of seconds to spend searching before giving up. A value <= 0 means no limit.
 	TimeLimit float64
 
+	customHeuristic bool
+
 	// Reusable search scratch, so repeated FindPath calls avoid allocations.
 	routeBuf     [][2]int
 	neighborBufs [][]*Node
@@ -33,6 +35,7 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 		DiagonalMovement: DiagonalNever,
 		TrackRecursion:   false,
 		TimeLimit:        -1,
+		customHeuristic:  opt.Heuristic != nil,
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -67,6 +70,8 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return path, err
 	}
+	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
+	stepCost := gridStepCost(grid)
 	searchSeq := int(globalSearchSeq.Add(1))
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
@@ -74,12 +79,16 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	end.ResetSearch(searchSeq)
 
 	h := func(a, b *Node) float64 {
-		return f.Heuristic(float64(AbsInt(b.X-a.X)), float64(AbsInt(b.Y-a.Y)))
+		return heuristic(float64(AbsInt(b.X-a.X)), float64(AbsInt(b.Y-a.Y)))
 	}
 
 	cost := func(a, b *Node) float64 {
-		if a.X == b.X || a.Y == b.Y {
-			return 1 * b.Weight
+		dx, dy := b.X-a.X, b.Y-a.Y
+		if stepCost != nil {
+			return stepCost(dx, dy) * b.Weight
+		}
+		if dx == 0 || dy == 0 {
+			return b.Weight
 		}
 		return SQRT2 * b.Weight
 	}

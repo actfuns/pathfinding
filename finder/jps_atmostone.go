@@ -14,13 +14,13 @@ func NewJPFMoveDiagonallyIfAtMostOneObstacle(opts ...Option) *JPFMoveDiagonallyI
 	return f
 }
 
-func atMostOneJump(b *JumpPointFinderBase, x, y, px, py int) *[2]int {
+func atMostOneJump(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool) {
 	grid := b.grid
 	dx := x - px
 	dy := y - py
 
 	if !grid.IsWalkableAt(x, y) {
-		return nil
+		return 0, 0, false
 	}
 
 	if b.TrackRecursion {
@@ -28,27 +28,30 @@ func atMostOneJump(b *JumpPointFinderBase, x, y, px, py int) *[2]int {
 	}
 
 	if grid.GetNodeAt(x, y) == b.endNode {
-		return &[2]int{x, y}
+		return x, y, true
 	}
 
 	if dx != 0 && dy != 0 {
 		if (grid.IsWalkableAt(x-dx, y+dy) && !grid.IsWalkableAt(x-dx, y)) ||
 			(grid.IsWalkableAt(x+dx, y-dy) && !grid.IsWalkableAt(x, y-dy)) {
-			return &[2]int{x, y}
+			return x, y, true
 		}
-		if atMostOneJump(b, x+dx, y, x, y) != nil || atMostOneJump(b, x, y+dy, x, y) != nil {
-			return &[2]int{x, y}
+		if _, _, ok := atMostOneJump(b, x+dx, y, x, y); ok {
+			return x, y, true
+		}
+		if _, _, ok := atMostOneJump(b, x, y+dy, x, y); ok {
+			return x, y, true
 		}
 	} else {
 		if dx != 0 {
 			if (grid.IsWalkableAt(x+dx, y+1) && !grid.IsWalkableAt(x, y+1)) ||
 				(grid.IsWalkableAt(x+dx, y-1) && !grid.IsWalkableAt(x, y-1)) {
-				return &[2]int{x, y}
+				return x, y, true
 			}
 		} else {
 			if (grid.IsWalkableAt(x+1, y+dy) && !grid.IsWalkableAt(x+1, y)) ||
 				(grid.IsWalkableAt(x-1, y+dy) && !grid.IsWalkableAt(x-1, y)) {
-				return &[2]int{x, y}
+				return x, y, true
 			}
 		}
 	}
@@ -56,10 +59,10 @@ func atMostOneJump(b *JumpPointFinderBase, x, y, px, py int) *[2]int {
 	if grid.IsWalkableAt(x+dx, y) || grid.IsWalkableAt(x, y+dy) {
 		return atMostOneJump(b, x+dx, y+dy, x, y)
 	}
-	return nil
+	return 0, 0, false
 }
 
-func atMostOneFindNeighbors(b *JumpPointFinderBase, node *Node) [][2]int {
+func atMostOneFindNeighbors(b *JumpPointFinderBase, node *Node, buf [][2]int) [][2]int {
 	parent := node.Parent
 	x, y := node.X, node.Y
 	grid := b.grid
@@ -69,7 +72,7 @@ func atMostOneFindNeighbors(b *JumpPointFinderBase, node *Node) [][2]int {
 		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
 		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 
-		neighbors := make([][2]int, 0, 5)
+		neighbors := buf[:0]
 
 		if dx != 0 && dy != 0 {
 			if grid.IsWalkableAt(x, y+dy) {
@@ -114,9 +117,9 @@ func atMostOneFindNeighbors(b *JumpPointFinderBase, node *Node) [][2]int {
 	}
 
 	neighborNodes := grid.GetNeighbors(node, DiagonalIfAtMostOneObstacle, b.neighborBuf)
-	neighbors := make([][2]int, len(neighborNodes))
-	for i, n := range neighborNodes {
-		neighbors[i] = [2]int{n.X, n.Y}
+	neighbors := buf[:0]
+	for _, n := range neighborNodes {
+		neighbors = append(neighbors, [2]int{n.X, n.Y})
 	}
 	return neighbors
 }

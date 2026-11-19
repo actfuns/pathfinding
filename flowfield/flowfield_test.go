@@ -349,3 +349,31 @@ func TestFindPathOutOfBounds(t *testing.T) {
 		t.Errorf("unreachable tile must return a nil path, got %v", path)
 	}
 }
+
+// Weights are charged when entering a tile (matching A*), including the goal.
+func TestFlowFieldDestinationWeight(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int{{0, 0, 0}})
+	g.SetWeightAt(2, 0, 5)
+
+	ff := New(g, 2, 0)
+	if c := ff.GetCost(0, 0); c != 6 {
+		t.Errorf("cost(0,0) = %v, want 6", c)
+	}
+	if dx, dy := ff.GetDirection(0, 0); dx != 1 || dy != 0 {
+		t.Errorf("direction(0,0) = (%d,%d), want (1,0)", dx, dy)
+	}
+}
+
+// Flowfield must use the grid's StepCost (hex moves all cost 1).
+func TestFlowFieldHexStepCost(t *testing.T) {
+	g := grid.NewHexGrid(grid.NewMatrix(5, 5), grid.WithTileSize(55, 64), grid.WithHexSide(32))
+	ff := New(g, 4, 4)
+	bfs, _ := finder.NewBreadthFirstFinder().FindPath(0, 0, 4, 4, g)
+	if len(bfs) == 0 {
+		t.Fatal("BFS found no path")
+	}
+	want := float64(len(bfs) - 1)
+	if got := ff.GetCost(0, 0); got != want {
+		t.Errorf("hex cost(0,0) = %v, want %v (BFS steps)", got, want)
+	}
+}

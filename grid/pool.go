@@ -201,8 +201,10 @@ func (p *Pool) Timeout() time.Duration { return p.timeout }
 
 // Base returns the resident instance used for read-only calls. It is built on
 // first use and reused until reset replaces the map, at which point the next
-// call rebuilds it. Base is not leased and does not count towards capacity.
-func (p *Pool) Base() Grid {
+// call rebuilds it. Base is not leased and does not count towards capacity, so
+// it is one extra grid per active Pool; Reset and Close drop it so a retired
+// map can be reclaimed. Callers must treat Base as read-only.
+func (p *Pool) Base() ReadOnlyGrid {
 	p.mu.Lock()
 	if p.base != nil && p.baseEpoch == p.epoch.Load() {
 		b := p.base
@@ -433,6 +435,7 @@ func (p *Pool) close() {
 	}
 	p.created -= len(p.idle)
 	p.idle = nil
+	p.base = nil
 	p.cond.Broadcast()
 }
 

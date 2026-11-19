@@ -135,9 +135,13 @@ func (g *OrthogonalGrid) SetWalkableAt(x, y int, walkable bool) {
 }
 
 // SetWeightAt sets the movement cost multiplier for the tile at (x, y).
-// A weight of 1.0 is the default; higher values make the tile more costly
-// to traverse. Panics if (x, y) is outside the grid.
+// A weight of 1.0 is the default; higher values make the tile more costly to
+// traverse. Panics if (x, y) is outside the grid or weight is not a finite
+// positive number.
 func (g *OrthogonalGrid) SetWeightAt(x, y int, weight float64) {
+	if !validWeight(weight) {
+		panic("grid: weight must be a finite positive number")
+	}
 	g.nodes[g.index(x, y)].Weight = weight
 }
 

@@ -59,8 +59,10 @@ var jpsDiagonalIdx = map[[2]int]int{
 // optimization of JPS. It replaces the iterative jump() function with an
 // O(1) table lookup of precomputed jump distances.
 //
-// Call Precompute(grid) before FindPath. The grid is assumed to be static;
-// changes to the grid require calling Precompute again.
+// Call Precompute(grid) before FindPath for axis-aligned grids. The grid is
+// assumed to be static; changes to the grid require calling Precompute again.
+// Precompute returns ErrUnsupportedGrid for hex/staggered grids; FindPath also
+// rejects them.
 //
 // The static table cannot encode jump points that depend on the goal, so the
 // search also relaxes one-step moves from every expanded node. This keeps the
@@ -69,10 +71,14 @@ var jpsDiagonalIdx = map[[2]int]int{
 //
 // JPS+ assumes every step has the same cost (tile Weight == 1). Tile weights are
 // ignored; use A* or Dijkstra for weighted grids.
+//
+// JPS+ only supports axis-aligned grids (OrthogonalGrid). Hex and staggered
+// grids return ErrUnsupportedGrid.
 type JPSPlusFinder struct {
 	Heuristic        HeuristicFunc
 	DiagonalMovement DiagonalMovement
 	Weight           float64
+	Adaptive         bool
 
 	width, height int
 
@@ -85,13 +91,14 @@ type JPSPlusFinder struct {
 	wide   bool
 
 	// Runtime state
-	grid      Grid
-	startNode *Node
-	endNode   *Node
-	openList  *MinHeap
-	heapSlice []*Node
-	pathBuf   [][2]int
-	expandBuf [][2]int
+	grid             Grid
+	startNode        *Node
+	endNode          *Node
+	openList         *MinHeap
+	heapSlice        []*Node
+	pathBuf          [][2]int
+	expandBuf        [][2]int
+	adaptiveFallback *AStarFinder
 
 	// Pre-allocated direction slice (avoid allocation in hot path)
 	dirs []int
@@ -111,6 +118,7 @@ func NewJPSPlusFinder(opts ...Option) *JPSPlusFinder {
 		Heuristic:        Manhattan,
 		DiagonalMovement: diagonal,
 		Weight:           1,
+		Adaptive:         opt.Adaptive,
 		dirs:             dirs,
 	}
 	if opt.Heuristic != nil {
@@ -126,8 +134,12 @@ func NewJPSPlusFinder(opts ...Option) *JPSPlusFinder {
 
 // Precompute builds the jump distance table for the given grid.
 // Must be called before FindPath. The grid is assumed static.
-func (j *JPSPlusFinder) Precompute(grid Grid) {
+func (j *JPSPlusFinder) Precompute(grid Grid) error {
+	if !supportsJPS(grid) {
+		return ErrUnsupportedGrid
+	}
 	j.precompute(grid, grid.Width() > 128 || grid.Height() > 128)
+	return nil
 }
 
 // precompute builds the table with an explicit cell width. It is split out so
@@ -163,11 +175,10 @@ func (j *JPSPlusFinder) precompute(grid Grid, wide bool) {
 }
 
 // detectPrimaryJumpPoints scans each walkable cell for forced neighbors.
-// Returns a map from cell position to bitmask of directions where the cell
-// acts as a jump point.
-func (j *JPSPlusFinder) detectPrimaryJumpPoints(grid Grid) map[[2]int]uint8 {
-	primaryJPs := make(map[[2]int]uint8)
+// Returns a per-cell bitmask of directions where the cell acts as a jump point.
+func (j *JPSPlusFinder) detectPrimaryJumpPoints(grid Grid) []uint8 {
 	w, h := j.width, j.height
+	primaryJPs := make([]uint8, w*h)
 
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
@@ -203,7 +214,7 @@ func (j *JPSPlusFinder) detectPrimaryJumpPoints(grid Grid) map[[2]int]uint8 {
 					}
 
 					dirIdx := jpsCardinalIdx[cd]
-					primaryJPs[[2]int{jpx, jpy}] |= 1 << dirIdx
+					primaryJPs[jpy*w+jpx] |= 1 << dirIdx
 				}
 			}
 		}
@@ -212,7 +223,7 @@ func (j *JPSPlusFinder) detectPrimaryJumpPoints(grid Grid) map[[2]int]uint8 {
 }
 
 // computeDistances fills the jumpTable with distances in all 8 directions.
-func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs map[[2]int]uint8) {
+func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs []uint8) {
 	w, h := j.width, j.height
 
 	// Helper: get distance to obstacle or jump point in a cardinal direction
@@ -223,7 +234,7 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs map[[2]int]uint8)
 			if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
 				return int16(-dist)
 			}
-			if primaryJPs[[2]int{nx, ny}]&(1<<dirIdx) != 0 {
+			if primaryJPs[ny*w+nx]&(1<<dirIdx) != 0 {
 				return int16(dist + 1)
 			}
 			dist++
@@ -427,6 +438,33 @@ func (j *JPSPlusFinder) PrecomputedSize() int {
 	return 12 + j.width*j.height*8*cellBytes
 }
 
+// AdaptiveDensityThreshold is the obstacle ratio at or above which Adaptive
+// JPS+ prefers A*.
+const AdaptiveDensityThreshold = 0.1
+
+func (j *JPSPlusFinder) useAStar(grid Grid) bool {
+	oc, ok := grid.(interface{ ObstacleCount() int })
+	if !ok {
+		return false
+	}
+	area := grid.Width() * grid.Height()
+	if area == 0 {
+		return false
+	}
+	return float64(oc.ObstacleCount())/float64(area) >= AdaptiveDensityThreshold
+}
+
+func (j *JPSPlusFinder) newAdaptiveFallback() Finder {
+	if j.adaptiveFallback == nil {
+		j.adaptiveFallback = NewAStarFinder(
+			WithDiagonal(j.DiagonalMovement),
+			WithHeuristic(j.Heuristic),
+			WithWeight(j.Weight),
+		)
+	}
+	return j.adaptiveFallback
+}
+
 // FindPath performs JPS+ pathfinding using the precomputed jump table.
 // Precompute(grid) must have been called first with the same grid.
 func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
@@ -435,11 +473,20 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
-	if !j.hasTable() {
-		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
+	if !supportsJPS(grid) {
+		return nil, ErrUnsupportedGrid
 	}
 	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return path, err
+	}
+	if !j.hasTable() {
+		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
+	}
+	if grid.Width() != j.width || grid.Height() != j.height {
+		return nil, ErrPrecomputedMismatch
+	}
+	if j.Adaptive && j.useAStar(grid) {
+		return j.newAdaptiveFallback().FindPath(startX, startY, endX, endY, grid)
 	}
 	searchSeq := int(globalSearchSeq.Add(1))
 	j.grid = grid

@@ -14,5 +14,6 @@ func NewBiBestFirstFinder(opts ...Option) *BiBestFirstFinder {
 	f.Heuristic = func(dx, dy float64) float64 {
 		return orig(dx, dy) * 1000000
 	}
+	f.customHeuristic = true
 	return f
 }

@@ -1,6 +1,8 @@
 package grid
 
 import (
+	"math"
+
 	"github.com/actfuns/pathfinding/finder"
 )
 
@@ -30,6 +32,44 @@ func NewMatrix(w, h int) [][]int {
 		m[i] = make([]int, w)
 	}
 	return m
+}
+
+// validWeight reports whether w is a finite positive movement multiplier.
+func validWeight(w float64) bool {
+	return w > 0 && !math.IsNaN(w) && !math.IsInf(w, 0)
+}
+
+// ReadOnlyGrid is the read-only subset of Grid. A Proxy exposes only these
+// methods; changing map data goes through PoolManager.Reset with a new Factory.
+type ReadOnlyGrid interface {
+	Width() int
+	Height() int
+	IsInside(x, y int) bool
+	IsWalkableAt(x, y int) bool
+	GetNodeAt(x, y int) *finder.Node
+	GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node
+	Clone() finder.Grid
+
+	TileWidth() int
+	TileHeight() int
+	ObstacleCount() int
+	TileIndex(x, y int) int
+	TileXY(index int) (int, int)
+	GetWeightAt(x, y int) float64
+
+	WorldToTile(wx, wy float32) (int, int)
+	TileToWorld(tx, ty int) (float32, float32)
+	IsWalkableAtWorld(wx, wy float32) bool
+
+	HasLineOfSight(x1, y1, x2, y2 int) bool
+	HasLineOfSightWorld(x1, y1, x2, y2 float32) bool
+	FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, bool)
+	FindNearestWalkableWorld(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool)
+
+	Finder() finder.Finder
+	FindPath(x1, y1, x2, y2 int) ([][2]int, error)
+	FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32, error)
+	RenderSVG(cfg *SVGOpts, paths ...[][2]int) string
 }
 
 // Grid defines the interface that all grid types implement.

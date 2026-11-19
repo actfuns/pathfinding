@@ -25,3 +25,35 @@ type Grid interface {
 	// for snapshotting a map, not for running two searches against one map.
 	Clone() Grid
 }
+
+// StepCostGrid is optionally implemented by grids whose step costs differ from
+// the square-grid default (cardinal = 1, diagonal = sqrt(2)).
+type StepCostGrid interface {
+	StepCost(dx, dy int) float64
+}
+
+// heuristicGrid is optionally implemented by grids that need a topology-specific
+// default heuristic (for example, hex grids with unit-cost moves).
+type heuristicGrid interface {
+	DefaultHeuristic(diagonal DiagonalMovement) HeuristicFunc
+}
+
+// gridStepCost returns the grid's step-cost function, or nil when the
+// square-grid default applies. Returning nil keeps the inline fast path.
+func gridStepCost(grid Grid) func(dx, dy int) float64 {
+	if g, ok := grid.(StepCostGrid); ok {
+		return g.StepCost
+	}
+	return nil
+}
+
+// heuristicFor returns the grid's default heuristic unless the caller supplied
+// an explicit one.
+func heuristicFor(grid Grid, diagonal DiagonalMovement, fallback HeuristicFunc, custom bool) HeuristicFunc {
+	if !custom {
+		if g, ok := grid.(heuristicGrid); ok {
+			return g.DefaultHeuristic(diagonal)
+		}
+	}
+	return fallback
+}

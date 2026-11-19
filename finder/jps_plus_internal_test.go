@@ -22,12 +22,13 @@ func newFlatGrid(w, h int) *flatGrid {
 	return g
 }
 
-func (g *flatGrid) Width() int                     { return g.w }
-func (g *flatGrid) Height() int                    { return g.h }
-func (g *flatGrid) IsInside(x, y int) bool         { return x >= 0 && x < g.w && y >= 0 && y < g.h }
-func (g *flatGrid) IsWalkableAt(x, y int) bool     { return g.IsInside(x, y) && g.nodes[y*g.w+x].Walkable }
-func (g *flatGrid) SetWalkableAt(x, y int, v bool) { g.nodes[y*g.w+x].Walkable = v }
-func (g *flatGrid) GetNodeAt(x, y int) *Node       { return &g.nodes[y*g.w+x] }
+func (g *flatGrid) Width() int                        { return g.w }
+func (g *flatGrid) Height() int                       { return g.h }
+func (g *flatGrid) IsInside(x, y int) bool            { return x >= 0 && x < g.w && y >= 0 && y < g.h }
+func (g *flatGrid) IsWalkableAt(x, y int) bool        { return g.IsInside(x, y) && g.nodes[y*g.w+x].Walkable }
+func (g *flatGrid) SetWalkableAt(x, y int, v bool)    { g.nodes[y*g.w+x].Walkable = v }
+func (g *flatGrid) GetNodeAt(x, y int) *Node          { return &g.nodes[y*g.w+x] }
+func (g *flatGrid) SupportsJPSCanonicalPruning() bool { return true }
 func (g *flatGrid) Clone() Grid {
 	ng := &flatGrid{w: g.w, h: g.h, nodes: make([]Node, len(g.nodes))}
 	copy(ng.nodes, g.nodes)
@@ -62,7 +63,7 @@ func TestJPSPlusDynamicTableWidth(t *testing.T) {
 	for _, tc := range cases {
 		g := newFlatGrid(tc.w, 1)
 		f := NewJPSPlusFinder(WithDiagonal(DiagonalNever))
-		f.Precompute(g)
+		_ = f.Precompute(g)
 		f.grid = g
 
 		if f.wide != tc.wide {
@@ -113,7 +114,7 @@ func TestJPSPlusInt8MatchesInt16(t *testing.T) {
 	}
 
 	narrow := NewJPSPlusFinder(WithDiagonal(DiagonalOnlyWhenNoObstacles))
-	narrow.Precompute(g)
+	_ = narrow.Precompute(g)
 	if narrow.wide {
 		t.Fatal("128x128 grid should use int8")
 	}
@@ -156,7 +157,7 @@ func TestJPSPlusTableRoundTripBothWidths(t *testing.T) {
 			}
 		}
 		f := NewJPSPlusFinder(WithDiagonal(DiagonalOnlyWhenNoObstacles))
-		f.Precompute(g)
+		_ = f.Precompute(g)
 		if f.wide != tc.wide {
 			t.Fatalf("%dx%d: wide=%v, want %v", tc.w, tc.h, f.wide, tc.wide)
 		}

@@ -4,6 +4,9 @@ package finder
 //
 // JPS assumes every step has the same cost (tile Weight == 1). Tile weights are
 // ignored; use A* or Dijkstra for weighted grids.
+//
+// JPS only supports axis-aligned grids (OrthogonalGrid). Hex and staggered
+// grids return ErrUnsupportedGrid.
 type JumpPointFinderBase struct {
 	Heuristic        HeuristicFunc
 	DiagonalMovement DiagonalMovement
@@ -14,12 +17,13 @@ type JumpPointFinderBase struct {
 	endNode          *Node
 	openList         *MinHeap
 	neighborBuf      []*Node
+	neighborPosBuf   [][2]int
 	heapSlice        []*Node
 	pathBuf          [][2]int
 	expandBuf        [][2]int
 
-	jumpFn          func(b *JumpPointFinderBase, x, y, px, py int) *[2]int
-	findNeighborsFn func(b *JumpPointFinderBase, node *Node) [][2]int
+	jumpFn          func(b *JumpPointFinderBase, x, y, px, py int) (int, int, bool)
+	findNeighborsFn func(b *JumpPointFinderBase, node *Node, buf [][2]int) [][2]int
 }
 
 // GridWithJPSSupport is optionally implemented by Grid types that support
@@ -27,6 +31,13 @@ type JumpPointFinderBase struct {
 type GridWithJPSSupport interface {
 	Grid
 	SupportsJPSCanonicalPruning() bool
+}
+
+// supportsJPS reports whether the grid has the axis-aligned topology that JPS
+// assumes. Hex and staggered grids must use A*.
+func supportsJPS(grid Grid) bool {
+	gs, ok := grid.(GridWithJPSSupport)
+	return ok && gs.SupportsJPSCanonicalPruning()
 }
 
 // NewJumpPointFinderBase creates a new JumpPointFinderBase.
@@ -38,6 +49,7 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 		Weight:           1,
 		TrackRecursion:   false,
 		neighborBuf:      make([]*Node, 0, 8),
+		neighborPosBuf:   make([][2]int, 0, 8),
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic
@@ -57,6 +69,9 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 	// report it as a caller error instead of a crash.
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
+	}
+	if !supportsJPS(grid) {
+		return nil, ErrUnsupportedGrid
 	}
 	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return path, err
@@ -144,25 +159,14 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node, searchSeq int) {
 	endY := b.endNode.Y
 	x, y := node.X, node.Y
 
-	// Non-orthogonal grids (staggered) need grid.GetNeighbors for correct neighbor topology.
-	// JPS pruning makes axis-aligned assumptions that don't hold on staggered/hex grids.
-	var neighbors [][2]int
-	if gs, ok := grid.(GridWithJPSSupport); ok && gs.SupportsJPSCanonicalPruning() {
-		neighbors = b.findNeighborsFn(b, node)
-	} else {
-		nodes := grid.GetNeighbors(node, b.DiagonalMovement, b.neighborBuf)
-		neighbors = make([][2]int, len(nodes))
-		for i, n := range nodes {
-			neighbors[i] = [2]int{n.X, n.Y}
-		}
-	}
+	// FindPath guarantees supportsJPS(grid), so canonical pruning is safe.
+	neighbors := b.findNeighborsFn(b, node, b.neighborPosBuf[:0])
+	b.neighborPosBuf = neighbors[:0]
 	for _, neighbor := range neighbors {
-		jumpPoint := b.jumpFn(b, neighbor[0], neighbor[1], x, y)
-		if jumpPoint == nil {
+		jx, jy, ok := b.jumpFn(b, neighbor[0], neighbor[1], x, y)
+		if !ok {
 			continue
 		}
-
-		jx, jy := jumpPoint[0], jumpPoint[1]
 		jumpNode := grid.GetNodeAt(jx, jy)
 		jumpNode.ResetSearch(searchSeq)
 

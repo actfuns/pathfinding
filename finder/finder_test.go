@@ -178,8 +178,7 @@ func TestAllFindersRejectOutOfBounds(t *testing.T) {
 	g := grid.NewOrthogonalGrid(m)
 
 	jpsPlus := finder.NewJPSPlusFinder()
-	jpsPlus.Precompute(g)
-
+	_ = jpsPlus.Precompute(g)
 	for name, f := range map[string]finder.Finder{
 		"AStar":          finder.NewAStarFinder(),
 		"BreadthFirst":   finder.NewBreadthFirstFinder(),

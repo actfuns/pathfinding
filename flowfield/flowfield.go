@@ -32,7 +32,7 @@ type Field struct {
 	dirs []dir2    // direction to cheapest neighbour
 
 	neighborBuf []*finder.Node
-	queue       []item
+	queue       itemHeap
 }
 
 type dir2 struct{ dx, dy int }
@@ -40,6 +40,54 @@ type dir2 struct{ dx, dy int }
 type item struct {
 	x, y int
 	g    float64
+}
+
+// itemHeap is a typed min-heap ordered by cost. A typed heap avoids the
+// per-push interface boxing of container/heap, which dominates flowfield builds
+// on weighted maps.
+type itemHeap []item
+
+func (h *itemHeap) push(it item) {
+	*h = append(*h, it)
+	i := len(*h) - 1
+	for i > 0 {
+		p := (i - 1) / 2
+		if (*h)[p].g <= it.g {
+			break
+		}
+		(*h)[i] = (*h)[p]
+		i = p
+	}
+	(*h)[i] = it
+}
+
+func (h *itemHeap) pop() item {
+	old := *h
+	n := len(old)
+	root := old[0]
+	last := old[n-1]
+	old = old[:n-1]
+	if len(old) > 0 {
+		i := 0
+		for {
+			l := 2*i + 1
+			if l >= len(old) {
+				break
+			}
+			c := l
+			if r := l + 1; r < len(old) && old[r].g < old[l].g {
+				c = r
+			}
+			if old[c].g >= last.g {
+				break
+			}
+			old[i] = old[c]
+			i = c
+		}
+		old[i] = last
+	}
+	*h = old
+	return root
 }
 
 // Option configures the flow field.
@@ -62,7 +110,7 @@ func initField(grid finder.Grid, opts []Option) *Field {
 		cost:        make([]float64, w*h),
 		dirs:        make([]dir2, w*h),
 		neighborBuf: make([]*finder.Node, 0, 8),
-		queue:       make([]item, 0, w*h),
+		queue:       make(itemHeap, 0, w*h),
 	}
 	for _, opt := range opts {
 		opt(ff)
@@ -113,10 +161,15 @@ func (ff *Field) integrateMulti(goals [][2]int) {
 	grid := ff.grid
 	cost := ff.cost
 	diag := ff.diagonal
+	stepCost := stepCostFunc(grid)
 
 	nb := ff.neighborBuf[:0]
 	queue := ff.queue[:0]
 	idx := func(x, y int) int { return y*w + x }
+
+	// Cardinal-only unit-cost fields reduce to plain BFS. Keep Dijkstra for
+	// weighted grids or when diagonal steps have a different cost.
+	useBFS := ff.diagonal == finder.DiagonalNever && unitStepCost(grid) && allUnitWeights(grid)
 
 	// Push all walkable goals as initial sources
 	for _, g := range goals {
@@ -130,9 +183,31 @@ func (ff *Field) integrateMulti(goals [][2]int) {
 		}
 	}
 
+	if useBFS {
+		for head := 0; head < len(queue); head++ {
+			cur := queue[head]
+			ci := idx(cur.x, cur.y)
+			if cost[ci] != cur.g {
+				continue
+			}
+			node := grid.GetNodeAt(cur.x, cur.y)
+			neighbors := grid.GetNeighbors(node, diag, nb)
+			nb = nb[:0]
+			for _, nbNode := range neighbors {
+				ni := idx(nbNode.X, nbNode.Y)
+				nd := cur.g + 1
+				if cost[ni] < 0 || nd < cost[ni] {
+					cost[ni] = nd
+					queue = append(queue, item{x: nbNode.X, y: nbNode.Y, g: nd})
+				}
+			}
+		}
+		ff.queue = queue[:0]
+		return
+	}
+
 	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
+		cur := queue.pop()
 
 		ci := idx(cur.x, cur.y)
 		if cost[ci] != cur.g {
@@ -140,22 +215,21 @@ func (ff *Field) integrateMulti(goals [][2]int) {
 		}
 
 		node := grid.GetNodeAt(cur.x, cur.y)
+		curWeight := node.Weight
 		neighbors := grid.GetNeighbors(node, diag, nb)
 		nb = nb[:0]
 
 		for _, nbNode := range neighbors {
 			nx, ny := nbNode.X, nbNode.Y
 
-			step := 1.0
-			if nx-cur.x != 0 && ny-cur.y != 0 {
-				step = finder.SQRT2
-			}
-			nd := cur.g + step*nbNode.Weight
+			// Moving nb -> cur enters cur, so the destination-weight model
+			// charges cur's weight (matching A*).
+			nd := cur.g + stepCost(nx-cur.x, ny-cur.y)*curWeight
 
 			ni := idx(nx, ny)
 			if cost[ni] < 0 || nd < cost[ni] {
 				cost[ni] = nd
-				queue = append(queue, item{x: nx, y: ny, g: nd})
+				queue.push(item{x: nx, y: ny, g: nd})
 			}
 		}
 	}
@@ -169,6 +243,7 @@ func (ff *Field) vectorize() {
 	grid := ff.grid
 	cost := ff.cost
 	diag := ff.diagonal
+	stepCost := stepCostFunc(grid)
 
 	nb := ff.neighborBuf[:0]
 	idx := func(x, y int) int { return y*w + x }
@@ -181,7 +256,12 @@ func (ff *Field) vectorize() {
 				continue
 			}
 
-			bestG := cost[ci]
+			if cost[ci] == 0 {
+				ff.dirs[ci] = dir2{0, 0}
+				continue
+			}
+
+			best := 0.0
 			bestDir := dir2{0, 0}
 
 			node := grid.GetNodeAt(x, y)
@@ -194,8 +274,9 @@ func (ff *Field) vectorize() {
 				if nc < 0 {
 					continue
 				}
-				if nc < bestG {
-					bestG = nc
+				total := nc + stepCost(nbNode.X-x, nbNode.Y-y)*nbNode.Weight
+				if bestDir == (dir2{0, 0}) || total < best {
+					best = total
 					bestDir = dir2{nbNode.X - x, nbNode.Y - y}
 				}
 			}
@@ -213,6 +294,39 @@ func (ff *Field) GetDirection(x, y int) (int, int) {
 	}
 	d := ff.dirs[y*ff.width+x]
 	return d.dx, d.dy
+}
+
+// allUnitWeights reports whether every tile uses the default movement weight.
+func allUnitWeights(grid finder.Grid) bool {
+	for y := 0; y < grid.Height(); y++ {
+		for x := 0; x < grid.Width(); x++ {
+			if grid.GetNodeAt(x, y).Weight != 1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// unitStepCost reports whether cardinal steps cost 1.
+func unitStepCost(grid finder.Grid) bool {
+	if sc, ok := grid.(finder.StepCostGrid); ok {
+		return sc.StepCost(1, 0) == 1 && sc.StepCost(0, 1) == 1
+	}
+	return true
+}
+
+// stepCostFunc resolves the grid's step-cost function once per build.
+func stepCostFunc(grid finder.Grid) func(dx, dy int) float64 {
+	if sc, ok := grid.(finder.StepCostGrid); ok {
+		return sc.StepCost
+	}
+	return func(dx, dy int) float64 {
+		if dx != 0 && dy != 0 {
+			return finder.SQRT2
+		}
+		return 1
+	}
 }
 
 // GetCost returns the integration cost (distance to nearest goal).

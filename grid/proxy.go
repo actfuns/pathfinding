@@ -7,9 +7,10 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
-// Proxy is the Grid a scene holds for the lifetime of its map.
+// Proxy is the read-only Grid view a scene holds for the lifetime of its map.
 //
-// It implements Grid, but splits the two access patterns:
+// It exposes the read-only Grid operations (ReadOnlyGrid) and splits the two
+// access patterns:
 //
 //   - FindPath and FindPathWorld lease an instance from the Pool, run the search
 //     on it and hand it straight back, so that searches from different scenes —
@@ -51,19 +52,25 @@ import (
 // # Release and Reset
 //
 // Release must be called exactly once when the scene is done; extra calls are
-// safe no-ops. A released Proxy is dead, not merely quiet: every Grid method
-// panics rather than answering from a map that is gone.
+// safe no-ops. A released Proxy is dead, not merely quiet: every Proxy method
+// panics rather than answering from a map that is gone. Release also drops the
+// cached Base and result buffers so they can be reclaimed.
+//
+// Proxy is read-only. To change map data, build a new Factory and call
+// PoolManager.Reset; mutations are deliberately not exposed because leased
+// instances are independent copies and would not see them.
 //
 // PoolManager.Reset does NOT do that. It swaps the map data underneath and
 // leaves this Proxy live and in use — existing Proxies keep working and serve
 // the new map from their next call onward, with no re-Acquire and no panic.
 type Proxy interface {
-	Grid
+	ReadOnlyGrid
 	Release()
 }
 
 // proxy implements Proxy: read-only calls are forwarded to the resident Base
 // instance, pathfinding goes through a lease and lands in a reused buffer.
+// There are no mutators.
 //
 // Everything below the Pool handle is unsynchronised state (base, baseEpoch,
 // pathBuf, worldBuf) and is written without atomics on the assumption of ONE
@@ -79,8 +86,8 @@ type proxy struct {
 	pathBuf  [][2]int
 	worldBuf [][2]float32
 
-	base        Grid   // cached pool.Base(), filled on first read
-	baseEpoch   uint64 // Pool.Epoch() that p.base was read from
+	base        ReadOnlyGrid // cached pool.Base(), filled on first read
+	baseEpoch   uint64       // Pool.Epoch() that p.base was read from
 	released    atomic.Bool
 	releaseOnce sync.Once
 }
@@ -109,7 +116,7 @@ func (p *proxy) checkLive() {
 // Base is cached and re-read only when the Pool's epoch moves, which is what
 // Reset bumps. A plain field (not atomic) is enough: a Proxy is single-goroutine
 // by contract, so the only shared read is the atomic Epoch load.
-func (p *proxy) live() Grid {
+func (p *proxy) live() ReadOnlyGrid {
 	p.checkLive()
 	// Re-read after a Reset, or this Proxy would keep answering from the map it
 	// started on. Epoch() is a single atomic load, so the common case is one
@@ -174,6 +181,8 @@ func (p *proxy) FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32, error) 
 }
 
 // --- everything else: forwarded to the resident Base instance ---
+// Proxy is read-only, so these calls cannot race with mutations. Map changes
+// go through PoolManager.Reset.
 
 func (p *proxy) Width() int  { return p.live().Width() }
 func (p *proxy) Height() int { return p.live().Height() }
@@ -182,9 +191,6 @@ func (p *proxy) IsInside(x, y int) bool {
 }
 
 func (p *proxy) IsWalkableAt(x, y int) bool { return p.live().IsWalkableAt(x, y) }
-func (p *proxy) SetWalkableAt(x, y int, walkable bool) {
-	p.live().SetWalkableAt(x, y, walkable)
-}
 
 func (p *proxy) GetNodeAt(x, y int) *finder.Node { return p.live().GetNodeAt(x, y) }
 func (p *proxy) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
@@ -192,7 +198,7 @@ func (p *proxy) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement
 }
 
 // Clone returns an independent copy of the underlying grid. The copy is detached
-// from the Pool and is safe to use without going through a Proxy.
+// from the Pool and is safe to use (and mutate) without going through a Proxy.
 func (p *proxy) Clone() finder.Grid { return p.live().Clone() }
 
 func (p *proxy) TileWidth() int  { return p.live().TileWidth() }
@@ -206,17 +212,13 @@ func (p *proxy) TileXY(index int) (int, int) {
 	return p.live().TileXY(index)
 }
 
-func (p *proxy) SetWeightAt(x, y int, weight float64) { p.live().SetWeightAt(x, y, weight) }
-func (p *proxy) GetWeightAt(x, y int) float64         { return p.live().GetWeightAt(x, y) }
+func (p *proxy) GetWeightAt(x, y int) float64 { return p.live().GetWeightAt(x, y) }
 
 func (p *proxy) WorldToTile(wx, wy float32) (int, int) { return p.live().WorldToTile(wx, wy) }
 func (p *proxy) TileToWorld(tx, ty int) (float32, float32) {
 	return p.live().TileToWorld(tx, ty)
 }
 func (p *proxy) IsWalkableAtWorld(wx, wy float32) bool { return p.live().IsWalkableAtWorld(wx, wy) }
-func (p *proxy) SetWalkableAtWorld(wx, wy float32, walkable bool) {
-	p.live().SetWalkableAtWorld(wx, wy, walkable)
-}
 
 func (p *proxy) HasLineOfSight(x1, y1, x2, y2 int) bool {
 	return p.live().HasLineOfSight(x1, y1, x2, y2)
@@ -245,5 +247,12 @@ func (p *proxy) Release() {
 	p.releaseOnce.Do(func() {
 		p.released.Store(true)
 		p.manager.release(p.key, p.pool)
+		// Drop references so a retained released Proxy cannot keep the map,
+		// its Base grid, or result buffers alive.
+		p.base = nil
+		p.pathBuf = nil
+		p.worldBuf = nil
+		p.pool = nil
+		p.manager = nil
 	})
 }
