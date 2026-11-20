@@ -20,9 +20,9 @@ func TestFlowFieldBasic(t *testing.T) {
 		t.Fatal("New returned nil")
 	}
 
-	for y := 0; y < 3; y++ {
-		for x := 0; x < 3; x++ {
-			if c := ff.GetCost(int32(x), int32(y)); c < 0 {
+	for y := int32(0); y < 3; y++ {
+		for x := int32(0); x < 3; x++ {
+			if c := ff.GetCost(x, y); c < 0 {
 				t.Errorf("tile (%d,%d) should be reachable, got cost=%v", x, y, c)
 			}
 		}
@@ -298,8 +298,8 @@ func TestFlowFieldDiagonalWithObstacles(t *testing.T) {
 
 func BenchmarkFlowFieldNew(b *testing.B) {
 	g := grid.NewOrthogonalGrid(grid.NewMatrix(50, 50))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = New(g, 25, 25)
 	}
 }
@@ -307,8 +307,8 @@ func BenchmarkFlowFieldNew(b *testing.B) {
 func BenchmarkFlowFieldDirection(b *testing.B) {
 	g := grid.NewOrthogonalGrid(grid.NewMatrix(50, 50))
 	ff := New(g, 25, 25)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		ff.GetDirection(10, 10)
 	}
 }

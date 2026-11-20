@@ -84,10 +84,10 @@ type Grid interface {
 	ObstacleCount() int32
 	// TileIndex returns the flat array index for tile (x, y).
 	// Equivalent to y*Width + x. Panics if outside the grid.
-	TileIndex(x, y int32) int32
+	TileIndex(x, y int32) int
 	// TileXY returns the tile coordinates for a flat array index.
 	// Equivalent to (index % Width, index / Width).
-	TileXY(index int32) (int32, int32)
+	TileXY(index int) (int32, int32)
 
 	// SetWeightAt sets the per-tile movement cost multiplier for tile (x, y).
 	// Weight 1.0 is the default; higher values make movement more expensive.

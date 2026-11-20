@@ -14,12 +14,12 @@ type Portal struct {
 	Offset  int32 // offset along the chunk edge (0-based)
 
 	// External connections to neighboring chunks (portal keys)
-	ExternalCount   int32
+	ExternalCount   int
 	ExternalPortals []int32
 	ExternalCosts   []int32
 
 	// Internal connections to other portals in the same chunk
-	InternalCount   int32
+	InternalCount   int
 	InternalPortals []int32 // portal key of connected portal
 	InternalCosts   []int32 // movement cost (octile * 10)
 }
@@ -52,7 +52,7 @@ type HPAWorld struct {
 	// Unused slots remain nil.
 	Portals []*Portal
 	// NumPortals is the total number of allocated portals.
-	NumPortals int32
+	NumPortals int
 	// ChunkMapX is the number of chunks along the X axis.
 	ChunkMapX int32
 	// ChunkMapY is the number of chunks along the Y axis.
@@ -276,7 +276,7 @@ func connectExternals(grid finder.Grid, w *HPAWorld, nb []*finder.Node) {
 
 						// Deduplicate
 						dup := false
-						for ei := 0; ei < int(p.ExternalCount); ei++ {
+						for ei := 0; ei < p.ExternalCount; ei++ {
 							if p.ExternalPortals[ei] == ekey {
 								dup = true
 								break

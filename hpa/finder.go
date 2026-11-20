@@ -164,7 +164,7 @@ type hpaNode struct {
 	g, h, f   float32
 	parent    *hpaNode
 	closed    bool
-	heapIdx   int32
+	heapIdx   int
 }
 
 // getHPANode returns a node from the pool, or allocates a new one.
@@ -327,7 +327,7 @@ func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid)
 				continue
 			}
 
-			for i := 0; i < int(cp.ExternalCount); i++ {
+			for i := 0; i < cp.ExternalCount; i++ {
 				ek := cp.ExternalPortals[i]
 				ep := world.Portals[ek]
 				if ep == nil {
@@ -337,7 +337,7 @@ func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid)
 				f.openSlice = f.relaxEdge(ek, edgeG, ep, endX, endY, cur)
 			}
 
-			for i := 0; i < int(cp.InternalCount); i++ {
+			for i := 0; i < cp.InternalCount; i++ {
 				ik := cp.InternalPortals[i]
 				ip := world.Portals[ik]
 				if ip == nil {
@@ -574,13 +574,13 @@ func tileLineOfSight(a, b [2]int32, grid finder.Grid) bool {
 // --- Min-heap helpers ---
 
 func (f *HPAFinder) push(heap []*hpaNode, n *hpaNode) []*hpaNode {
-	if n.heapIdx >= 0 && int(n.heapIdx) < len(heap) && heap[int(n.heapIdx)] == n {
-		f.siftUp(heap, int(n.heapIdx))
+	if n.heapIdx >= 0 && n.heapIdx < len(heap) && heap[n.heapIdx] == n {
+		f.siftUp(heap, n.heapIdx)
 		return heap
 	}
-	n.heapIdx = int32(len(heap))
+	n.heapIdx = len(heap)
 	heap = append(heap, n)
-	return f.siftUp(heap, int(n.heapIdx))
+	return f.siftUp(heap, n.heapIdx)
 }
 
 func (f *HPAFinder) pop(heap []*hpaNode) ([]*hpaNode, *hpaNode) {
@@ -605,8 +605,8 @@ func (f *HPAFinder) siftUp(heap []*hpaNode, idx int) []*hpaNode {
 			break
 		}
 		heap[idx], heap[parent] = heap[parent], heap[idx]
-		heap[idx].heapIdx = int32(idx)
-		heap[parent].heapIdx = int32(parent)
+		heap[idx].heapIdx = idx
+		heap[parent].heapIdx = parent
 		idx = parent
 	}
 	return heap
@@ -628,8 +628,8 @@ func (f *HPAFinder) siftDown(heap []*hpaNode, idx int) []*hpaNode {
 			break
 		}
 		heap[idx], heap[smallest] = heap[smallest], heap[idx]
-		heap[idx].heapIdx = int32(idx)
-		heap[smallest].heapIdx = int32(smallest)
+		heap[idx].heapIdx = idx
+		heap[smallest].heapIdx = smallest
 		idx = smallest
 	}
 	return heap

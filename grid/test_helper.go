@@ -10,12 +10,6 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
-// smallFactory builds a fully independent 8x8 orthogonal grid with 32px tiles.
-// Pool tests use it because each call must yield a separate instance.
-func smallFactory() Grid {
-	return NewOrthogonalGrid(NewMatrix(8, 8), WithTileSize(32, 32))
-}
-
 // gridForSVG is any grid type that can render SVG.
 type gridForSVG interface {
 	RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string

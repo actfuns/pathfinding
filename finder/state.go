@@ -62,7 +62,7 @@ func (s *searchStates) at(i int32) *nodeState {
 }
 
 func (s *searchStates) index(n *Node) int32 {
-	return int32(n.Y*s.width + n.X)
+	return n.Y*s.width + n.X
 }
 
 func (s *searchStates) xy(i int32) (int32, int32) {

@@ -27,7 +27,7 @@ func TestHPAExternalPortalCapacity(t *testing.T) {
 	if p.ExternalCount != 8 {
 		t.Errorf("external connections = %d, want 8", p.ExternalCount)
 	}
-	if len(p.ExternalPortals) != int(p.ExternalCount) || len(p.ExternalCosts) != int(p.ExternalCount) {
+	if len(p.ExternalPortals) != p.ExternalCount || len(p.ExternalCosts) != p.ExternalCount {
 		t.Errorf("slice lengths: portals=%d costs=%d count=%d",
 			len(p.ExternalPortals), len(p.ExternalCosts), p.ExternalCount)
 	}

@@ -166,7 +166,7 @@ func TestHPABFSQuadDir(t *testing.T) {
 		t.Fatal("expected portals at both edges")
 	}
 	found := false
-	for i := int32(0); i < northPortal.InternalCount; i++ {
+	for i := 0; i < northPortal.InternalCount; i++ {
 		if northPortal.InternalPortals[i] == southKey {
 			if northPortal.InternalCosts[i] != 70 {
 				t.Errorf("expected cost 70, got %d", northPortal.InternalCosts[i])

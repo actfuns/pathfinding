@@ -22,25 +22,25 @@ type HexGrid struct {
 	staggerEven bool  // true = even rows/cols shifted
 	tileW       int32 // pixel width of a tile
 	tileH       int32 // pixel height of a tile
-	hexSide     int   // length of the hex side (non-stagger direction)
+	hexSide     int32 // length of the hex side (non-stagger direction)
 
 	// Derived layout params (precomputed, mirrors Tiled's RenderParams)
-	sideLenX int // hexSideLength (non-stagger axis)
-	sideLenY int // hexSideLength (non-stagger axis)
-	sideOffX int // (tileW - sideLenX) / 2
-	sideOffY int // (tileH - sideLenY) / 2
-	colW     int // sideOffX + sideLenX
-	rowH     int // sideOffY + sideLenY
-	renW     int // colW + sideOffX  (= effective tileW for render)
-	renH     int // rowH + sideOffY  (= effective tileH for render)
+	sideLenX int32 // hexSideLength (non-stagger axis)
+	sideLenY int32 // hexSideLength (non-stagger axis)
+	sideOffX int32 // (tileW - sideLenX) / 2
+	sideOffY int32 // (tileH - sideLenY) / 2
+	colW     int32 // sideOffX + sideLenX
+	rowH     int32 // sideOffY + sideLenY
+	renW     int32 // colW + sideOffX  (= effective tileW for render)
+	renH     int32 // rowH + sideOffY  (= effective tileH for render)
 
 	nodes         []finder.Node
 	finder        finder.Finder
 	obstacleCount int32
 
 	// Precomputed neighbor offsets (indexed by parity)
-	neighborsEven [6][2]int
-	neighborsOdd  [6][2]int
+	neighborsEven [6][2]int32
+	neighborsOdd  [6][2]int32
 	smoother      Smoother // smoothing function; nil = default
 }
 
@@ -73,7 +73,7 @@ func NewHexGrid(matrix [][]int32, opts ...GridOption) *HexGrid {
 		height:        int32(h),
 		tileW:         cfg.tileW,
 		tileH:         cfg.tileH,
-		hexSide:       int(cfg.hexSide),
+		hexSide:       cfg.hexSide,
 		staggerX:      cfg.staggerX,
 		staggerEven:   cfg.staggerEven,
 		obstacleCount: int32(obs),
@@ -101,8 +101,8 @@ func (g *HexGrid) initParams() {
 	} else {
 		g.sideLenY = g.hexSide
 	}
-	g.sideOffX = (int(g.tileW) - g.sideLenX) / 2
-	g.sideOffY = (int(g.tileH) - g.sideLenY) / 2
+	g.sideOffX = (g.tileW - g.sideLenX) / 2
+	g.sideOffY = (g.tileH - g.sideLenY) / 2
 	g.colW = g.sideOffX + g.sideLenX
 	g.rowH = g.sideOffY + g.sideLenY
 	g.renW = g.colW + g.sideOffX
@@ -113,7 +113,7 @@ func (g *HexGrid) initParams() {
 func (g *HexGrid) initNeighbors() {
 	if g.staggerX {
 		// Flat-top hex: stagger on X axis
-		g.neighborsEven = [6][2]int{
+		g.neighborsEven = [6][2]int32{
 			{-1, -1}, // NW
 			{0, -1},  // N
 			{1, -1},  // NE
@@ -121,7 +121,7 @@ func (g *HexGrid) initNeighbors() {
 			{0, 1},   // S
 			{-1, 0},  // W
 		}
-		g.neighborsOdd = [6][2]int{
+		g.neighborsOdd = [6][2]int32{
 			{0, -1}, // N
 			{-1, 1}, // NW
 			{1, 0},  // E
@@ -131,7 +131,7 @@ func (g *HexGrid) initNeighbors() {
 		}
 	} else {
 		// Pointy-top hex: stagger on Y axis
-		g.neighborsEven = [6][2]int{
+		g.neighborsEven = [6][2]int32{
 			{-1, -1}, // NW
 			{0, -1},  // NE
 			{-1, 0},  // W
@@ -139,7 +139,7 @@ func (g *HexGrid) initNeighbors() {
 			{0, 1},   // SE
 			{1, 0},   // E
 		}
-		g.neighborsOdd = [6][2]int{
+		g.neighborsOdd = [6][2]int32{
 			{1, 0},  // E
 			{0, -1}, // NW
 			{1, -1}, // NE
@@ -150,45 +150,46 @@ func (g *HexGrid) initNeighbors() {
 	}
 }
 
-func (g *HexGrid) doStaggerX(x int) bool {
+func (g *HexGrid) doStaggerX(x int32) bool {
 	return g.staggerX && ((x&1) != 0) != g.staggerEven
 }
 
-func (g *HexGrid) doStaggerY(y int) bool {
+func (g *HexGrid) doStaggerY(y int32) bool {
 	return !g.staggerX && ((y&1) != 0) != g.staggerEven
 }
 
 // --- tile coordinate implementations of finder.Grid ---
 
-func (g *HexGrid) index(x, y int) int { return int(int32(y)*g.width + int32(x)) }
+func (g *HexGrid) index(x, y int32) int { return int(y)*int(g.width) + int(x) }
 
 // TileIndex returns the flat array index for tile (x, y).
-func (g *HexGrid) TileIndex(x, y int32) int32 { return int32(g.index(int(x), int(y))) }
+func (g *HexGrid) TileIndex(x, y int32) int { return g.index(x, y) }
 
 // TileXY returns the tile coordinates for a flat array index.
-func (g *HexGrid) TileXY(index int32) (int32, int32) {
-	return int32(index) % int32(g.width), int32(index) / int32(g.width)
+func (g *HexGrid) TileXY(index int) (int32, int32) {
+	w := int(g.width)
+	return int32(index % w), int32(index / w)
 }
 
 // Width returns the number of tiles along the X axis.
-func (g *HexGrid) Width() int32 { return int32(g.width) }
+func (g *HexGrid) Width() int32 { return g.width }
 
 // Height returns the number of tiles along the Y axis.
-func (g *HexGrid) Height() int32 { return int32(g.height) }
+func (g *HexGrid) Height() int32 { return g.height }
 
 // TileWidth returns the tile width in world units.
-func (g *HexGrid) TileWidth() int32 { return int32(g.tileW) }
+func (g *HexGrid) TileWidth() int32 { return g.tileW }
 
 // TileHeight returns the tile height in world units.
-func (g *HexGrid) TileHeight() int32 { return int32(g.tileH) }
+func (g *HexGrid) TileHeight() int32 { return g.tileH }
 
 // IsInside reports whether the given tile coordinates are within the grid bounds.
 func (g *HexGrid) IsInside(x, y int32) bool {
-	return x >= 0 && x < int32(g.width) && y >= 0 && y < int32(g.height)
+	return x >= 0 && x < g.width && y >= 0 && y < g.height
 }
 
 // GetNodeAt returns the node at the given tile coordinates. The coordinates must be inside the grid; the caller should check IsInside first.
-func (g *HexGrid) GetNodeAt(x, y int32) *finder.Node { return &g.nodes[g.index(int(x), int(y))] }
+func (g *HexGrid) GetNodeAt(x, y int32) *finder.Node { return &g.nodes[g.index(x, y)] }
 
 // IsWalkableAt reports whether the tile at the given coordinates is walkable.
 // Coordinates outside the grid bounds are considered not walkable.
@@ -196,12 +197,12 @@ func (g *HexGrid) IsWalkableAt(x, y int32) bool {
 	if !g.IsInside(x, y) {
 		return false
 	}
-	return g.nodes[g.index(int(x), int(y))].Walkable
+	return g.nodes[g.index(x, y)].Walkable
 }
 
 // SetWalkableAt sets the walkability of the tile at the given coordinates.
 func (g *HexGrid) SetWalkableAt(x, y int32, walkable bool) {
-	node := &g.nodes[g.index(int(x), int(y))]
+	node := &g.nodes[g.index(x, y)]
 	if node.Walkable == walkable {
 		return
 	}
@@ -219,14 +220,14 @@ func (g *HexGrid) SetWeightAt(x, y int32, weight float32) {
 	if !validWeight(weight) {
 		panic("grid: weight must be a finite positive number")
 	}
-	g.nodes[g.index(int(x), int(y))].Weight = weight
+	g.nodes[g.index(x, y)].Weight = weight
 }
 
 func (g *HexGrid) GetWeightAt(x, y int32) float32 {
 	if !g.IsInside(x, y) {
 		return 1.0
 	}
-	return g.nodes[g.index(int(x), int(y))].Weight
+	return g.nodes[g.index(x, y)].Weight
 }
 
 // HasLineOfSight reports whether two tiles can see each other using dense world-space sampling.
@@ -242,7 +243,7 @@ func (g *HexGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
 }
 
 // ObstacleCount returns the number of non-walkable tiles in the grid.
-func (g *HexGrid) ObstacleCount() int32 { return int32(g.obstacleCount) }
+func (g *HexGrid) ObstacleCount() int32 { return g.obstacleCount }
 
 // Clone returns a deep copy of the hex grid, including a copy of all nodes with
 // parent references cleared. The clone shares the finder and precomputed layout
@@ -271,9 +272,7 @@ func (g *HexGrid) Clone() finder.Grid {
 		smoother:      g.smoother,
 	}
 	ng.nodes = make([]finder.Node, len(g.nodes))
-	for i := range g.nodes {
-		ng.nodes[i] = g.nodes[i]
-	}
+	copy(ng.nodes, g.nodes)
 	return ng
 }
 
@@ -281,7 +280,7 @@ func (g *HexGrid) Clone() finder.Grid {
 
 // tileToScreenCoords converts tile coords to pixel/screen coords.
 // Mirrors HexagonalRenderer::tileToScreenCoords.
-func (g *HexGrid) tileToScreenCoords(tx, ty int) (float64, float64) {
+func (g *HexGrid) tileToScreenCoords(tx, ty int32) (float64, float64) {
 	if g.staggerX {
 		px := float64(tx * g.colW)
 		py := float64(ty*(g.renH+g.sideLenY)) + float64(g.rowH)/2
@@ -300,7 +299,7 @@ func (g *HexGrid) tileToScreenCoords(tx, ty int) (float64, float64) {
 
 // screenToTileCoords converts pixel/screen coords to tile coords.
 // Mirrors HexagonalRenderer::screenToTileCoords — nearest-of-4-centers approach.
-func (g *HexGrid) screenToTileCoords(sx, sy float64) (int, int) {
+func (g *HexGrid) screenToTileCoords(sx, sy float64) (int32, int32) {
 	x, y := sx, sy
 
 	if g.staggerX {
@@ -317,8 +316,8 @@ func (g *HexGrid) screenToTileCoords(sx, sy float64) (int, int) {
 		}
 	}
 
-	refX := int(math.Floor(x / float64(g.colW*2)))
-	refY := int(math.Floor(y / float64(g.rowH*2)))
+	refX := int32(math.Floor(x / float64(g.colW*2)))
+	refY := int32(math.Floor(y / float64(g.rowH*2)))
 
 	relX := x - float64(refX*g.colW*2)
 	relY := y - float64(refY*g.rowH*2)
@@ -374,16 +373,16 @@ func (g *HexGrid) screenToTileCoords(sx, sy float64) (int, int) {
 		}
 	}
 
-	var offsets [4][2]int
+	var offsets [4][2]int32
 	if g.staggerX {
-		offsets = [4][2]int{
+		offsets = [4][2]int32{
 			{0, 0},
 			{1, -1},
 			{1, 0},
 			{2, 0},
 		}
 	} else {
-		offsets = [4][2]int{
+		offsets = [4][2]int32{
 			{0, 0},
 			{-1, 1},
 			{0, 1},
@@ -396,13 +395,12 @@ func (g *HexGrid) screenToTileCoords(sx, sy float64) (int, int) {
 
 // WorldToTile converts world (pixel) coordinates to hex tile coordinates.
 func (g *HexGrid) WorldToTile(wx, wy float32) (int32, int32) {
-	tx, ty := g.screenToTileCoords(float64(wx), float64(wy))
-	return int32(tx), int32(ty)
+	return g.screenToTileCoords(float64(wx), float64(wy))
 }
 
 // TileToWorld converts hex tile coordinates to world (pixel) position (tile center).
 func (g *HexGrid) TileToWorld(tx, ty int32) (float32, float32) {
-	px, py := g.tileToScreenCoords(int(tx), int(ty))
+	px, py := g.tileToScreenCoords(tx, ty)
 	if g.staggerX {
 		return float32(px + float64(g.tileW)/2), float32(py + float64(g.renH)/2)
 	}
@@ -566,7 +564,7 @@ func (g *HexGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edge
 func (g *HexGrid) FindNearestWalkable(wx, wy float32, maxRadius int32) (int32, int32, bool) {
 	tx, ty := g.WorldToTile(wx, wy)
 	if g.IsWalkableAt(tx, ty) {
-		return int32(tx), int32(ty), true
+		return tx, ty, true
 	}
 	var aox float32 = wx - float32(tx*g.tileW+g.tileW/2)
 	if aox < 0 {
@@ -734,12 +732,12 @@ func (g *HexGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][
 // GetNeighbors returns the 6 hex neighbors. Diagonal parameter is ignored
 // because hex grids have no separate diagonal concept — all 6 are cardinal moves.
 func (g *HexGrid) GetNeighbors(node *finder.Node, _ finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
-	x, y := int(node.X), int(node.Y)
+	x, y := node.X, node.Y
 	neighbors := buffer[:0]
-	w := int(g.width)
+	w := g.width
 	nodes := g.nodes
 
-	var dirs [6][2]int
+	var dirs [6][2]int32
 	shifted := false
 	if g.staggerX {
 		shifted = g.doStaggerX(x)
@@ -755,8 +753,8 @@ func (g *HexGrid) GetNeighbors(node *finder.Node, _ finder.DiagonalMovement, buf
 	for _, d := range dirs {
 		nx := x + d[0]
 		ny := y + d[1]
-		if nx >= 0 && nx < w && ny >= 0 && ny < int(g.height) && nodes[ny*w+nx].Walkable {
-			neighbors = append(neighbors, &nodes[ny*w+nx])
+		if nx >= 0 && nx < w && ny >= 0 && ny < g.height && nodes[int(ny*w+nx)].Walkable {
+			neighbors = append(neighbors, &nodes[int(ny*w+nx)])
 		}
 	}
 
@@ -783,7 +781,7 @@ func (g *HexGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 	minX, minY := math.MaxFloat64, math.MaxFloat64
 	for y := 0; y < gh; y++ {
 		for x := 0; x < gw; x++ {
-			cx, cy := g.tileToScreenCoords(x, gh-1-y)
+			cx, cy := g.tileToScreenCoords(int32(x), int32(gh-1-y))
 			if cx < minX {
 				minX = cx
 			}
@@ -828,7 +826,7 @@ func (g *HexGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 	vxMax, vyMax := -math.MaxFloat64, -math.MaxFloat64
 	for y := 0; y < gh; y++ {
 		for x := 0; x < gw; x++ {
-			cx, cy := g.tileToScreenCoords(x, gh-1-y)
+			cx, cy := g.tileToScreenCoords(int32(x), int32(gh-1-y))
 			for _, off := range hexOffsets {
 				vx := cx + off[0]
 				vy := cy + off[1]
@@ -859,12 +857,12 @@ func (g *HexGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 	// Draw tiles
 	for y := 0; y < gh; y++ {
 		for x := 0; x < gw; x++ {
-			cx, cy := g.tileToScreenCoords(x, gh-1-y)
+			cx, cy := g.tileToScreenCoords(int32(x), int32(gh-1-y))
 			fill, stroke := "#c8e6c9", "#cccccc"
 			if !g.IsWalkableAt(int32(x), int32(y)) {
 				fill, stroke = "#555555", "#444444"
 			} else {
-				fill = weightToColor(g.nodes[g.index(x, y)].Weight, cfg)
+				fill = weightToColor(g.nodes[g.index(int32(x), int32(y))].Weight, cfg)
 			}
 			pts := make([]string, len(hexOffsets))
 			for i, off := range hexOffsets {
@@ -877,7 +875,7 @@ func (g *HexGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 
 	drawPathAndMarkers(&b, startX, startY, endX, endY,
 		func(tx, ty int32) (float64, float64) {
-			cx, cy := g.tileToScreenCoords(int(tx), gh-1-int(ty))
+			cx, cy := g.tileToScreenCoords(tx, int32(gh-1)-ty)
 			var cxOff, cyOff float64
 			if g.staggerX {
 				cxOff = float64(g.tileW) / 2

@@ -107,9 +107,9 @@ func TestStaggeredWorldToTileTiledSuite(t *testing.T) {
 func TestStaggeredRelativeCoords(t *testing.T) {
 	// staggerY, odd
 	tests := []struct {
-		x, y   int
-		fn     func(int, int, bool, bool) (int, int)
-		ex, ey int
+		x, y   int32
+		fn     func(int32, int32, bool, bool) (int32, int32)
+		ex, ey int32
 	}{
 		// topLeft
 		{0, 0, staggeredTopLeft, -1, -1},
