@@ -45,7 +45,7 @@ func TestIDATimeLimitGivesUp(t *testing.T) {
 		}
 		out := make(chan result, 1)
 		go func() {
-			p, err := f.FindPath(0, 0, 119, 119, g)
+			p, err := f.FindPath(0, 0, 119, 119, g, nil)
 			out <- result{p, err}
 		}()
 
@@ -75,7 +75,7 @@ func TestNoPathIsNotAnError(t *testing.T) {
 	g := grid.NewOrthogonalGrid(matrix)
 
 	f := finder.NewAStarFinder()
-	path, err := f.FindPath(0, 0, 2, 2, g)
+	path, err := f.FindPath(0, 0, 2, 2, g, nil)
 	if err != nil {
 		t.Fatalf("a failed search must report nil error, got %v", err)
 	}
@@ -86,7 +86,7 @@ func TestNoPathIsNotAnError(t *testing.T) {
 	// Truly unreachable: nil path, nil error.
 	blocked := [][]int{{0, 1, 0}, {0, 1, 0}, {0, 1, 0}}
 	gb := grid.NewOrthogonalGrid(blocked)
-	path, err = f.FindPath(0, 0, 2, 0, gb)
+	path, err = f.FindPath(0, 0, 2, 0, gb, nil)
 	if err != nil {
 		t.Fatalf("unreachable target must be (nil, nil), got err=%v", err)
 	}
@@ -109,7 +109,7 @@ func TestIDAStarUnreachableTerminates(t *testing.T) {
 	var path [][2]int
 	var err error
 	go func() {
-		path, err = f.FindPath(0, 0, 2, 0, g)
+		path, err = f.FindPath(0, 0, 2, 0, g, nil)
 		close(done)
 	}()
 	select {
@@ -132,7 +132,7 @@ func TestIDAStarLongCorridor(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int{row})
 	f := finder.NewIDAStarFinder()
 
-	path, err := f.FindPath(0, 0, n-1, 0, g)
+	path, err := f.FindPath(0, 0, n-1, 0, g, nil)
 	if err != nil {
 		t.Fatalf("FindPath error: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestIDAStarEndAtOrigin(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int{{0, 0, 0}})
 	f := finder.NewIDAStarFinder()
 
-	path, err := f.FindPath(2, 0, 0, 0, g)
+	path, err := f.FindPath(2, 0, 0, 0, g, nil)
 	if err != nil {
 		t.Fatalf("FindPath error: %v", err)
 	}
@@ -185,8 +185,8 @@ func TestIDAStarRecursiveNeighborBuffers(t *testing.T) {
 		astar := finder.NewAStarFinder(opts...)
 		ida := finder.NewIDAStarFinder(opts...)
 
-		wantPath, wantErr := astar.FindPath(2, 0, 2, 4, g)
-		gotPath, gotErr := ida.FindPath(2, 0, 2, 4, g)
+		wantPath, wantErr := astar.FindPath(2, 0, 2, 4, g, nil)
+		gotPath, gotErr := ida.FindPath(2, 0, 2, 4, g, nil)
 		if (wantErr != nil) != (gotErr != nil) {
 			t.Fatalf("diag=%v: error mismatch: a=%v i=%v", diag, wantErr, gotErr)
 		}

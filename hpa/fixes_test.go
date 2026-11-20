@@ -54,7 +54,7 @@ func TestHPAUsesDiagonalConnectivity(t *testing.T) {
 
 	never := NewHPAFinder(WithChunkSize(cs))
 	never.Build(g)
-	if p, err := never.FindPath(0, 4, 2*cs-1, 3, g); err != nil {
+	if p, err := never.FindPath(0, 4, 2*cs-1, 3, g, nil); err != nil {
 		t.Fatalf("Never: %v", err)
 	} else if p != nil {
 		t.Fatalf("Never should have no route, got %v", p)
@@ -62,7 +62,7 @@ func TestHPAUsesDiagonalConnectivity(t *testing.T) {
 
 	always := NewHPAFinder(WithChunkSize(cs), WithDiagonal(finder.DiagonalAlways))
 	always.Build(g)
-	p, err := always.FindPath(0, 4, 2*cs-1, 3, g)
+	p, err := always.FindPath(0, 4, 2*cs-1, 3, g, nil)
 	if err != nil {
 		t.Fatalf("Always: %v", err)
 	}

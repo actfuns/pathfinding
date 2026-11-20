@@ -22,7 +22,6 @@ type StaggeredGrid struct {
 	height        int    // tiles down
 	nodes         []finder.Node
 	finder        finder.Finder
-	worldBuf      [][2]float32
 	obstacleCount int
 
 	// Precomputed cardinal and diagonal neighbor offsets
@@ -215,8 +214,8 @@ func (g *StaggeredGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
 func (g *StaggeredGrid) ObstacleCount() int { return g.obstacleCount }
 
 // Clone returns a deep copy of the staggered grid with independent node data.
-// The clone shares the Finder and layout parameters with the original but owns
-// its own node slice, so it must not be searched at the same time as the original.
+// The clone shares the Finder and layout parameters with the original; standard
+// finders keep per-call scratch and can be searched concurrently.
 func (g *StaggeredGrid) Clone() finder.Grid {
 	ng := &StaggeredGrid{
 		cardinalOffsets:  g.cardinalOffsets,
@@ -656,31 +655,35 @@ func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int,
 }
 
 // FindPath finds a path between two tile positions.
-func (g *StaggeredGrid) FindPath(x1, y1, x2, y2 int) ([][2]int, error) {
+func (g *StaggeredGrid) FindPath(x1, y1, x2, y2 int, dst [][2]int) ([][2]int, error) {
 	if g.finder == nil {
 		return nil, nil
 	}
-	// GetNodeAt panics on an out-of-range index, so check first and say so.
 	if !g.IsInside(x1, y1) || !g.IsInside(x2, y2) {
 		return nil, finder.ErrOutOfBounds
 	}
-	path, err := g.finder.FindPath(x1, y1, x2, y2, g)
-	if err != nil {
-		return nil, err
-	}
-	if path == nil {
-		return nil, nil
+	path, err := g.finder.FindPath(x1, y1, x2, y2, g, dst)
+	if err != nil || path == nil {
+		return path, err
 	}
 	if g.smoother != nil {
 		path = g.smoother(path)
+	}
+	if dst != nil {
+		path = append(dst[:0], path...)
 	}
 	return path, nil
 }
 
 // FindPathWorld finds a path between two world positions through the staggered grid.
-// The returned [][2]float32 is backed by an internal buffer and is only
-// valid until the next FindPath call on the same grid.
-func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32, error) {
+// The returned slice is independent and owned by the caller.
+func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
+	var dst [][2]float32
+	var tileDst [][2]int
+	if buff != nil {
+		dst = buff.World[:0]
+		tileDst = buff.Tile[:0]
+	}
 	if g.finder == nil {
 		return nil, nil
 	}
@@ -690,15 +693,20 @@ func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32,
 		return nil, finder.ErrOutOfBounds
 	}
 	if g.obstacleCount == 0 {
-		if cap(g.worldBuf) < 2 {
-			g.worldBuf = make([][2]float32, 2)
+		var out [][2]float32
+		if dst != nil && cap(dst) >= 2 {
+			out = dst[:2]
+		} else {
+			out = make([][2]float32, 2)
 		}
-		g.worldBuf = g.worldBuf[:2]
-		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
-		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
-		return g.worldBuf, nil
+		out[0][0], out[0][1] = wx1, wy1
+		out[1][0], out[1][1] = wx2, wy2
+		if buff != nil {
+			buff.World = out
+		}
+		return out, nil
 	}
-	path, err := g.finder.FindPath(sx, sy, ex, ey, g)
+	path, err := g.finder.FindPath(sx, sy, ex, ey, g, tileDst)
 	if err != nil {
 		return nil, err
 	}
@@ -708,17 +716,27 @@ func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32,
 	if g.smoother != nil {
 		path = g.smoother(path)
 	}
-	if cap(g.worldBuf) >= len(path) {
-		g.worldBuf = g.worldBuf[:len(path)]
+	if path == nil {
+		return nil, nil
+	}
+	if buff != nil {
+		buff.Tile = path
+	}
+	var out [][2]float32
+	if dst != nil && cap(dst) >= len(path) {
+		out = dst[:len(path)]
 	} else {
-		g.worldBuf = make([][2]float32, len(path))
+		out = make([][2]float32, len(path))
 	}
 	for i, p := range path {
-		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
+		out[i][0], out[i][1] = g.TileToWorld(p[0], p[1])
 	}
-	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
-	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
-	return g.worldBuf, nil
+	out[0][0], out[0][1] = wx1, wy1
+	out[len(out)-1][0], out[len(out)-1][1] = wx2, wy2
+	if buff != nil {
+		buff.World = out
+	}
+	return out, nil
 }
 
 // GetNeighbors returns neighbors for a node on a staggered isometric grid, respecting the

@@ -20,9 +20,9 @@ type Grid interface {
 	// GetNeighbors returns the walkable, adjacent neighbors of the given node.
 	GetNeighbors(node *Node, diagonal DiagonalMovement, buffer []*Node) []*Node
 	// Clone returns a copy of the grid with its own node storage, but sharing
-	// the Finder with the original. The Finder keeps reusable search buffers,
-	// so the copy must not be searched at the same time as the original — it is
-	// for snapshotting a map, not for running two searches against one map.
+	// the Finder with the original. Standard finders keep per-call scratch and
+	// are safe for concurrent read-only searches; custom finders must provide
+	// the same guarantee.
 	Clone() Grid
 }
 

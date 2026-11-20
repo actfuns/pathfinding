@@ -21,7 +21,7 @@ func main() {
 	g := grid.NewOrthogonalGrid(matrix)
 	f := finder.NewAStarFinder(finder.WithDiagonal(finder.DiagonalNever))
 
-	path, err := f.FindPath(0, 0, 4, 4, g)
+	path, err := f.FindPath(0, 0, 4, 4, g, nil)
 	if err != nil {
 		fmt.Println("Search failed:", err)
 		return

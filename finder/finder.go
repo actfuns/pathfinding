@@ -30,6 +30,11 @@ var ErrUnsupportedGrid = errors.New("finder: grid topology is not supported by t
 // grid of different dimensions than the one being searched.
 var ErrPrecomputedMismatch = errors.New("finder: precomputed data does not match the grid")
 
+// ErrSearchBusy is returned when no search slot became available before the
+// configured wait limit. It means the search was not attempted and may be
+// retried later.
+var ErrSearchBusy = errors.New("finder: no search slot available")
+
 // Finder is the interface for all pathfinding algorithms.
 //
 // Results come in three shapes, and the pair (path, err) tells them apart:
@@ -38,14 +43,35 @@ var ErrPrecomputedMismatch = errors.New("finder: precomputed data does not match
 //	nil, nil   the search completed and no route exists
 //	nil, err   the request is invalid or the search could not complete; err is
 //	           why (e.g. ErrTimeLimit, ErrOutOfBounds, ErrNotWalkable,
-//	           ErrUnsupportedGrid)
+//	           ErrUnsupportedGrid, ErrSearchBusy)
 //
 // A nil path with a nil error is the normal answer for an unreachable target,
 // so most callers only need to check len(path).
 //
-// The returned path is backed by an internal buffer and is only valid until the
-// next FindPath call on the same Finder. If you need to persist the result,
-// copy it (e.g., append([][2]int{}, path...)).
+// The returned path is owned by the caller and remains valid until the caller
+// releases it. Concurrent FindPath calls on the same Finder are safe as long as
+// its configuration and the Grid are not mutated. The per-search state pool
+// creates slots on demand up to GOMAXPROCS (see SetMaxConcurrentSearches),
+// then blocks until one is free.
+// Do not call FindPath recursively from a heuristic or callback: once all slots
+// are taken, the nested call waits forever.
+//
+// Setup that builds search data (JPSPlusFinder.Precompute, HPAFinder.Build,
+// waypoint graph construction) must finish before concurrent FindPath calls
+// start.
 type Finder interface {
-	FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error)
+	// FindPath returns a path. A non-nil dst is treated as dst[:0]; if its
+	// capacity is sufficient the path is written directly into it. Nil dst
+	// behaves like the classic allocating call.
+	FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error)
 }
+
+var (
+	_ Finder = (*AStarFinder)(nil)
+	_ Finder = (*BiAStarFinder)(nil)
+	_ Finder = (*BreadthFirstFinder)(nil)
+	_ Finder = (*BiBreadthFirstFinder)(nil)
+	_ Finder = (*IDAStarFinder)(nil)
+	_ Finder = (*JumpPointFinderBase)(nil)
+	_ Finder = (*JPSPlusFinder)(nil)
+)

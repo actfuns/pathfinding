@@ -31,18 +31,28 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 }
 
 // FindPath finds a path using bidirectional BFS.
-func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
-	// GetNodeAt panics on an out-of-range index, so validate up front and
-	// report it as a caller error instead of a crash.
-	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
-		return nil, ErrOutOfBounds
-	}
-	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
-		return path, err
+func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return finishPath(path, dst, true), err
 	}
 	searchSeq := globalSearchSeq.Add(1)
-	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
-	defer releaseStates(states)
+	states, err := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	if err != nil {
+		return nil, err
+	}
+	local := *f
+	local.neighborBuf = states.neighborBuf[:0]
+	local.pathBuf = states.pathBuf[:0]
+	defer func() {
+		states.neighborBuf = local.neighborBuf
+		states.pathBuf = local.pathBuf
+		releaseStates(states)
+	}()
+	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	return finishPath(p, dst, false), err
+}
+
+func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 
@@ -51,8 +61,9 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 		BY_END   = 2
 	)
 
-	startOpenList := make([]*Node, 0, 64)
-	endOpenList := make([]*Node, 0, 64)
+	startOpenList := states.queue[:0]
+	endOpenList := states.queueB[:0]
+	defer func() { states.queue = startOpenList; states.queueB = endOpenList }()
 
 	startState := states.get(startNode)
 	startOpenList = append(startOpenList, startNode)
@@ -65,10 +76,11 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 	endState.Parent = -1
 
 	neighborBuf := f.neighborBuf[:0]
+	startHead, endHead := 0, 0
 
-	for len(startOpenList) > 0 && len(endOpenList) > 0 {
-		node := startOpenList[0]
-		startOpenList = startOpenList[1:]
+	for startHead < len(startOpenList) && endHead < len(endOpenList) {
+		node := startOpenList[startHead]
+		startHead++
 		states.get(node).Closed = true
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
@@ -89,8 +101,8 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 			ns.Opened = BY_START
 		}
 
-		node = endOpenList[0]
-		endOpenList = endOpenList[1:]
+		node = endOpenList[endHead]
+		endHead++
 		states.get(node).Closed = true
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)

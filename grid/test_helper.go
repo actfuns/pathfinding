@@ -82,7 +82,7 @@ func runSVGTest(t *testing.T, gridType string, scenarios []svgScenario, newGrid 
 						t.Skipf("%s: %v", ft.name, err)
 					}
 				}
-				path, err := ft.f.FindPath(s.startX, s.startY, s.endX, s.endY, fg)
+				path, err := ft.f.FindPath(s.startX, s.startY, s.endX, s.endY, fg, nil)
 				if errors.Is(err, finder.ErrUnsupportedGrid) {
 					t.Skipf("%s does not support this grid topology", ft.name)
 				}

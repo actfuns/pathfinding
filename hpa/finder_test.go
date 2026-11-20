@@ -18,7 +18,7 @@ func TestHPASingleChunk(t *testing.T) {
 	})
 	f := NewHPAFinder()
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 4, 4, g)
+	path, _ := f.FindPath(0, 0, 4, 4, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -40,7 +40,7 @@ func TestHPATwoChunks(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 19, 3, g)
+	path, _ := f.FindPath(0, 0, 19, 3, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -61,7 +61,7 @@ func TestHPAWithObstacles(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 15, 7, g)
+	path, _ := f.FindPath(0, 0, 15, 7, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -79,7 +79,7 @@ func TestHPAUnreachable(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	path, _ := f.FindPath(0, 2, 19, 2, g)
+	path, _ := f.FindPath(0, 2, 19, 2, g, nil)
 	if path != nil {
 		t.Error("expected nil path for unreachable destination, got a path")
 	}
@@ -92,7 +92,7 @@ func TestHPAStartIsWall(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 19, 1, g)
+	path, _ := f.FindPath(0, 0, 19, 1, g, nil)
 	if path != nil {
 		t.Error("expected nil for wall start")
 	}
@@ -108,7 +108,7 @@ func TestHPASameChunkDiagonal(t *testing.T) {
 	})
 	f := NewHPAFinder(WithAllowDiagonal(false))
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 4, 4, g)
+	path, _ := f.FindPath(0, 0, 4, 4, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -125,7 +125,7 @@ func TestHPAMediumGrid(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 19, 3, g)
+	path, _ := f.FindPath(0, 0, 19, 3, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -183,7 +183,7 @@ func TestHPAConcretePathValid(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 19, 1, g)
+	path, _ := f.FindPath(0, 0, 19, 1, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -202,7 +202,7 @@ func TestHPAManyChunks(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	path, _ := f.FindPath(0, 1, 31, 1, g)
+	path, _ := f.FindPath(0, 1, 31, 1, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -237,9 +237,9 @@ func TestHPARepeatable(t *testing.T) {
 			f := NewHPAFinder(WithChunkSize(8))
 			f.Build(g)
 
-			first, _ := f.FindPath(c.sx, c.sy, c.ex, c.ey, g)
+			first, _ := f.FindPath(c.sx, c.sy, c.ex, c.ey, g, nil)
 			for i := 0; i < 5; i++ {
-				got, _ := f.FindPath(c.sx, c.sy, c.ex, c.ey, g)
+				got, _ := f.FindPath(c.sx, c.sy, c.ex, c.ey, g, nil)
 				if !pathEqual(first, got) {
 					t.Fatalf("iteration %d: result differs from first call\nfirst=%v\ngot=%v", i+1, first, got)
 				}
@@ -252,7 +252,7 @@ func TestHPARepeatable(t *testing.T) {
 		f := NewHPAFinder(WithChunkSize(8))
 		f.Build(g)
 		for i := 0; i < 5; i++ {
-			if got, err := f.FindPath(0, 0, 7, 1, g); err != nil {
+			if got, err := f.FindPath(0, 0, 7, 1, g, nil); err != nil {
 				t.Fatalf("unreachable search must not error: %v", err)
 			} else if got != nil {
 				// (7,1) is in the obstacle column; may or may not be reachable.
@@ -295,7 +295,7 @@ func TestStringPulling_smoothed(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8), WithStringPulling(true))
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 15, 1, g)
+	path, _ := f.FindPath(0, 0, 15, 1, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -310,7 +310,7 @@ func TestStringPulling_shortPath(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	path, _ := f.FindPath(0, 0, 7, 1, g)
+	path, _ := f.FindPath(0, 0, 7, 1, g, nil)
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
@@ -324,11 +324,11 @@ func TestPathCache(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	first, _ := f.FindPath(0, 0, 15, 1, g)
+	first, _ := f.FindPath(0, 0, 15, 1, g, nil)
 	if first == nil {
 		t.Fatal("expected path")
 	}
-	second, _ := f.FindPath(0, 0, 15, 1, g)
+	second, _ := f.FindPath(0, 0, 15, 1, g, nil)
 	if second == nil {
 		t.Fatal("expected path on second call")
 	}
@@ -344,7 +344,7 @@ func TestPathCacheInvalidation(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	f.FindPath(0, 0, 15, 1, g)
+	f.FindPath(0, 0, 15, 1, g, nil)
 	if len(f.pathCache) == 0 {
 		t.Fatal("expected cache to be populated after FindPath")
 	}
@@ -352,7 +352,7 @@ func TestPathCacheInvalidation(t *testing.T) {
 	if len(f.pathCache) != 0 {
 		t.Error("expected cache to be empty after Build")
 	}
-	path, _ := f.FindPath(0, 0, 15, 1, g)
+	path, _ := f.FindPath(0, 0, 15, 1, g, nil)
 	if path == nil {
 		t.Fatal("expected path after rebuild")
 	}
@@ -422,7 +422,7 @@ func TestHPARefusesOutOfBounds(t *testing.T) {
 		{-1, 0, 5, 5},
 		{0, 0, 0, -1},
 	} {
-		path, err := f.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g)
+		path, err := f.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g, nil)
 		if !errors.Is(err, finder.ErrOutOfBounds) {
 			t.Errorf("FindPath(%d,%d,%d,%d) err = %v, want ErrOutOfBounds",
 				tc.sx, tc.sy, tc.ex, tc.ey, err)

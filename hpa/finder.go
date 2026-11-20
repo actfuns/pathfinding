@@ -1,6 +1,8 @@
 package hpa
 
 import (
+	"sync"
+
 	"github.com/actfuns/pathfinding/finder"
 )
 
@@ -39,6 +41,7 @@ type HPAFinder struct {
 	portalKeyEndBuf []int            // reusable result in findReachablePortals (end)
 	endSetMap       map[int]struct{} // reusable end-portal set
 	pathCache       map[[2]int][]int // portal path cache (P3): key=[startChunk,endChunk]
+	cacheMu         *sync.RWMutex
 }
 
 // HPAOption configures an HPAFinder.
@@ -118,6 +121,7 @@ func NewHPAFinder(opts ...HPAOption) *HPAFinder {
 	f.openSlice = make([]*hpaNode, 0, 64)
 	f.endSetMap = make(map[int]struct{})
 	f.pathCache = make(map[[2]int][]int, 64)
+	f.cacheMu = new(sync.RWMutex)
 	return f
 }
 
@@ -132,11 +136,19 @@ func (f *HPAFinder) Build(grid finder.Grid) error {
 	if !supportsHPA(grid) {
 		return finder.ErrUnsupportedGrid
 	}
+	if f.cacheMu == nil {
+		f.cacheMu = new(sync.RWMutex)
+	}
+	if f.pathCache == nil {
+		f.pathCache = make(map[[2]int][]int, 64)
+	}
 	f.world = BuildWorldWithDiagonal(grid, f.chunkSize, f.DiagonalMovement)
 	// Invalidate path cache on rebuild
+	f.cacheMu.Lock()
 	for k := range f.pathCache {
 		delete(f.pathCache, k)
 	}
+	f.cacheMu.Unlock()
 	return nil
 }
 
@@ -184,7 +196,33 @@ func (f *HPAFinder) recycleNodes() {
 // a concrete search within a chunk.
 var _ finder.Finder = (*HPAFinder)(nil)
 
-func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) ([][2]int, error) {
+func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid, dst [][2]int) ([][2]int, error) {
+	local := *f
+	local.neighborBuf = nil
+	local.bfsCostsBuf = nil
+	local.bfsQueueBuf = nil
+	local.tmpNode = &finder.Node{}
+	local.allNodes = make(map[int]*hpaNode)
+	local.openSlice = nil
+	local.hpaNodePool = nil
+	local.portalPathBuf = nil
+	local.waypointsBuf = nil
+	if dst != nil {
+		local.waypointsResult = dst[:0]
+	} else {
+		local.waypointsResult = nil
+	}
+	local.portalKeyBuf = nil
+	local.portalKeyEndBuf = nil
+	local.endSetMap = make(map[int]struct{})
+	p, err := local.findPath(startX, startY, endX, endY, grid)
+	if dst == nil || p == nil {
+		return p, err
+	}
+	return append(dst[:0], p...), err
+}
+
+func (f *HPAFinder) findPath(startX, startY, endX, endY int, grid finder.Grid) ([][2]int, error) {
 	if f.world == nil {
 		panic("HPAFinder: Build(grid) must be called before FindPath")
 	}
@@ -231,7 +269,9 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) (
 
 	// --- P3: Portal Path Cache ---
 	cacheKey := [2]int{startChunk, endChunk}
+	f.cacheMu.RLock()
 	cachedPath, cacheHit := f.pathCache[cacheKey]
+	f.cacheMu.RUnlock()
 	useCache := false
 	if cacheHit && len(cachedPath) > 0 {
 		firstInStart := false
@@ -326,7 +366,9 @@ func (f *HPAFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) (
 		// Store in cache
 		cached := make([]int, len(f.portalPathBuf))
 		copy(cached, f.portalPathBuf)
+		f.cacheMu.Lock()
 		f.pathCache[cacheKey] = cached
+		f.cacheMu.Unlock()
 	} else {
 		// Reuse cached portal path
 		f.portalPathBuf = append(f.portalPathBuf[:0], cachedPath...)
@@ -462,7 +504,7 @@ func (f *HPAFinder) findReachablePortals(world *HPAWorld, sx, sy int, chunkID in
 }
 
 func (f *HPAFinder) concreteFind(sx, sy, ex, ey int, grid finder.Grid) ([][2]int, error) {
-	return f.concreteFinder.FindPath(sx, sy, ex, ey, grid)
+	return f.concreteFinder.FindPath(sx, sy, ex, ey, grid, nil)
 }
 
 // smoothPath removes unnecessary waypoints from a path by checking

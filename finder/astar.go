@@ -56,21 +56,33 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 }
 
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.
-func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
-	// GetNodeAt panics on an out-of-range index, so validate up front and
-	// report it as a caller error instead of a crash.
-	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
-		return nil, ErrOutOfBounds
+func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return finishPath(path, dst, true), err
 	}
-	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
-		return path, err
+	searchSeq := globalSearchSeq.Add(1)
+	states, err := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	if err != nil {
+		return nil, err
 	}
+	local := *f
+	local.neighborBuf = states.neighborBuf[:0]
+	local.heapSlice = states.heap[:0]
+	local.pathBuf = states.pathBuf[:0]
+	defer func() {
+		states.neighborBuf = local.neighborBuf
+		states.heap = local.heapSlice
+		states.pathBuf = local.pathBuf
+		releaseStates(states)
+	}()
+	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	return finishPath(p, dst, false), err
+}
+
+func (f *AStarFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
-	searchSeq := globalSearchSeq.Add(1)
-	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
-	defer releaseStates(states)
-	openList := &MinHeap{nodes: f.heapSlice[:0], tieBreak: true, state: states}
+	openList := &minHeap{nodes: f.heapSlice[:0], tieBreak: true, state: states}
 	defer func() {
 		clear(openList.nodes[:cap(openList.nodes)])
 		f.heapSlice = openList.nodes[:0]

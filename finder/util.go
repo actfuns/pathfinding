@@ -2,6 +2,14 @@ package finder
 
 import "math"
 
+// preflight validates endpoints and handles requests that need no search.
+func preflight(startX, startY, endX, endY int, grid Grid) (path [][2]int, err error) {
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, ErrOutOfBounds
+	}
+	return checkEndpoints(startX, startY, endX, endY, grid)
+}
+
 // checkEndpoints handles requests that need no search. It returns a non-nil
 // path for a zero-length request on a walkable tile, and ErrNotWalkable for an
 // unwalkable destination. A nil path with a nil error means "run the search".
@@ -13,6 +21,19 @@ func checkEndpoints(startX, startY, endX, endY int, grid Grid) (path [][2]int, e
 		return [][2]int{{startX, startY}}, nil
 	}
 	return nil, nil
+}
+
+func finishPath(path, dst [][2]int, owned bool) [][2]int {
+	if path == nil {
+		return nil
+	}
+	if dst != nil {
+		return append(dst[:0], path...)
+	}
+	if owned {
+		return path
+	}
+	return clonePath(path)
 }
 
 // PathLength computes the total length of a path.

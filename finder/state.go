@@ -20,6 +20,20 @@ type searchStates struct {
 	width, height int
 	seq           int64
 	states        []nodeState
+
+	// Per-search scratch. It lives here so one pool slot owns both the tile
+	// state and the finder buffers for one FindPath.
+	neighborBuf    []*Node
+	queue          []*Node
+	queueB         []*Node
+	neighborPosBuf [][2]int
+	heap           []heapEntry
+	heapB          []heapEntry
+	pathBuf        [][2]int
+	expandBuf      [][2]int
+	routeBuf       [][2]int
+	neighborBufs   [][]*Node
+	onPath         []bool
 }
 
 func (s *searchStates) begin(width, height int, seq int64) {
@@ -72,15 +86,13 @@ func (s *searchStates) backtrace(node *Node, buf [][2]int) [][2]int {
 
 func (s *searchStates) biBacktrace(nodeA, nodeB *Node, buf [][2]int) [][2]int {
 	buf = buf[:0]
-	var pathA [][2]int
 	for i := s.index(nodeA); i >= 0; i = s.at(i).Parent {
 		x, y := s.xy(i)
-		pathA = append(pathA, [2]int{x, y})
+		buf = append(buf, [2]int{x, y})
 	}
-	for i, j := 0, len(pathA)-1; i < j; i, j = i+1, j-1 {
-		pathA[i], pathA[j] = pathA[j], pathA[i]
+	for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
+		buf[i], buf[j] = buf[j], buf[i]
 	}
-	buf = append(buf, pathA...)
 	for i := s.index(nodeB); i >= 0; i = s.at(i).Parent {
 		x, y := s.xy(i)
 		buf = append(buf, [2]int{x, y})

@@ -15,7 +15,6 @@ type JumpPointFinderBase struct {
 	grid             Grid
 	startNode        *Node
 	endNode          *Node
-	openList         *MinHeap
 	neighborBuf      []*Node
 	neighborPosBuf   [][2]int
 	heapSlice        []heapEntry
@@ -37,6 +36,17 @@ type GridWithJPSSupport interface {
 func supportsJPS(grid Grid) bool {
 	gs, ok := grid.(GridWithJPSSupport)
 	return ok && gs.SupportsJPSCanonicalPruning()
+}
+
+// preflightJPS validates a JPS request before any search state is acquired.
+func preflightJPS(startX, startY, endX, endY int, grid Grid) (path [][2]int, err error) {
+	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
+		return nil, ErrOutOfBounds
+	}
+	if !supportsJPS(grid) {
+		return nil, ErrUnsupportedGrid
+	}
+	return checkEndpoints(startX, startY, endX, endY, grid)
 }
 
 // NewJumpPointFinderBase creates a new JumpPointFinderBase.
@@ -63,26 +73,41 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 }
 
 // FindPath finds a path using JPS.
-func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
-	// GetNodeAt panics on an out-of-range index, so validate up front and
-	// report it as a caller error instead of a crash.
-	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
-		return nil, ErrOutOfBounds
-	}
-	if !supportsJPS(grid) {
-		return nil, ErrUnsupportedGrid
-	}
-	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
-		return path, err
+func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+	if path, err := preflightJPS(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return finishPath(path, dst, true), err
 	}
 	searchSeq := globalSearchSeq.Add(1)
-	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
-	defer releaseStates(states)
-	b.openList = &MinHeap{nodes: b.heapSlice[:0], state: states}
+	states, err := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	if err != nil {
+		return nil, err
+	}
+	local := *b
+	local.grid = nil
+	local.startNode = nil
+	local.endNode = nil
+	local.neighborBuf = states.neighborBuf[:0]
+	local.neighborPosBuf = states.neighborPosBuf[:0]
+	local.heapSlice = states.heap[:0]
+	local.pathBuf = states.pathBuf[:0]
+	local.expandBuf = states.expandBuf[:0]
 	defer func() {
-		clear(b.openList.nodes[:cap(b.openList.nodes)])
-		b.heapSlice = b.openList.nodes[:0]
-		b.openList = nil
+		states.neighborBuf = local.neighborBuf
+		states.neighborPosBuf = local.neighborPosBuf
+		states.heap = local.heapSlice
+		states.pathBuf = local.pathBuf
+		states.expandBuf = local.expandBuf
+		releaseStates(states)
+	}()
+	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	return finishPath(p, dst, false), err
+}
+
+func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+	openList := &minHeap{nodes: b.heapSlice[:0], state: states}
+	defer func() {
+		clear(openList.nodes[:cap(openList.nodes)])
+		b.heapSlice = openList.nodes[:0]
 	}()
 	b.startNode = grid.GetNodeAt(startX, startY)
 	b.endNode = grid.GetNodeAt(endX, endY)
@@ -92,11 +117,11 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 	startState := states.get(b.startNode)
 	startState.G = 0
 	startState.F = 0
-	b.openList.Push(b.startNode)
+	openList.Push(b.startNode)
 	startState.Opened = 1
 
-	for !b.openList.Empty() {
-		node := b.openList.Pop()
+	for !openList.Empty() {
+		node := openList.Pop()
 		states.get(node).Closed = true
 
 		if node == b.endNode {
@@ -143,16 +168,15 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 			return b.expandBuf, nil
 		}
 
-		b.identifySuccessors(node, states)
+		b.identifySuccessors(node, states, openList)
 	}
 
 	return nil, nil
 }
 
-func (b *JumpPointFinderBase) identifySuccessors(node *Node, states *searchStates) {
+func (b *JumpPointFinderBase) identifySuccessors(node *Node, states *searchStates, openList *minHeap) {
 	grid := b.grid
 	heuristic := b.Heuristic
-	openList := b.openList
 	endX := b.endNode.X
 	endY := b.endNode.Y
 	x, y := node.X, node.Y

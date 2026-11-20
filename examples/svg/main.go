@@ -35,7 +35,7 @@ func main() {
 	}
 
 	f := finder.NewAStarFinder()
-	path, err := f.FindPath(0, 0, 6, 5, g)
+	path, err := f.FindPath(0, 0, 6, 5, g, nil)
 	if err != nil {
 		fmt.Println("Search failed:", err)
 		return

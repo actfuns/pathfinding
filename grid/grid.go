@@ -39,37 +39,34 @@ func validWeight(w float64) bool {
 	return w > 0 && !math.IsNaN(w) && !math.IsInf(w, 0)
 }
 
-// ReadOnlyGrid is the read-only subset of Grid. A Proxy exposes only these
-// methods; changing map data goes through PoolManager.Reset with a new Factory.
-type ReadOnlyGrid interface {
-	Width() int
-	Height() int
-	IsInside(x, y int) bool
-	IsWalkableAt(x, y int) bool
-	GetNodeAt(x, y int) *finder.Node
-	GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node
-	Clone() finder.Grid
+// PathBuff holds reusable tile and world-coordinate buffers for
+// FindPathWorld. The zero value means normal allocation.
+type PathBuff struct {
+	Tile  [][2]int
+	World [][2]float32
+}
 
-	TileWidth() int
-	TileHeight() int
-	ObstacleCount() int
-	TileIndex(x, y int) int
-	TileXY(index int) (int, int)
-	GetWeightAt(x, y int) float64
+// NewPathBuff creates a reusable PathBuff with the given starting capacities.
+func NewPathBuff(tileCap, worldCap int) *PathBuff {
+	if tileCap < 0 {
+		tileCap = 0
+	}
+	if worldCap < 0 {
+		worldCap = 0
+	}
+	return &PathBuff{
+		Tile:  make([][2]int, 0, tileCap),
+		World: make([][2]float32, 0, worldCap),
+	}
+}
 
-	WorldToTile(wx, wy float32) (int, int)
-	TileToWorld(tx, ty int) (float32, float32)
-	IsWalkableAtWorld(wx, wy float32) bool
-
-	HasLineOfSight(x1, y1, x2, y2 int) bool
-	HasLineOfSightWorld(x1, y1, x2, y2 float32) bool
-	FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, bool)
-	FindNearestWalkableWorld(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool)
-
-	Finder() finder.Finder
-	FindPath(x1, y1, x2, y2 int) ([][2]int, error)
-	FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32, error)
-	RenderSVG(cfg *SVGOpts, paths ...[][2]int) string
+// Reset clears both lengths while keeping the capacities.
+func (b *PathBuff) Reset() {
+	if b == nil {
+		return
+	}
+	b.Tile = b.Tile[:0]
+	b.World = b.World[:0]
 }
 
 // Grid defines the interface that all grid types implement.
@@ -131,13 +128,17 @@ type Grid interface {
 	// FindPath finds a path between two tile positions.
 	// A nil path with a nil error means no route exists; a non-nil error means
 	// the search could not complete (e.g. finder.ErrTimeLimit), so the answer is
-	// unknown. Result is backed by an internal buffer — valid only until the
-	// next FindPath call.
-	FindPath(x1, y1, x2, y2 int) ([][2]int, error)
+	// unknown. The returned path is independent and owned by the caller.
+	// dst is treated as dst[:0]; pass nil for normal allocation.
+	// Concurrent read-only searches are safe when the configured Finder is
+	// concurrency-safe; mutating the grid or finder during a search is not.
+	FindPath(x1, y1, x2, y2 int, dst [][2]int) ([][2]int, error)
+
 	// FindPathWorld finds a path between two world positions through the grid.
-	// Uses the grid's Finder, with the same three result shapes as FindPath.
-	// Result is backed by an internal buffer — valid only until the next FindPathWorld call.
-	FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32, error)
+	// buff.World is the world-space output; buff.Tile is the Finder's tile-space
+	// scratch. nil buff lets both steps allocate. The buffer's slice headers are
+	// updated if either backing array grows.
+	FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error)
 
 	// RenderSVG renders the grid and paths as an SVG string.
 	// Tiles are coloured by their Weight value with terrain legend.

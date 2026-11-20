@@ -32,7 +32,7 @@ func BenchmarkOrthogonalAlloc(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				f.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base)
+				f.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base, nil)
 			}
 		})
 
@@ -41,7 +41,7 @@ func BenchmarkOrthogonalAlloc(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				f.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base)
+				f.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base, nil)
 			}
 		})
 
@@ -51,7 +51,7 @@ func BenchmarkOrthogonalAlloc(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				h.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base)
+				h.FindPath(sz.sx, sz.sy, sz.ex, sz.ey, base, nil)
 			}
 		})
 	}
@@ -64,14 +64,14 @@ func BenchmarkOrthogonal100(b *testing.B) {
 	b.Run("AStar", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 99, 99, base)
+			f.FindPath(0, 0, 99, 99, base, nil)
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
 		sm := NewOrthogonalGrid(matrix, WithSmoothBresenham())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			sm.FindPathWorld(0, 0, 99, 99)
+			sm.FindPathWorld(0, 0, 99, 99, nil)
 		}
 	})
 	b.Run("JPS", func(b *testing.B) {
@@ -79,7 +79,7 @@ func BenchmarkOrthogonal100(b *testing.B) {
 		fj := jps.Finder()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			fj.FindPath(0, 0, 99, 99, jps)
+			fj.FindPath(0, 0, 99, 99, jps, nil)
 		}
 	})
 	b.Run("HPA", func(b *testing.B) {
@@ -87,7 +87,7 @@ func BenchmarkOrthogonal100(b *testing.B) {
 		h.Build(base)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			h.FindPath(0, 0, 99, 99, base)
+			h.FindPath(0, 0, 99, 99, base, nil)
 		}
 	})
 }
@@ -99,14 +99,14 @@ func BenchmarkOrthogonal500(b *testing.B) {
 	b.Run("AStar", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 499, 499, base)
+			f.FindPath(0, 0, 499, 499, base, nil)
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
 		sm := NewOrthogonalGrid(matrix, WithSmoothBresenham())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			sm.FindPathWorld(0, 0, 499, 499)
+			sm.FindPathWorld(0, 0, 499, 499, nil)
 		}
 	})
 	b.Run("HPA", func(b *testing.B) {
@@ -114,7 +114,7 @@ func BenchmarkOrthogonal500(b *testing.B) {
 		h.Build(base)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			h.FindPath(0, 0, 499, 499, base)
+			h.FindPath(0, 0, 499, 499, base, nil)
 		}
 	})
 }
@@ -128,14 +128,14 @@ func BenchmarkHex100(b *testing.B) {
 	b.Run("AStar", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 99, 99, base)
+			f.FindPath(0, 0, 99, 99, base, nil)
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
 		sm := NewOrthogonalGrid(matrix, WithSmoothBresenham())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			sm.FindPathWorld(sx, sy, ex, ey)
+			sm.FindPathWorld(sx, sy, ex, ey, nil)
 		}
 	})
 }
@@ -149,14 +149,14 @@ func BenchmarkStaggered100(b *testing.B) {
 	b.Run("AStar", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			f.FindPath(0, 0, 99, 99, base)
+			f.FindPath(0, 0, 99, 99, base, nil)
 		}
 	})
 	b.Run("AStarSmooth", func(b *testing.B) {
 		sm := NewOrthogonalGrid(matrix, WithSmoothBresenham())
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			sm.FindPathWorld(sx, sy, ex, ey)
+			sm.FindPathWorld(sx, sy, ex, ey, nil)
 		}
 	})
 }

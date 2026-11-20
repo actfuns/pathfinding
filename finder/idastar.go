@@ -61,20 +61,32 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 }
 
 // FindPath finds a path using IDA*.
-func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
-	// GetNodeAt panics on an out-of-range index, so validate up front and
-	// report it as a caller error instead of a crash.
-	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
-		return nil, ErrOutOfBounds
+func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return finishPath(path, dst, true), err
 	}
-	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
-		return path, err
+	searchSeq := globalSearchSeq.Add(1)
+	states, err := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	if err != nil {
+		return nil, err
 	}
+	local := *f
+	local.routeBuf = states.routeBuf[:0]
+	local.neighborBufs = states.neighborBufs
+	local.onPath = states.onPath
+	defer func() {
+		states.routeBuf = local.routeBuf
+		states.neighborBufs = local.neighborBufs
+		states.onPath = local.onPath
+		releaseStates(states)
+	}()
+	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	return finishPath(p, dst, true), err
+}
+
+func (f *IDAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
-	searchSeq := globalSearchSeq.Add(1)
-	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
-	defer releaseStates(states)
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
 

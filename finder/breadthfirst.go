@@ -30,30 +30,42 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 }
 
 // FindPath finds a path using BFS.
-func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
-	// GetNodeAt panics on an out-of-range index, so validate up front and
-	// report it as a caller error instead of a crash.
-	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
-		return nil, ErrOutOfBounds
-	}
-	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
-		return path, err
+func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return finishPath(path, dst, true), err
 	}
 	searchSeq := globalSearchSeq.Add(1)
-	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
-	defer releaseStates(states)
+	states, err := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	if err != nil {
+		return nil, err
+	}
+	local := *f
+	local.neighborBuf = states.neighborBuf[:0]
+	local.pathBuf = states.pathBuf[:0]
+	defer func() {
+		states.neighborBuf = local.neighborBuf
+		states.pathBuf = local.pathBuf
+		releaseStates(states)
+	}()
+	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	return finishPath(p, dst, false), err
+}
+
+func (f *BreadthFirstFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 	startState := states.get(startNode)
-	openList := make([]*Node, 0, 64)
+	openList := states.queue[:0]
+	defer func() { states.queue = openList }()
 	openList = append(openList, startNode)
 	startState.Opened = 1
 
 	neighborBuf := f.neighborBuf[:0]
+	head := 0
 
-	for len(openList) > 0 {
-		node := openList[0]
-		openList = openList[1:]
+	for head < len(openList) {
+		node := openList[head]
+		head++
 		nodeState := states.get(node)
 		nodeState.Closed = true
 

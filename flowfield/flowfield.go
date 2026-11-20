@@ -344,7 +344,7 @@ func (ff *Field) GetCost(x, y int) float64 {
 // Like the finders, it separates "you asked about a tile that is not on the
 // map" from "that tile cannot reach any goal": the first is finder.ErrOutOfBounds,
 // the second is a nil path with a nil error.
-func (ff *Field) FindPath(startX, startY int) ([][2]int, error) {
+func (ff *Field) FindPath(startX, startY int, dst [][2]int) ([][2]int, error) {
 	w := ff.width
 	if !ff.grid.IsInside(startX, startY) {
 		return nil, finder.ErrOutOfBounds
@@ -352,7 +352,7 @@ func (ff *Field) FindPath(startX, startY int) ([][2]int, error) {
 	if ff.cost[startY*w+startX] < 0 {
 		return nil, nil
 	}
-	path := make([][2]int, 0, w)
+	path := dst[:0]
 	cx, cy := startX, startY
 	for {
 		path = append(path, [2]int{cx, cy})

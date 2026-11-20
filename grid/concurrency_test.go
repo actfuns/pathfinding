@@ -3,66 +3,83 @@ package grid
 import (
 	"sync"
 	"testing"
+
+	"github.com/actfuns/pathfinding/finder"
 )
 
-// A released Proxy must not keep the map, Base, or buffers reachable.
-func TestReleasedProxyDropsReferences(t *testing.T) {
-	m := NewPoolManager()
-	pr, err := m.Acquire("k", smallFactory, WithCapacity(2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !pr.IsWalkableAt(0, 0) {
-		t.Fatal("sanity: tile should be walkable")
-	}
-	p := pr.(*proxy)
-	if p.base == nil {
-		t.Fatal("expected Base to be cached")
-	}
-	pool := p.pool
-	pr.Release()
-	if p.base != nil || p.pool != nil || p.pathBuf != nil || p.worldBuf != nil {
-		t.Fatal("released Proxy retained references")
-	}
-	if pool.base != nil {
-		t.Fatal("closed Pool retained its Base grid")
-	}
-}
-
-// Reset calls must not race with reads through live Proxies. Each Proxy stays
-// on its own goroutine, per the Proxy contract.
-func TestPoolManagerResetConcurrentReads(t *testing.T) {
-	m := NewPoolManager()
-	const scenes = 4
-	proxies := make([]Proxy, 0, scenes)
-	for i := 0; i < scenes; i++ {
-		pr, err := m.Acquire("k", smallFactory, WithCapacity(scenes))
-		if err != nil {
-			t.Fatal(err)
+func TestConcurrentReadOnlyFindPath(t *testing.T) {
+	m := make([][]int, 48)
+	for y := range m {
+		m[y] = make([]int, 48)
+		for x := range m[y] {
+			if (x*7+y*11)%19 == 0 {
+				m[y][x] = 1
+			}
 		}
-		proxies = append(proxies, pr)
 	}
-	defer func() {
-		for _, pr := range proxies {
-			pr.Release()
-		}
-	}()
-
+	m[0][0], m[47][47] = 0, 0
+	f := finder.NewAStarFinder(finder.WithDiagonal(finder.DiagonalAlways))
+	g := NewOrthogonalGrid(m, WithFinder(f), WithTileSize(16, 16))
 	var wg sync.WaitGroup
-	for i := 0; i < 32; i++ {
+	for i := 0; i < 16; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = m.Reset("k", smallFactory)
+			dst := make([][2]int, 0, 256)
+			wdst := make([][2]float32, 0, 256)
+			tdst := make([][2]int, 0, 256)
+			for j := 0; j < 100; j++ {
+				p, err := g.FindPath(0, 0, 47, 47, nil)
+				if err != nil || p == nil {
+					t.Errorf("FindPath: %v %v", p, err)
+					return
+				}
+				p, err = g.FindPath(0, 0, 47, 47, dst[:0])
+				if err != nil || p == nil {
+					t.Errorf("FindPath: %v %v", p, err)
+					return
+				}
+				dst = p
+				wp, err := g.FindPathWorld(0, 0, 47*16, 47*16, &PathBuff{Tile: tdst[:0], World: wdst[:0]})
+				if err != nil || wp == nil {
+					t.Errorf("FindPathWorld: %v %v", wp, err)
+					return
+				}
+				wdst = wp
+			}
 		}()
 	}
-	for _, pr := range proxies {
-		pr := pr
+	wg.Wait()
+}
+
+func TestConcurrentJPSPlusReadOnlyFindPath(t *testing.T) {
+	m := make([][]int, 48)
+	for y := range m {
+		m[y] = make([]int, 48)
+		for x := range m[y] {
+			if (x*5+y*13)%23 == 0 {
+				m[y][x] = 1
+			}
+		}
+	}
+	m[0][0], m[47][47] = 0, 0
+	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalAlways))
+	g := NewOrthogonalGrid(m, WithFinder(f))
+	if err := f.Precompute(g); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				_ = pr.IsWalkableAt(0, 0)
+			dst := make([][2]int, 0, 256)
+			for j := 0; j < 50; j++ {
+				p, err := g.FindPath(0, 0, 47, 47, dst[:0])
+				if err != nil || p == nil {
+					t.Errorf("FindPath: %v %v", p, err)
+					return
+				}
 			}
 		}()
 	}

@@ -12,7 +12,7 @@ import (
 func TestOrthogonalStress_AllOpen(t *testing.T) {
 	matrix := generateGrid(200, 200, 0)
 
-	path, err := NewOrthogonalGrid(matrix).FindPath(0, 0, 199, 199)
+	path, err := NewOrthogonalGrid(matrix).FindPath(0, 0, 199, 199, nil)
 	if err != nil {
 		t.Fatalf("FindPath: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestOrthogonalStress_AllOpen(t *testing.T) {
 		t.Fatal("FindPath: expected path on open grid")
 	}
 
-	smooth, err := NewOrthogonalGrid(matrix, WithSmoothBresenham()).FindPath(0, 0, 199, 199)
+	smooth, err := NewOrthogonalGrid(matrix, WithSmoothBresenham()).FindPath(0, 0, 199, 199, nil)
 	if err != nil {
 		t.Fatalf("FindPath+SmoothBresenham: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestOrthogonalStress_VariousFinders(t *testing.T) {
 	} {
 		t.Run(ft.name, func(t *testing.T) {
 			g := NewOrthogonalGrid(matrix, WithTileSize(1, 1))
-			path, err := g.FindPath(0, 0, 99, 99)
+			path, err := g.FindPath(0, 0, 99, 99, nil)
 			if err != nil {
 				t.Fatalf("FindPath: %v", err)
 			}
@@ -61,7 +61,7 @@ func TestOrthogonalStress_VariousFinders(t *testing.T) {
 			}
 		})
 		t.Run(ft.name+"Smooth", func(t *testing.T) {
-			smooth, err := NewOrthogonalGrid(matrix, WithTileSize(1, 1), WithSmoothBresenham()).FindPath(0, 0, 99, 99)
+			smooth, err := NewOrthogonalGrid(matrix, WithTileSize(1, 1), WithSmoothBresenham()).FindPath(0, 0, 99, 99, nil)
 			if err != nil {
 				t.Fatalf("FindPath+SmoothBresenham: %v", err)
 			}
@@ -75,7 +75,7 @@ func TestOrthogonalStress_VariousFinders(t *testing.T) {
 func TestOrthogonalStress_DenseGrid(t *testing.T) {
 	matrix := generateGrid(500, 500, 0.05)
 	t.Run("FindPath", func(t *testing.T) {
-		path, err := NewOrthogonalGrid(matrix).FindPath(0, 0, 499, 499)
+		path, err := NewOrthogonalGrid(matrix).FindPath(0, 0, 499, 499, nil)
 		if err != nil {
 			t.Fatalf("FindPath: %v", err)
 		}
@@ -84,7 +84,7 @@ func TestOrthogonalStress_DenseGrid(t *testing.T) {
 		}
 	})
 	t.Run("FindPath+SmoothBresenham", func(t *testing.T) {
-		smooth, err := NewOrthogonalGrid(matrix, WithSmoothBresenham()).FindPath(0, 0, 499, 499)
+		smooth, err := NewOrthogonalGrid(matrix, WithSmoothBresenham()).FindPath(0, 0, 499, 499, nil)
 		if err != nil {
 			t.Fatalf("FindPath+SmoothBresenham: %v", err)
 		}

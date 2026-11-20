@@ -44,7 +44,7 @@ func TestFlowFieldFindPath(t *testing.T) {
 		{0, 0, 0},
 	})
 	ff := New(g, 2, 2)
-	path, err := ff.FindPath(0, 0)
+	path, err := ff.FindPath(0, 0, nil)
 	if err != nil {
 		t.Fatalf("FindPath: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestFindPathOutOfBounds(t *testing.T) {
 	ff := New(grid.NewOrthogonalGrid(m), 2, 2)
 
 	for _, tc := range [][2]int{{-1, 0}, {0, -1}, {99, 99}} {
-		path, err := ff.FindPath(tc[0], tc[1])
+		path, err := ff.FindPath(tc[0], tc[1], nil)
 		if !errors.Is(err, finder.ErrOutOfBounds) {
 			t.Errorf("FindPath(%d,%d) err = %v, want ErrOutOfBounds", tc[0], tc[1], err)
 		}
@@ -341,7 +341,7 @@ func TestFindPathOutOfBounds(t *testing.T) {
 		{0, 1, 0},
 	}
 	fw := New(grid.NewOrthogonalGrid(walled), 2, 0)
-	path, err := fw.FindPath(0, 0)
+	path, err := fw.FindPath(0, 0, nil)
 	if err != nil {
 		t.Errorf("unreachable tile err = %v, want nil", err)
 	}
@@ -368,7 +368,7 @@ func TestFlowFieldDestinationWeight(t *testing.T) {
 func TestFlowFieldHexStepCost(t *testing.T) {
 	g := grid.NewHexGrid(grid.NewMatrix(5, 5), grid.WithTileSize(55, 64), grid.WithHexSide(32))
 	ff := New(g, 4, 4)
-	bfs, _ := finder.NewBreadthFirstFinder().FindPath(0, 0, 4, 4, g)
+	bfs, _ := finder.NewBreadthFirstFinder().FindPath(0, 0, 4, 4, g, nil)
 	if len(bfs) == 0 {
 		t.Fatal("BFS found no path")
 	}

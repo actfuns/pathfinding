@@ -91,14 +91,12 @@ type JPSPlusFinder struct {
 	wide   bool
 
 	// Runtime state
-	grid             Grid
-	startNode        *Node
-	endNode          *Node
-	openList         *MinHeap
-	heapSlice        []heapEntry
-	pathBuf          [][2]int
-	expandBuf        [][2]int
-	adaptiveFallback *AStarFinder
+	grid      Grid
+	startNode *Node
+	endNode   *Node
+	heapSlice []heapEntry
+	pathBuf   [][2]int
+	expandBuf [][2]int
 
 	// Pre-allocated direction slice (avoid allocation in hot path)
 	dirs []int
@@ -454,29 +452,22 @@ func (j *JPSPlusFinder) useAStar(grid Grid) bool {
 	return float64(oc.ObstacleCount())/float64(area) >= AdaptiveDensityThreshold
 }
 
-func (j *JPSPlusFinder) newAdaptiveFallback() Finder {
-	if j.adaptiveFallback == nil {
-		j.adaptiveFallback = NewAStarFinder(
-			WithDiagonal(j.DiagonalMovement),
-			WithHeuristic(j.Heuristic),
-			WithWeight(j.Weight),
-		)
-	}
-	return j.adaptiveFallback
+func (j *JPSPlusFinder) newAdaptiveFallback() *AStarFinder {
+	return NewAStarFinder(
+		WithDiagonal(j.DiagonalMovement),
+		WithHeuristic(j.Heuristic),
+		WithWeight(j.Weight),
+	)
 }
 
-// FindPath performs JPS+ pathfinding using the precomputed jump table.
-// Precompute(grid) must have been called first with the same grid.
-func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
-	// GetNodeAt panics on an out-of-range index, so validate up front and
-	// report it as a caller error instead of a crash.
+func (j *JPSPlusFinder) preflight(startX, startY, endX, endY int, grid Grid) (path [][2]int, err error) {
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
 	if !supportsJPS(grid) {
 		return nil, ErrUnsupportedGrid
 	}
-	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
+	if path, err = checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return path, err
 	}
 	if !j.hasTable() {
@@ -485,18 +476,46 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	if grid.Width() != j.width || grid.Height() != j.height {
 		return nil, ErrPrecomputedMismatch
 	}
+	return nil, nil
+}
+
+// FindPath performs JPS+ pathfinding using the precomputed jump table.
+// Precompute(grid) must have been called first with the same grid.
+func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+	if path, err := j.preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return finishPath(path, dst, true), err
+	}
 	if j.Adaptive && j.useAStar(grid) {
-		return j.newAdaptiveFallback().FindPath(startX, startY, endX, endY, grid)
+		return j.newAdaptiveFallback().FindPath(startX, startY, endX, endY, grid, dst)
 	}
 	searchSeq := globalSearchSeq.Add(1)
-	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
-	defer releaseStates(states)
-	j.grid = grid
-	j.openList = &MinHeap{nodes: j.heapSlice[:0], state: states}
+	states, err := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	if err != nil {
+		return nil, err
+	}
+	local := *j
+	local.grid = nil
+	local.startNode = nil
+	local.endNode = nil
+	local.heapSlice = states.heap[:0]
+	local.pathBuf = states.pathBuf[:0]
+	local.expandBuf = states.expandBuf[:0]
 	defer func() {
-		clear(j.openList.nodes[:cap(j.openList.nodes)])
-		j.heapSlice = j.openList.nodes[:0]
-		j.openList = nil
+		states.heap = local.heapSlice
+		states.pathBuf = local.pathBuf
+		states.expandBuf = local.expandBuf
+		releaseStates(states)
+	}()
+	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	return finishPath(p, dst, false), err
+}
+
+func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+	j.grid = grid
+	openList := &minHeap{nodes: j.heapSlice[:0], state: states}
+	defer func() {
+		clear(openList.nodes[:cap(openList.nodes)])
+		j.heapSlice = openList.nodes[:0]
 	}()
 
 	j.startNode = grid.GetNodeAt(startX, startY)
@@ -509,10 +528,10 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 	states.get(j.endNode)
 	startState.G = 0
 	startState.F = 0
-	j.openList.Push(j.startNode)
+	openList.Push(j.startNode)
 
-	for !j.openList.Empty() {
-		node := j.openList.Pop()
+	for !openList.Empty() {
+		node := openList.Pop()
 		states.get(node).Closed = true
 
 		if node.X == endX && node.Y == endY {
@@ -557,17 +576,16 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 			return j.expandBuf, nil
 		}
 
-		j.identifySuccessors(node, states)
+		j.identifySuccessors(node, states, openList)
 	}
 	return nil, nil
 }
 
-func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates) {
+func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, openList *minHeap) {
 	x, y := node.X, node.Y
 	endX, endY := j.endNode.X, j.endNode.Y
 	heuristic := j.Heuristic
 	grid := j.grid
-	openList := j.openList
 	nodeState := states.get(node)
 
 	// Use diagonal movement setting to determine which directions to check

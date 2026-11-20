@@ -48,7 +48,7 @@ func TestAStarWeight(t *testing.T) {
 		{0, 0, 0, 0, 0},
 	})
 	f := finder.NewAStarFinder(finder.WithWeight(100))
-	path, _ := f.FindPath(0, 0, 4, 1, g)
+	path, _ := f.FindPath(0, 0, 4, 1, g, nil)
 	if path == nil {
 		t.Error("expected path even with high weight")
 	}

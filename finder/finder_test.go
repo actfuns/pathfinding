@@ -57,7 +57,7 @@ func testFinderAgainstJS(t *testing.T, name string, newFinder func() finder.Find
 	for i, s := range testScenarios {
 		g := grid.NewOrthogonalGrid(s.matrix)
 		f := newFinder()
-		path, _ := f.FindPath(s.startX, s.startY, s.endX, s.endY, g)
+		path, _ := f.FindPath(s.startX, s.startY, s.endX, s.endY, g, nil)
 		if path == nil {
 			t.Errorf("%s scenario %d: path not found", name, i+1)
 			continue
@@ -100,7 +100,7 @@ func TestFinderUnreachablePath(t *testing.T) {
 	}
 	for _, ft := range finders {
 		t.Run(ft.name, func(t *testing.T) {
-			path, _ := ft.f.FindPath(0, 0, 2, 0, g)
+			path, _ := ft.f.FindPath(0, 0, 2, 0, g, nil)
 			if path != nil {
 				t.Errorf("expected nil for unreachable, got %v", path)
 			}
@@ -126,7 +126,7 @@ func TestFinderUnwalkableEnd(t *testing.T) {
 	}
 	for _, ft := range finders {
 		t.Run(ft.name, func(t *testing.T) {
-			path, err := ft.f.FindPath(0, 0, 1, 0, g)
+			path, err := ft.f.FindPath(0, 0, 1, 0, g, nil)
 			if !errors.Is(err, finder.ErrNotWalkable) {
 				t.Fatalf("FindPath error = %v, want ErrNotWalkable", err)
 			}
@@ -145,7 +145,7 @@ func TestFinderSingleCell(t *testing.T) {
 		finder.NewBreadthFirstFinder(),
 	}
 	for i, f := range finders {
-		path, _ := f.FindPath(0, 0, 0, 0, g)
+		path, _ := f.FindPath(0, 0, 0, 0, g, nil)
 		if path == nil {
 			t.Errorf("finder %d (%T): expected path for single cell start==end", i, f)
 		}
@@ -159,7 +159,7 @@ func TestFinder1xN(t *testing.T) {
 		finder.NewBreadthFirstFinder(),
 	} {
 		g := grid.NewOrthogonalGrid([][]int{{0, 0, 0}})
-		path, _ := f.FindPath(0, 0, 2, 0, g)
+		path, _ := f.FindPath(0, 0, 2, 0, g, nil)
 		if path == nil {
 			t.Errorf("finder %d (%T): expected path on 1xN grid", i, f)
 		}
@@ -197,7 +197,7 @@ func TestAllFindersRejectOutOfBounds(t *testing.T) {
 				{-1, 0, 1, 1},    // negative start
 				{0, 0, 0, -1},    // negative end
 			} {
-				path, err := f.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g)
+				path, err := f.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g, nil)
 				if !errors.Is(err, finder.ErrOutOfBounds) {
 					t.Errorf("FindPath(%d,%d,%d,%d) = (%v, %v), want ErrOutOfBounds",
 						tc.sx, tc.sy, tc.ex, tc.ey, path, err)

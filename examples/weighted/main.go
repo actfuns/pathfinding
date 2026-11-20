@@ -38,7 +38,7 @@ func main() {
 
 	// A* WITH weight awareness — avoids swamp by taking the perimeter
 	fWeighted := finder.NewAStarFinder()
-	pathWeighted, err := fWeighted.FindPath(1, 0, 7, 7, g)
+	pathWeighted, err := fWeighted.FindPath(1, 0, 7, 7, g, nil)
 	if err != nil {
 		fmt.Println("Search failed:", err)
 		return
@@ -47,7 +47,7 @@ func main() {
 	// A* WITHOUT weights (all tiles cost 1) — cuts through swamp
 	gPlain := grid.NewOrthogonalGrid(matrix)
 	fPlain := finder.NewAStarFinder()
-	pathPlain, err := fPlain.FindPath(1, 0, 7, 7, gPlain)
+	pathPlain, err := fPlain.FindPath(1, 0, 7, 7, gPlain, nil)
 	if err != nil {
 		fmt.Println("Search failed:", err)
 		return

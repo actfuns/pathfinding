@@ -39,7 +39,7 @@ func BenchmarkCompare(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					f.FindPath(0, 0, sz.w-1, sz.h-1, base)
+					f.FindPath(0, 0, sz.w-1, sz.h-1, base, nil)
 				}
 			})
 
@@ -48,7 +48,7 @@ func BenchmarkCompare(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					f.FindPath(0, 0, sz.w-1, sz.h-1, base)
+					f.FindPath(0, 0, sz.w-1, sz.h-1, base, nil)
 				}
 			})
 
@@ -58,7 +58,7 @@ func BenchmarkCompare(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					f.FindPath(0, 0, sz.w-1, sz.h-1, base)
+					f.FindPath(0, 0, sz.w-1, sz.h-1, base, nil)
 				}
 			})
 		}

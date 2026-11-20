@@ -52,20 +52,34 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 }
 
 // FindPath finds a path using bidirectional A*.
-func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][2]int, error) {
-	// GetNodeAt panics on an out-of-range index, so validate up front and
-	// report it as a caller error instead of a crash.
-	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
-		return nil, ErrOutOfBounds
+func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
+		return finishPath(path, dst, true), err
 	}
-	if path, err := checkEndpoints(startX, startY, endX, endY, grid); path != nil || err != nil {
-		return path, err
+	searchSeq := globalSearchSeq.Add(1)
+	states, err := acquireStates(grid.Width(), grid.Height(), searchSeq)
+	if err != nil {
+		return nil, err
 	}
+	local := *f
+	local.neighborBuf = states.neighborBuf[:0]
+	local.startHeapSlice = states.heap[:0]
+	local.endHeapSlice = states.heapB[:0]
+	local.pathBuf = states.pathBuf[:0]
+	defer func() {
+		states.neighborBuf = local.neighborBuf
+		states.heap = local.startHeapSlice
+		states.heapB = local.endHeapSlice
+		states.pathBuf = local.pathBuf
+		releaseStates(states)
+	}()
+	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	return finishPath(p, dst, false), err
+}
+
+func (f *BiAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
-	searchSeq := globalSearchSeq.Add(1)
-	states := acquireStates(grid.Width(), grid.Height(), searchSeq)
-	defer releaseStates(states)
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 
@@ -74,8 +88,8 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid) ([][
 		BY_END   = 2
 	)
 
-	startOpenList := &MinHeap{nodes: f.startHeapSlice[:0], tieBreak: true, state: states}
-	endOpenList := &MinHeap{nodes: f.endHeapSlice[:0], tieBreak: true, state: states}
+	startOpenList := &minHeap{nodes: f.startHeapSlice[:0], tieBreak: true, state: states}
+	endOpenList := &minHeap{nodes: f.endHeapSlice[:0], tieBreak: true, state: states}
 	defer func() {
 		clear(startOpenList.nodes[:cap(startOpenList.nodes)])
 		clear(endOpenList.nodes[:cap(endOpenList.nodes)])

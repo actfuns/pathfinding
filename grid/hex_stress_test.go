@@ -4,6 +4,8 @@ package grid
 
 import (
 	"testing"
+
+	"github.com/actfuns/pathfinding/finder"
 )
 
 func TestHexStress_AllOpen(t *testing.T) {
@@ -13,14 +15,14 @@ func TestHexStress_AllOpen(t *testing.T) {
 	sx, sy := g.TileToWorld(5, 5)
 	ex, ey := g.TileToWorld(94, 94)
 
-	path, err := g.FindPathWorld(sx, sy, ex, ey)
+	path, err := g.FindPathWorld(sx, sy, ex, ey, nil)
 	if err != nil {
 		t.Fatalf("FindPathWorld: %v", err)
 	}
 	if path == nil {
 		t.Skip("hex FindPathWorld: no path (coordinate edge behavior)")
 	}
-	smooth, err := NewHexGrid(matrix, append(opts, WithSmoothDense())...).FindPathWorld(sx, sy, ex, ey)
+	smooth, err := NewHexGrid(matrix, append(opts, WithSmoothDense())...).FindPathWorld(sx, sy, ex, ey, nil)
 	if err != nil {
 		t.Fatalf("FindPathWorld+SmoothDense: %v", err)
 	}

@@ -19,7 +19,6 @@ type OrthogonalGrid struct {
 	obstacleCount int // number of non-walkable tiles
 	nodes         []finder.Node
 	finder        finder.Finder
-	worldBuf      [][2]float32
 	smoother      Smoother // smoothing function; nil = default
 }
 
@@ -391,8 +390,7 @@ func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int
 	return 0, 0, false
 }
 
-// Clone creates a deep copy of the grid. The returned grid has its own node
-// slice; each node is copied, but the parent pointer is cleared. The finder
+// Clone creates a deep copy of the grid with its own node slice. The finder
 // reference and tile dimensions are shared from the original.
 func (g *OrthogonalGrid) Clone() finder.Grid {
 	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, finder: g.finder, smoother: g.smoother}
@@ -443,28 +441,33 @@ func (g *OrthogonalGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 
 // FindPath finds a path between two tile positions.
 // Applies smoothing if configured via WithSmoothBresenham, WithSmoothBresenhamStrict, or WithSmoothDense.
-func (g *OrthogonalGrid) FindPath(x1, y1, x2, y2 int) ([][2]int, error) {
+func (g *OrthogonalGrid) FindPath(x1, y1, x2, y2 int, dst [][2]int) ([][2]int, error) {
 	if g.finder == nil {
 		return nil, nil
 	}
-	// GetNodeAt panics on an out-of-range index, so check first and say so.
 	if !g.IsInside(x1, y1) || !g.IsInside(x2, y2) {
 		return nil, finder.ErrOutOfBounds
 	}
-	path, err := g.finder.FindPath(x1, y1, x2, y2, g)
-	if err != nil {
-		return nil, err
-	}
-	if path == nil {
-		return nil, nil
+	path, err := g.finder.FindPath(x1, y1, x2, y2, g, dst)
+	if err != nil || path == nil {
+		return path, err
 	}
 	if g.smoother != nil {
 		path = g.smoother(path)
 	}
+	if dst != nil {
+		path = append(dst[:0], path...)
+	}
 	return path, nil
 }
 
-func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32, error) {
+func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
+	var dst [][2]float32
+	var tileDst [][2]int
+	if buff != nil {
+		dst = buff.World[:0]
+		tileDst = buff.Tile[:0]
+	}
 	if g.finder == nil {
 		return nil, nil
 	}
@@ -474,15 +477,20 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32
 		return nil, finder.ErrOutOfBounds
 	}
 	if g.obstacleCount == 0 {
-		if cap(g.worldBuf) < 2 {
-			g.worldBuf = make([][2]float32, 2)
+		var out [][2]float32
+		if dst != nil && cap(dst) >= 2 {
+			out = dst[:2]
+		} else {
+			out = make([][2]float32, 2)
 		}
-		g.worldBuf = g.worldBuf[:2]
-		g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
-		g.worldBuf[1][0], g.worldBuf[1][1] = wx2, wy2
-		return g.worldBuf, nil
+		out[0][0], out[0][1] = wx1, wy1
+		out[1][0], out[1][1] = wx2, wy2
+		if buff != nil {
+			buff.World = out
+		}
+		return out, nil
 	}
-	path, err := g.finder.FindPath(sx, sy, ex, ey, g)
+	path, err := g.finder.FindPath(sx, sy, ex, ey, g, tileDst)
 	if err != nil {
 		return nil, err
 	}
@@ -492,17 +500,27 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32) ([][2]float32
 	if g.smoother != nil {
 		path = g.smoother(path)
 	}
-	if cap(g.worldBuf) >= len(path) {
-		g.worldBuf = g.worldBuf[:len(path)]
+	if path == nil {
+		return nil, nil
+	}
+	if buff != nil {
+		buff.Tile = path
+	}
+	var out [][2]float32
+	if dst != nil && cap(dst) >= len(path) {
+		out = dst[:len(path)]
 	} else {
-		g.worldBuf = make([][2]float32, len(path))
+		out = make([][2]float32, len(path))
 	}
 	for i, p := range path {
-		g.worldBuf[i][0], g.worldBuf[i][1] = g.TileToWorld(p[0], p[1])
+		out[i][0], out[i][1] = g.TileToWorld(p[0], p[1])
 	}
-	g.worldBuf[0][0], g.worldBuf[0][1] = wx1, wy1
-	g.worldBuf[len(g.worldBuf)-1][0], g.worldBuf[len(g.worldBuf)-1][1] = wx2, wy2
-	return g.worldBuf, nil
+	out[0][0], out[0][1] = wx1, wy1
+	out[len(out)-1][0], out[len(out)-1][1] = wx2, wy2
+	if buff != nil {
+		buff.World = out
+	}
+	return out, nil
 }
 
 // --- neighbors ---

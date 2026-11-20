@@ -20,22 +20,22 @@ func TestJPSIgnoresTileWeights(t *testing.T) {
 	})
 	g.SetWeightAt(2, 1, 100)
 
-	bfs, _ := finder.NewBreadthFirstFinder().FindPath(0, 1, 4, 1, g)
+	bfs, _ := finder.NewBreadthFirstFinder().FindPath(0, 1, 4, 1, g, nil)
 	if len(bfs) != 5 {
 		t.Fatalf("BFS step path len=%d, want 5", len(bfs))
 	}
-	astar, _ := finder.NewAStarFinder().FindPath(0, 1, 4, 1, g)
+	astar, _ := finder.NewAStarFinder().FindPath(0, 1, 4, 1, g, nil)
 	if len(astar) == len(bfs) {
 		t.Fatalf("A* should detour around the expensive tile: %v", astar)
 	}
 
-	jpsPath, err := finder.NewJumpPointFinder().FindPath(0, 1, 4, 1, g)
+	jpsPath, err := finder.NewJumpPointFinder().FindPath(0, 1, 4, 1, g, nil)
 	if err != nil {
 		t.Fatalf("JPS: %v", err)
 	}
 	plus := finder.NewJPSPlusFinder()
 	_ = plus.Precompute(g)
-	plusPath, err := plus.FindPath(0, 1, 4, 1, g)
+	plusPath, err := plus.FindPath(0, 1, 4, 1, g, nil)
 	if err != nil {
 		t.Fatalf("JPS+: %v", err)
 	}
@@ -61,11 +61,11 @@ func TestJPSPlusRespectsDiagonalRules(t *testing.T) {
 		finder.DiagonalAlways,
 	} {
 		astar := finder.NewAStarFinder(finder.WithDiagonal(mode))
-		want, _ := astar.FindPath(0, 0, 1, 1, g)
+		want, _ := astar.FindPath(0, 0, 1, 1, g, nil)
 
 		plus := finder.NewJPSPlusFinder(finder.WithDiagonal(mode))
 		_ = plus.Precompute(g)
-		got, _ := plus.FindPath(0, 0, 1, 1, g)
+		got, _ := plus.FindPath(0, 0, 1, 1, g, nil)
 
 		if (len(want) == 0) != (len(got) == 0) {
 			t.Errorf("mode=%v: A* path=%v, JPS+ path=%v", mode, want, got)
@@ -75,7 +75,7 @@ func TestJPSPlusRespectsDiagonalRules(t *testing.T) {
 	// Sanity: only DiagonalAlways may cross two blocked cardinals.
 	plus := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalAlways))
 	_ = plus.Precompute(g)
-	if p, _ := plus.FindPath(0, 0, 1, 1, g); len(p) == 0 {
+	if p, _ := plus.FindPath(0, 0, 1, 1, g, nil); len(p) == 0 {
 		t.Error("DiagonalAlways should allow the diagonal move")
 	}
 }
@@ -106,7 +106,7 @@ func TestJPSAllowDiagonalOption(t *testing.T) {
 	g := grid.NewOrthogonalGrid(grid.NewMatrix(10, 10))
 
 	jps := finder.NewJumpPointFinder(finder.WithAllowDiagonal(false))
-	p1, err := jps.FindPath(0, 0, 5, 5, g)
+	p1, err := jps.FindPath(0, 0, 5, 5, g, nil)
 	if err != nil {
 		t.Fatalf("JPS error: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestJPSAllowDiagonalOption(t *testing.T) {
 
 	plus := finder.NewJPSPlusFinder(finder.WithAllowDiagonal(false))
 	_ = plus.Precompute(g)
-	p2, err := plus.FindPath(0, 0, 5, 5, g)
+	p2, err := plus.FindPath(0, 0, 5, 5, g, nil)
 	if err != nil {
 		t.Fatalf("JPS+ error: %v", err)
 	}
@@ -160,10 +160,10 @@ func TestJPSVariantConstructorsSetMovement(t *testing.T) {
 	}
 
 	g := grid.NewOrthogonalGrid([][]int{{0, 1}, {1, 0}})
-	if p, _ := always.FindPath(0, 0, 1, 1, g); len(p) == 0 {
+	if p, _ := always.FindPath(0, 0, 1, 1, g, nil); len(p) == 0 {
 		t.Error("always variant should allow the diagonal move")
 	}
-	if p, _ := noObstacles.FindPath(0, 0, 1, 1, g); len(p) != 0 {
+	if p, _ := noObstacles.FindPath(0, 0, 1, 1, g, nil); len(p) != 0 {
 		t.Errorf("noObstacles variant must not cut the corner: %v", p)
 	}
 }
@@ -182,10 +182,10 @@ func TestJPSPlusDiagonalModesAreOptimal(t *testing.T) {
 		finder.DiagonalIfAtMostOneObstacle,
 		finder.DiagonalAlways,
 	} {
-		want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(1, 2, 3, 3, g)
+		want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(1, 2, 3, 3, g, nil)
 		plus := finder.NewJPSPlusFinder(finder.WithDiagonal(mode))
 		_ = plus.Precompute(g)
-		got, err := plus.FindPath(1, 2, 3, 3, g)
+		got, err := plus.FindPath(1, 2, 3, 3, g, nil)
 		if err != nil {
 			t.Fatalf("mode=%v: %v", mode, err)
 		}
@@ -224,10 +224,10 @@ func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 		g := grid.NewOrthogonalGrid(m)
 
 		for _, mode := range modes {
-			want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(sx, sy, ex, ey, g)
+			want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(sx, sy, ex, ey, g, nil)
 			plus := finder.NewJPSPlusFinder(finder.WithDiagonal(mode))
 			_ = plus.Precompute(g)
-			got, err := plus.FindPath(sx, sy, ex, ey, g)
+			got, err := plus.FindPath(sx, sy, ex, ey, g, nil)
 			if err != nil {
 				t.Fatalf("it=%d mode=%v: %v", it, mode, err)
 			}
@@ -296,10 +296,10 @@ func TestJPSPlusKnownRegressions(t *testing.T) {
 
 	for _, tc := range cases {
 		g := grid.NewOrthogonalGrid(tc.m)
-		want, _ := finder.NewAStarFinder(finder.WithDiagonal(tc.mode)).FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g)
+		want, _ := finder.NewAStarFinder(finder.WithDiagonal(tc.mode)).FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g, nil)
 		plus := finder.NewJPSPlusFinder(finder.WithDiagonal(tc.mode))
 		_ = plus.Precompute(g)
-		got, err := plus.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g)
+		got, err := plus.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g, nil)
 		if err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
@@ -341,7 +341,7 @@ func TestJPSRejectsNonOrthogonal(t *testing.T) {
 	}{{"hex", hex}, {"staggered", stag}}
 
 	for _, gg := range grids {
-		if _, err := finder.NewJumpPointFinder().FindPath(0, 0, 5, 5, gg.g); !errors.Is(err, finder.ErrUnsupportedGrid) {
+		if _, err := finder.NewJumpPointFinder().FindPath(0, 0, 5, 5, gg.g, nil); !errors.Is(err, finder.ErrUnsupportedGrid) {
 			t.Errorf("%s JPS error = %v, want ErrUnsupportedGrid", gg.name, err)
 		}
 		for _, mode := range []finder.DiagonalMovement{
@@ -352,7 +352,7 @@ func TestJPSRejectsNonOrthogonal(t *testing.T) {
 		} {
 			// No Precompute: unsupported topology is rejected before that check.
 			f := finder.NewJPSPlusFinder(finder.WithDiagonal(mode))
-			if _, err := f.FindPath(0, 0, 5, 5, gg.g); !errors.Is(err, finder.ErrUnsupportedGrid) {
+			if _, err := f.FindPath(0, 0, 5, 5, gg.g, nil); !errors.Is(err, finder.ErrUnsupportedGrid) {
 				t.Errorf("%s mode=%v JPS+ error = %v, want ErrUnsupportedGrid", gg.name, mode, err)
 			}
 		}
@@ -379,7 +379,7 @@ func TestHexFindersMatchBFS(t *testing.T) {
 		m[sy][sx], m[ey][ex] = 0, 0
 		g := grid.NewHexGrid(m, grid.WithTileSize(55, 64), grid.WithHexSide(32))
 
-		bfs, _ := finder.NewBreadthFirstFinder().FindPath(sx, sy, ex, ey, g)
+		bfs, _ := finder.NewBreadthFirstFinder().FindPath(sx, sy, ex, ey, g, nil)
 		finders := []struct {
 			name string
 			f    finder.Finder
@@ -389,7 +389,7 @@ func TestHexFindersMatchBFS(t *testing.T) {
 			{"IDAStar", finder.NewIDAStarFinder()},
 		}
 		for _, ft := range finders {
-			got, err := ft.f.FindPath(sx, sy, ex, ey, g)
+			got, err := ft.f.FindPath(sx, sy, ex, ey, g, nil)
 			if err != nil {
 				t.Fatalf("it=%d %s: %v", it, ft.name, err)
 			}
@@ -421,7 +421,7 @@ func TestJPSPlusPrecomputedMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	g2 := grid.NewOrthogonalGrid(grid.NewMatrix(6, 6))
-	if _, err := f.FindPath(0, 0, 5, 5, g2); !errors.Is(err, finder.ErrPrecomputedMismatch) {
+	if _, err := f.FindPath(0, 0, 5, 5, g2, nil); !errors.Is(err, finder.ErrPrecomputedMismatch) {
 		t.Errorf("FindPath error = %v, want ErrPrecomputedMismatch", err)
 	}
 }
@@ -453,11 +453,11 @@ func TestJPSPlusAdaptive(t *testing.T) {
 	if err := plus.Precompute(g); err != nil {
 		t.Fatal(err)
 	}
-	got, err := plus.FindPath(0, 0, n-1, n-1, g)
+	got, err := plus.FindPath(0, 0, n-1, n-1, g, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(0, 0, n-1, n-1, g)
+	want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(0, 0, n-1, n-1, g, nil)
 	if (len(want) == 0) != (len(got) == 0) {
 		t.Fatalf("presence mismatch: A=%v P=%v", want, got)
 	}

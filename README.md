@@ -32,7 +32,7 @@ func main() {
     g := grid.NewOrthogonalGrid(terrain)
 
     // 在世界坐标系中寻路
-    path, err := g.FindPathWorld(0, 0, 4, 4)
+    path, err := g.FindPathWorld(0, 0, 4, 4, nil)
     if err != nil {
         panic(err) // 搜索没能完成（例如超过时间限制）
     }
@@ -69,7 +69,7 @@ g.SetWeightAt(3, 3, 5.0)
 g.SetWeightAt(5, 0, 0.3)  // 低成本道路
 
 f := finder.NewAStarFinder()
-path, _ := f.FindPath(0, 0, 7, 7, g)
+path, _ := f.FindPath(0, 0, 7, 7, g, nil)
 // A* 会自动选择总成本最低的路径，而非步骤最少的路径
 ```
 
@@ -158,12 +158,13 @@ g := grid.NewOrthogonalGrid(terrain,
 - `finder.ErrNotWalkable` — **终点**瓦片不可走（调用方的问题）；起点不可走不报错，仍允许寻路走出
 - `finder.ErrUnsupportedGrid` — 该算法不支持当前网格拓扑（如 JPS/JPS+、HPA 用于 hex/staggered）
 - `finder.ErrPrecomputedMismatch` — JPS+ 预计算数据与当前网格尺寸不一致
-- `grid.ErrPoolTimeout` / `grid.ErrPoolClosed` — 池层面的失败（见[并发寻路](#并发寻路)）
+- `finder.ErrSearchBusy` — 等待空闲搜索槽超时，搜索没有执行，可稍后重试
+- 状态/scratch 池满时 `FindPath` 会阻塞等待，不返回错误（见[并发寻路](#并发寻路)）
 
 关键点：**「没有路」不是错误**。目标不可达是算法的正常结论，所以绝大多数调用方只判断 `len(path)` 就够了，现有代码不检查 error 也依然正确：
 
 ```go
-path, err := g.FindPath(0, 0, 63, 63)
+path, err := g.FindPath(0, 0, 63, 63, nil)
 if err != nil {
     if errors.Is(err, finder.ErrOutOfBounds) || errors.Is(err, finder.ErrNotWalkable) {
         // 请求本身有问题：修起点/终点
@@ -179,128 +180,81 @@ if len(path) == 0 {
 
 ## 并发寻路
 
-### 为什么单个网格不能并发
+搜索状态已经从 `finder.Node` 拆到 per-FindPath 的 scratch，由有界池按需创建：默认上限是 `GOMAXPROCS`，不会预先创建这么多实例。因此：
 
-`OrthogonalGrid` / `HexGrid` / `StaggeredGrid` **不是并发安全的**。一次搜索会改写节点的可搜索状态（`G`、`F`、`Parent`、`Closed`、`Opened`…）并复用内部缓冲区（`pathBuf`、`heapSlice`、`neighborBuf`），而返回值又直接指向那块缓冲区，只在下次调用前有效。因此同一个网格上并发跑两次寻路会互相踩踏、返回错乱的路径。
-
-### 方案：PoolManager 按场景发放代理
-
-多个场景共用同一张地图时，每个场景从 `PoolManager` 取一个 `Proxy`（代理）。代理是**只读视图**：
-
-- **寻路** — 从 `Pool` 租借一个独占实例执行，用完立即归还，跨场景的并发搜索因此永不共享 finder 状态
-- **其余读方法** — 转发给池里常驻的只读 `Base` 实例，不需要租借、不会被寻路阻塞
-- **修改地图** — 不再通过 `Proxy`；构造新的 `Factory` 后调用 `PoolManager.Reset`
+- **同一个 Finder、同一个只读 Grid** 可以并发调用 `FindPath` / `FindPathWorld`。
+- 返回的 `[][2]int` / `[][2]float32` 是独立结果，归调用方所有，不需要在下一次调用前拷贝。
+- **不能**在搜索期间调用 `SetWalkableAt` / `SetWeightAt`，也不能并发修改 Finder 配置。
+- JPS+ 的 `Precompute`、HPA 的 `Build`、waypoint 图的增删边都必须在并发搜索开始前完成；它们与搜索并发不安全。
+- 每个 `FindPath` 占用一个状态槽；池会先复用空闲槽，没有空闲且未到上限时新建，达到上限后阻塞等待别人释放。内存随实际并发量增长。
+- 默认上限是 `runtime.GOMAXPROCS(0)`，可在启动时调用 `finder.SetMaxConcurrentSearches(n)` 调整；调低不会取消正在运行的搜索。
+- 等待上限默认是 `finder.DefaultSearchWait`（1 秒），可用 `finder.SetMaxSearchWait(d)` 调整；设为 `<= 0` 表示不等待，直接返回 `finder.ErrSearchBusy`。
 
 ```go
-mgr := grid.NewPoolManager()
+// 现在直接并发即可，不需要 Pool/Proxy。
+g := grid.NewOrthogonalGrid(terrain, grid.WithTileSize(32, 32))
+f := finder.NewAStarFinder(finder.WithDiagonal(finder.DiagonalAlways))
 
-// 每个场景一个 key（通常是地图名），并且只由该场景自己的 goroutine 驱动
-mapProxy, err := mgr.Acquire("town", func() grid.Grid {
-    return grid.NewOrthogonalGrid(terrain, grid.WithTileSize(32, 32))
-}, grid.WithCapacity(4))
-if err != nil {
-    return err
+var wg sync.WaitGroup
+for i := 0; i < 8; i++ {
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+        path, err := f.FindPath(0, 0, 200, 200, g, nil)
+        _ = path
+        _ = err
+    }()
 }
-defer mapProxy.Release()
-
-path, err := mapProxy.FindPathWorld(0, 0, 200, 200)
-// err 非 nil 表示搜索未能完成（池忙 / 超过时间限制），而不是"没有路"
+wg.Wait()
 ```
 
-`Acquire(key, factory, opts...)` 里 `key` 是地图名、`factory` 造实例(必填,为 nil 返回 `ErrNilFactory`),两者都只在池首次创建时读取。`opts` 可调并发上限和超时,都有默认值:
+> 并发读网格、并发使用同一个 Finder 是安全的；写网格、改 Finder 配置、Precompute/Build 仍需要外部同步。
 
-| 选项 | 默认 | 说明 |
-| :--- | :--- | :--- |
-| `WithCapacity(n)` | `runtime.NumCPU()` | 该地图同时能跑几个搜索。空闲时不占内存(突发结束后会缩回场景数),但每多一个实例就是一整份地图拷贝 |
-| `WithAcquireTimeout(d)` | `DefaultAcquireTimeout`(1 秒) | `Acquire` 最多等 d,到期返回 `ErrPoolTimeout`。`<= 0` 表示无限等 |
+### 路径缓冲
 
-### 契约
-
-> 一句话总结并发的形状：**并行靠代理，不靠锁。** 多个场景共享同一个 `Pool`（地图数据、实例、可调并发上限），但每个场景拿自己那个 `Proxy`，并且只在自己的 goroutine 上用。
-
-| 约定 | 说明 |
-| :--- | :--- |
-| **一个 Proxy 一个 goroutine** | **最硬的约束。** Proxy 缓存了读取用的 Base，并持有每个结果的写入缓冲 —— 两个 goroutine 驱动同一个 Proxy 会同时破坏这两样，**静默返回错乱的路径，不会 panic、没有任何报错**。检测代码不存在，也**不应该**加：一次原子操作会让只读路径从 4.2ns 涨到 9.5ns（2.3 倍），换来的是一个你已经能保证的约束。并发请**取多个 Proxy**，那才是 `Pool` 的用途。<br>**安全的**：多个 Proxy、任意多 goroutine ✅　**不安全**：一个 Proxy、多个 goroutine ❌ |
-| **工厂必须造完全独立的实例** | 每个实例需要自己的瓦片存储和自己的 Finder。**不要用 `Grid.Clone()`** —— 它复制节点但共享 Finder，两个克隆体并发搜索会损坏 |
-| **Proxy 只读** | `Proxy` 不再暴露 `SetWalkableAt` / `SetWeightAt`。要改地图，构造新 `Factory` 后调用 `Reset`，否则租借实例看不到修改。本设计面向静态地图 |
-| **必须 Release** | 场景销毁时调用一次。最后一个场景释放后池自动回收；重复调用安全 |
-| **校验不靠运气** | `Acquire` / `Reset` 对 nil 工厂返回 `ErrNilFactory`，`Reset` 目标无人持有时返回 `ErrNoPool` —— 不会静默"成功" |
-| **Release 后即失效** | 对已释放的 Proxy 调用任何 Proxy 方法会 **panic**，而不是静默返回旧数据（`Reset` 不会让 Proxy 失效）；释放时会清掉 Base/缓冲引用，便于回收 |
-| **池满有上限** | `WithCapacity` 是并发上限（默认 CPU 核数），到顶后 `FindPath` 等待实例归还，但不会超过池的获取超时（默认 `DefaultAcquireTimeout`） |
-| **容量不影响空闲内存** | 一轮突发结束后池会缩回场景数，所以 `capacity` 只决定峰值，按最繁忙值给即可 |
-
-### Acquire 有超时上限
-
-`Pool.Acquire` 是唯一的取实例入口。池满时它不会无限等 —— 到超时上限就返回 `grid.ErrPoolTimeout`，**即使一个实例都没归还也会醒**。
-
-默认上限 `DefaultAcquireTimeout`（1 秒）。这个值故意设得宽松：500×500 的 A\* 搜索实测约 3 ms，留了约 300 倍余量，慢搜索不会被误伤。它要挡的只是一件事 —— **租借泄漏**（调用方忘记 Release，或 panic 时没走 defer）会导致后来者永久阻塞。
-
-主循环有帧预算时，用 Option 收紧：
+tile 寻路的最后一参是 `[][2]int` 缓冲；只有 world 需要 `PathBuff`：
 
 ```go
-pr, err := mgr.Acquire("town", factory,
-    grid.WithCapacity(8),
-    grid.WithAcquireTimeout(2*time.Millisecond))
+// Finder / Grid tile 路径
+FindPath(..., grid Grid, dst [][2]int) ([][2]int, error)
 
-path, err := pr.FindPathWorld(0, 0, 200, 200)
-switch {
-case errors.Is(err, grid.ErrPoolTimeout):
-    // 没抢到实例，本帧跳过，下次再试
-case err != nil:
-    // 搜索没能完成
-case len(path) == 0:
-    // 真的没路
+// Grid world 路径
+FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *grid.PathBuff) ([][2]float32, error)
+```
+
+```go
+type PathBuff struct {
+    Tile  [][2]int
+    World [][2]float32
 }
+
+func NewPathBuff(tileCap, worldCap int) *PathBuff
+func (b *PathBuff) Reset()
 ```
 
-`Timeout <= 0` 表示无限等待（等于放弃上限），只能显式要。
-
-### 用统计决定上限该设多少
-
-不必猜。先读 `Stats()`：
+用法：
 
 ```go
-s := pr.Stats()
-if s.Waits > 0 && s.MaxWait > time.Millisecond {
-    log.Printf("town 寻路曾阻塞: %d 次, 累计 %v, 最长 %v",
-        s.Waits, s.WaitTotal, s.MaxWait)
-}
+tile := make([][2]int, 0, 512)
+path, err := f.FindPath(sx, sy, ex, ey, grid, tile[:0])
+
+buff := grid.NewPathBuff(512, 512)
+wpath, err := g.FindPathWorld(wx1, wy1, wx2, wy2, buff)
+
+// 普通调用
+path, err = f.FindPath(sx, sy, ex, ey, grid, nil)
+wpath, err = g.FindPathWorld(wx1, wy1, wx2, wy2, nil)
 ```
 
-`Stats` 是累计值，取两次快照相减就是单帧增量；`MaxWait` 是历史峰值。**如果 `Waits` 一直是 0，说明 `capacity` 给够了，超时永远触发不到。**
-
-统计只在调用方**真的发生阻塞**时记录，不阻塞的快路径不读时钟。`Stats()` 本身约 18 ns / 0 分配，每帧轮询一次无压力。
-
-### 地图变化：Reset
-
-`Reset` 只换**地图数据**,其它一概不动 —— 池对象不变、场景引用计数不变、已经发出去的 `Proxy` 全部继续有效、**不会 panic**。
-
-```go
-// 地图热重载 / 开门 / 换图,随便什么时候调用
-if err := mgr.Reset("town", newFactory); err != nil {
-    return err
-}
-// 之前拿到的 pr 照常能用,而且已经在新地图上工作了
-```
-
-内部做法是给池换工厂并递增一个 epoch:旧工厂建出来的实例随即作废 —— 空闲的立刻丢弃,在借的等这次搜索跑完再丢 —— 所以**下一次租借就会用新数据重建**。已经开始的搜索会跑完它开始时的那份地图。
-
-```go
-pr, _ := mgr.Acquire("town", factory, grid.WithCapacity(4))
-pr.FindPathWorld(...)        // 用旧地图
-mgr.Reset("town", newFactory)
-pr.FindPathWorld(...)        // 用新地图，同一个 pr
-```
-
-几点说明：
-
-- **容量和超时属于池、不属于地图**,`Reset` 不改它们。新 key 请在 `Acquire` 时传新的 options。
-- 多个场景同时持有时,`Reset` 之后它们**都**切到新地图,不需要谁重新 `Acquire`。
-- `Reset` 返回 `ErrNilFactory`(工厂为 nil)或 `ErrNoPool`(该 key 无人持有),不会静默"成功"。
-
-### 返回值生命周期
-
-`Proxy.FindPath` / `FindPathWorld` 的结果指向代理自己的缓冲，**在下一次搜索前有效**。需要长期持有请自行拷贝——这也是它与 `grid.Grid` 其他方法一致的地方。
+- `dst == nil` / `buff == nil`：普通分配
+- `dst != nil`：复用 tile 路径
+- `buff.Tile`：复用 tile scratch
+- `buff.World`：复用 world 输出
+- 容量不够时自动扩容，并回写 `PathBuff` 的 slice 头
+- 返回 slice 归调用方所有；`dst` / `PathBuff` 不能被并发调用共享
+- 状态和 scratch 仍然复用；A*/BiA*/BFS/BiBFS/JPS+ 预热后可做到 0 alloc/op，JPS 有 1 次编译器 escape 分配
+- Waypoint 已使用 scratch pool，传 `dst` 预热后可 0 alloc；HPA 仍会分配内部 map/scratch；Flowfield 的 `FindPath` 也接收 `dst`
+- Flowfield 构建完成后，`GetDirection` / `GetCost` / `FindPath` 可以并发读；`Reset` / `ResetMulti` 仍不能与读取并发
 
 ## 寻路算法
 
@@ -356,7 +310,7 @@ if err := f.Precompute(g); err != nil {
     // ErrUnsupportedGrid: JPS+ 只支持正交网格
 }
 
-path, _ := f.FindPath(0, 0, 2, 2, g)
+path, _ := f.FindPath(0, 0, 2, 2, g, nil)
 
 // 导出烘焙数据供后续启动直接加载
 data, _ := f.PrecomputedData()
@@ -393,7 +347,7 @@ if err := f.Build(g); err != nil {
     // ErrUnsupportedGrid: HPA 只支持正交网格
 }
 
-path, _ := f.FindPath(0, 0, 499, 499, g)
+path, _ := f.FindPath(0, 0, 499, 499, g, nil)
 ```
 
 ### Waypoint Graph
@@ -419,7 +373,7 @@ a.Connect(b, waypoint.EdgeStateStatic)
 b.Connect(c)
 
 f := waypoint.NewWaypointFinder(g)
-path, _ := f.FindPath(0, 0, 10, 10, grid)
+path, _ := f.FindPath(0, 0, 10, 10, grid, nil)
 ```
 
 ### OrthogonalGrid 分配与路径平滑
@@ -472,8 +426,8 @@ path, _ := f.FindPath(0, 0, 10, 10, grid)
 关键发现：
 - **开阔地形 (0%)** — JPS+ 利用预计算跳点表直接跳到目标，100×100 仅 **0.67µs**，比 A\* 快 **282×**
 - **有障碍时** — JPS 和 JPS+ 表现接近，100×100 比 A\* 快 **8~16×**
-- **A\* 零分配** — 内部复用 Node/OpenSet 缓冲区，全程 0 allocs/op
-- **JPS+ 近乎零分配** — 内联 Bresenham 消除 ExpandPath 分配，仅返回路径的 1 次分配
+- **A\* 低分配** — 内部复用搜索 scratch；返回路径由调用方拥有，每轮约 1 次分配
+- **JPS+ 低分配** — 内联 Bresenham，复用 scratch；路径与展开结果归调用方
 
 ### 网格构造
 
@@ -485,7 +439,7 @@ path, _ := f.FindPath(0, 0, 10, 10, grid)
 | Staggered | 1.40 ms | 4.80 MB | **7** |
 | Hex | 1.87 ms | 4.80 MB | **7** |
 
-改造前为 **40,006 次分配 / 5.45 MB**。分配次数下降 **99.98%**，对 GC 压力影响显著 —— 使用[并发寻路](#并发寻路)时，池内每个实例都受益。
+改造前为 **40,006 次分配 / 5.45 MB**。分配次数下降 **99.98%**，对 GC 压力影响显著；并发搜索时每个 `FindPath` 复用独立 scratch。
 
 ### Waypoint 寻路
 
@@ -554,6 +508,17 @@ go run examples/flowfield/
 
 ## 版本历史
 
+### Unreleased — 状态外置与直接并发
+- `Node` 只保留 `X/Y/Walkable/Weight`；搜索状态改为 per-FindPath scratch，`Parent`/`HeapIndex` 使用 flat index
+- `Finder.FindPath` 接收 `[][2]int` 输出缓冲；`Grid.FindPathWorld` 接收 `*grid.PathBuff`（Tile + World）；核心 finder 可做到预热后 0 alloc/op
+- 新增 `ErrSearchBusy` 与 `SetMaxSearchWait`：槽位等待超时返回错误，避免无限阻塞
+- 同一 Finder、同一只读 Grid 支持并发 `FindPath` / `FindPathWorld`；返回路径独立，归调用方所有
+- 移除 `grid.Pool` / `Proxy` / `PoolManager` / `Lease`；并发由有界状态/scratch 池限制，按需创建到 `GOMAXPROCS` 上限（可用 `SetMaxConcurrentSearches` 调整），未达上限先新建，达到后阻塞等待
+- JPS/JPS+ 运行时参数改为 per-call，预计算表只读
+- 修复回溯结果未写回缓冲导致的重复分配，以及池化状态被 heap/openList 间接持有的问题
+
+BREAKING: 移除 `Node` 搜索字段/`ResetSearch`、`Backtrace`/`BiBacktrace`/`NewMinHeap`、grid Pool API；JPS+ `Precompute`、HPA `Build` 不可与搜索并发
+
 ### v0.9.0 — 并发寻路 + 寻路返回 error
 - **破坏性变更**：`finder.Finder.FindPath`、`grid.Grid.FindPath` / `FindPathWorld`、`hpa` / `waypoint` / `flowfield.Field.FindPath` 改为返回 `([][2]int, error)`
 - `grid.Pool` 只保留 `Acquire` 一个取实例入口,自带超时上限（默认 `DefaultAcquireTimeout`）；`WithCapacity` 默认取 CPU 核数
@@ -613,19 +578,19 @@ go run examples/flowfield/
 
 ## 设计原则
 
-- **零分配热路径** — A\* 和 HPA\* 在预热后达到 0 B/op，减少 GC 压力
+- **复用搜索 scratch** — heap/neighbor/path 缓冲按搜索复用；返回路径独立分配，支持直接并发
 - **接口统一** — 所有算法实现 `finder.Finder` 接口，可互换
 - **可插拔** — `grid.WithFinder()` 允许替换底层寻路算法
 - **Option 模式** — 所有配置项通过函数选项安全设置
 - **接口分离** — `finder.Grid` 只暴露寻路所需方法，`grid.Grid` 提供完整的消费者接口
-- **并发靠代理** — 网格本身非并发安全；需要并发时用 `grid.PoolManager` 按场景发放 `Proxy`
+- **直接并发** — 只读网格 + 独立搜索 scratch；写网格、改配置、Precompute/Build 仍需外部同步
 
 ## 文档
 
 - [Finder API](finder/finder.go) — 所有寻路算法的通用接口
 - [Grid](finder/grid.go) — 寻路算法所需的网格接口
 - [Grid 实现](grid/) — 正交、六边形、交错三种网格类型
-- [并发寻路](grid/pool_manager.go) — PoolManager / Pool / Proxy，网格实例池与场景生命周期
+- [并发寻路](finder/state_pool.go) — per-FindPath 状态槽与并发约束
 - [HPA\*](hpa/) — 层级寻路（Portal Compression + String Pulling + Path Cache）
 - [Waypoint](waypoint/) — 航点图寻路（空间索引 + LOS 过滤）
 - [Examples](examples/) — 可直接运行的示例（basic/weighted/svg/flowfield）

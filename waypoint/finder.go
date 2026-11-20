@@ -2,6 +2,8 @@ package waypoint
 
 import (
 	"math"
+	"sync"
+	"sync/atomic"
 
 	"github.com/actfuns/pathfinding/finder"
 )
@@ -10,13 +12,22 @@ import (
 //
 // It finds the closest waypoint nodes with line-of-sight to the start/end
 // positions (via the grid parameter) and runs A* on the graph.
+type waypointScratch struct {
+	allMap map[*WaypointNode]*aNode
+	heap   []*aNode
+}
+
+var (
+	waypointSeq         atomic.Int64
+	waypointScratchPool = sync.Pool{New: func() any { return &waypointScratch{allMap: make(map[*WaypointNode]*aNode)} }}
+)
+
 type WaypointFinder struct {
 	graph *WaypointGraph
 
 	// Reusable buffers for FindPath (zero-alloc after warm-up)
-	searchSeq int
+	searchSeq int64
 	heapSlice []*aNode
-	allMap    map[*WaypointNode]*aNode
 	pathBuf   [][2]int
 }
 
@@ -35,8 +46,7 @@ func WithGraph(g *WaypointGraph) WaypointOption {
 // inject a pre-built graph.
 func NewWaypointFinder(opts ...WaypointOption) *WaypointFinder {
 	f := &WaypointFinder{
-		graph:  NewWaypointGraph(),
-		allMap: make(map[*WaypointNode]*aNode),
+		graph: NewWaypointGraph(),
 	}
 	for _, opt := range opts {
 		opt(f)
@@ -56,7 +66,28 @@ var _ finder.Finder = (*WaypointFinder)(nil)
 // An unwalkable destination returns finder.ErrNotWalkable; an unwalkable start
 // is still snapped to the closest node with line of sight.
 // Path is automatically smoothed via string pulling to remove redundant waypoints.
-func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid) ([][2]int, error) {
+func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Grid, dst [][2]int) ([][2]int, error) {
+	sc := waypointScratchPool.Get().(*waypointScratch)
+	local := *f
+	local.searchSeq = waypointSeq.Add(1)
+	local.heapSlice = sc.heap[:0]
+	if dst != nil {
+		local.pathBuf = dst[:0]
+	} else {
+		local.pathBuf = nil
+	}
+	defer func() {
+		sc.heap = local.heapSlice
+		waypointScratchPool.Put(sc)
+	}()
+	p, err := local.findPath(startX, startY, endX, endY, grid, sc.allMap)
+	if dst == nil || p == nil {
+		return p, err
+	}
+	return append(dst[:0], p...), err
+}
+
+func (f *WaypointFinder) findPath(startX, startY, endX, endY int, grid finder.Grid, all map[*WaypointNode]*aNode) ([][2]int, error) {
 	// FindClosestWithLOS would fall back to "no node found" for a request that
 	// never pointed at the graph at all.
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
@@ -91,7 +122,7 @@ func (f *WaypointFinder) FindPath(startX, startY, endX, endY int, grid finder.Gr
 		return f.SmoothPath(raw, grid), nil
 	}
 
-	path := f.findPathInternal(startNode, endNode, startX, startY, endX, endY)
+	path := f.findPathInternal(startNode, endNode, startX, startY, endX, endY, all)
 	return f.SmoothPath(path, grid), nil
 }
 
@@ -119,10 +150,9 @@ func (f *WaypointFinder) SmoothPath(path [][2]int, grid finder.Grid) [][2]int {
 }
 
 // findPathInternal runs A* between two graph nodes.
-func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, startX, startY, endX, endY int) [][2]int {
+func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, startX, startY, endX, endY int, all map[*WaypointNode]*aNode) [][2]int {
 	open := &nodeHeap{nodes: f.heapSlice[:0]}
 	defer func() { f.heapSlice = open.nodes[:0] }()
-	all := f.allMap
 
 	seq := f.searchSeq
 
@@ -217,7 +247,7 @@ type aNode struct {
 	g, h, f float64
 	parent  *aNode
 	closed  bool
-	seq     int // matches finder searchSeq to detect stale state
+	seq     int64 // matches finder searchSeq to detect stale state
 	heapIdx int
 }
 
