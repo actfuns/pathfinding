@@ -25,14 +25,14 @@ const (
 	jpsPlusMagic16 uint32 = 0x4A505332
 )
 
-var jpsCardinalDirs = [4][2]int{
+var jpsCardinalDirs = [4][2]int32{
 	{0, -1}, // N
 	{1, 0},  // E
 	{0, 1},  // S
 	{-1, 0}, // W
 }
 
-var jpsDiagonalDirs = [4][2]int{
+var jpsDiagonalDirs = [4][2]int32{
 	{1, -1},  // NE
 	{1, 1},   // SE
 	{-1, 1},  // SW
@@ -40,7 +40,7 @@ var jpsDiagonalDirs = [4][2]int{
 }
 
 // jpsCardinalIdx maps cardinal direction vectors to dir index.
-var jpsCardinalIdx = map[[2]int]int{
+var jpsCardinalIdx = map[[2]int32]int{
 	{0, -1}: dirN,
 	{1, 0}:  dirE,
 	{0, 1}:  dirS,
@@ -48,7 +48,7 @@ var jpsCardinalIdx = map[[2]int]int{
 }
 
 // jpsDiagonalIdx maps diagonal direction vectors to dir index.
-var jpsDiagonalIdx = map[[2]int]int{
+var jpsDiagonalIdx = map[[2]int32]int{
 	{1, -1}:  dirNE,
 	{1, 1}:   dirSE,
 	{-1, 1}:  dirSW,
@@ -77,10 +77,10 @@ var jpsDiagonalIdx = map[[2]int]int{
 type JPSPlusFinder struct {
 	Heuristic        HeuristicFunc
 	DiagonalMovement DiagonalMovement
-	Weight           float64
+	Weight           float32
 	Adaptive         bool
 
-	width, height int
+	width, height int32
 
 	// jump8/jump16 store precomputed jump distances per cell per direction.
 	// Layout: (y*width + x)*8 + dir
@@ -95,8 +95,8 @@ type JPSPlusFinder struct {
 	startNode *Node
 	endNode   *Node
 	heapSlice []heapEntry
-	pathBuf   [][2]int
-	expandBuf [][2]int
+	pathBuf   [][2]int32
+	expandBuf [][2]int32
 
 	// Pre-allocated direction slice (avoid allocation in hot path)
 	dirs []int
@@ -146,7 +146,7 @@ func (j *JPSPlusFinder) precompute(grid Grid, wide bool) {
 	j.width = grid.Width()
 	j.height = grid.Height()
 	j.wide = wide
-	size := j.width * j.height * 8
+	size := int(j.width * j.height * 8)
 	if j.wide {
 		if cap(j.jump16) < size {
 			j.jump16 = make([]int16, size)
@@ -176,10 +176,10 @@ func (j *JPSPlusFinder) precompute(grid Grid, wide bool) {
 // Returns a per-cell bitmask of directions where the cell acts as a jump point.
 func (j *JPSPlusFinder) detectPrimaryJumpPoints(grid Grid) []uint8 {
 	w, h := j.width, j.height
-	primaryJPs := make([]uint8, w*h)
+	primaryJPs := make([]uint8, int(w*h))
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := int32(0); y < h; y++ {
+		for x := int32(0); x < w; x++ {
 			if !grid.IsWalkableAt(x, y) {
 				continue
 			}
@@ -191,11 +191,11 @@ func (j *JPSPlusFinder) detectPrimaryJumpPoints(grid Grid) []uint8 {
 				}
 
 				// Perpendicular to wall direction
-				var checkDirs [2][2]int
+				var checkDirs [2][2]int32
 				if dir[0] != 0 { // horizontal direction (E/W)
-					checkDirs = [2][2]int{{0, -1}, {0, 1}} // N/S
+					checkDirs = [2][2]int32{{0, -1}, {0, 1}} // N/S
 				} else { // vertical direction (N/S)
-					checkDirs = [2][2]int{{-1, 0}, {1, 0}} // W/E
+					checkDirs = [2][2]int32{{-1, 0}, {1, 0}} // W/E
 				}
 
 				for _, cd := range checkDirs {
@@ -212,7 +212,7 @@ func (j *JPSPlusFinder) detectPrimaryJumpPoints(grid Grid) []uint8 {
 					}
 
 					dirIdx := jpsCardinalIdx[cd]
-					primaryJPs[jpy*w+jpx] |= 1 << dirIdx
+					primaryJPs[int(jpy*w+jpx)] |= 1 << dirIdx
 				}
 			}
 		}
@@ -225,14 +225,14 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs []uint8) {
 	w, h := j.width, j.height
 
 	// Helper: get distance to obstacle or jump point in a cardinal direction
-	scanCardinal := func(x, y int, dx, dy int, dirIdx int) int16 {
-		dist := 0
+	scanCardinal := func(x, y int32, dx, dy int32, dirIdx int) int16 {
+		dist := int32(0)
 		for {
 			nx, ny := x+dx*(dist+1), y+dy*(dist+1)
 			if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
 				return int16(-dist)
 			}
-			if primaryJPs[ny*w+nx]&(1<<dirIdx) != 0 {
+			if primaryJPs[int(ny*w+nx)]&(1<<dirIdx) != 0 {
 				return int16(dist + 1)
 			}
 			dist++
@@ -240,12 +240,12 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs []uint8) {
 	}
 
 	// Part A: Cardinal directions
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := int32(0); y < h; y++ {
+		for x := int32(0); x < w; x++ {
 			if !grid.IsWalkableAt(x, y) {
 				continue
 			}
-			base := (y*w + x) * 8
+			base := int((y*w + x) * 8)
 			for _, dir := range jpsCardinalDirs {
 				dirIdx := jpsCardinalIdx[dir]
 				j.setTable(base+dirIdx, scanCardinal(x, y, dir[0], dir[1], dirIdx))
@@ -254,21 +254,21 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs []uint8) {
 	}
 
 	// Part B: Diagonal directions
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := int32(0); y < h; y++ {
+		for x := int32(0); x < w; x++ {
 			if !grid.IsWalkableAt(x, y) {
 				continue
 			}
-			base := (y*w + x) * 8
+			base := int((y*w + x) * 8)
 
 			for _, ddir := range jpsDiagonalDirs {
 				ddirIdx := jpsDiagonalIdx[ddir]
-				hdx, hdy := ddir[0], 0 // horizontal component
-				vdx, vdy := 0, ddir[1] // vertical component
-				hDirIdx := jpsCardinalIdx[[2]int{hdx, hdy}]
-				vDirIdx := jpsCardinalIdx[[2]int{vdx, vdy}]
+				hdx, hdy := ddir[0], int32(0) // horizontal component
+				vdx, vdy := int32(0), ddir[1] // vertical component
+				hDirIdx := jpsCardinalIdx[[2]int32{hdx, hdy}]
+				vDirIdx := jpsCardinalIdx[[2]int32{vdx, vdy}]
 
-				dist := 0
+				dist := int32(0)
 				for {
 					cx, cy := x+ddir[0]*dist, y+ddir[1]*dist
 					if !grid.IsInside(cx, cy) || !grid.IsWalkableAt(cx, cy) {
@@ -278,7 +278,7 @@ func (j *JPSPlusFinder) computeDistances(grid Grid, primaryJPs []uint8) {
 
 					if dist > 0 {
 						// Check cardinal neighbors at this diagonal position
-						cb := (cy*w + cx) * 8
+						cb := int((cy*w + cx) * 8)
 						if j.getTable(cb+hDirIdx) > 0 || j.getTable(cb+vDirIdx) > 0 {
 							j.setTable(base+ddirIdx, int16(dist))
 							break
@@ -329,11 +329,11 @@ func (j *JPSPlusFinder) setTable(i int, v int16) {
 }
 
 // getDist returns the precomputed jump distance for cell (x,y) in direction dirIdx.
-func (j *JPSPlusFinder) getDist(x, y, dirIdx int) int16 {
+func (j *JPSPlusFinder) getDist(x, y int32, dirIdx int) int16 {
 	if !j.grid.IsInside(x, y) {
 		return 0
 	}
-	i := (y*j.width+x)*8 + dirIdx
+	i := int((y*j.width+x)*8) + dirIdx
 	if j.wide {
 		return j.jump16[i]
 	}
@@ -354,7 +354,7 @@ func (j *JPSPlusFinder) PrecomputedData() ([]byte, error) {
 		cellBytes = 2
 	}
 	// Format: magic(4) + width(4) + height(4) + table
-	size := 12 + j.width*j.height*8*cellBytes
+	size := 12 + int(j.width*j.height*8)*cellBytes
 	buf := make([]byte, size)
 	binary.LittleEndian.PutUint32(buf[0:4], magic)
 	binary.LittleEndian.PutUint32(buf[4:8], uint32(j.width))
@@ -396,8 +396,8 @@ func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 	if len(data)-12 < tableSize*cellBytes {
 		return fmt.Errorf("JPSPlusFinder: precomputed data too short, need %d bytes", tableSize*cellBytes)
 	}
-	j.width = w
-	j.height = h
+	j.width = int32(w)
+	j.height = int32(h)
 	j.wide = wide
 	if wide {
 		if cap(j.jump16) < tableSize {
@@ -433,7 +433,7 @@ func (j *JPSPlusFinder) PrecomputedSize() int {
 	if j.wide {
 		cellBytes = 2
 	}
-	return 12 + j.width*j.height*8*cellBytes
+	return 12 + int(j.width*j.height*8)*cellBytes
 }
 
 // AdaptiveDensityThreshold is the obstacle ratio at or above which Adaptive
@@ -441,7 +441,7 @@ func (j *JPSPlusFinder) PrecomputedSize() int {
 const AdaptiveDensityThreshold = 0.1
 
 func (j *JPSPlusFinder) useAStar(grid Grid) bool {
-	oc, ok := grid.(interface{ ObstacleCount() int })
+	oc, ok := grid.(interface{ ObstacleCount() int32 })
 	if !ok {
 		return false
 	}
@@ -449,7 +449,7 @@ func (j *JPSPlusFinder) useAStar(grid Grid) bool {
 	if area == 0 {
 		return false
 	}
-	return float64(oc.ObstacleCount())/float64(area) >= AdaptiveDensityThreshold
+	return float32(oc.ObstacleCount())/float32(area) >= AdaptiveDensityThreshold
 }
 
 func (j *JPSPlusFinder) newAdaptiveFallback() *AStarFinder {
@@ -460,7 +460,7 @@ func (j *JPSPlusFinder) newAdaptiveFallback() *AStarFinder {
 	)
 }
 
-func (j *JPSPlusFinder) preflight(startX, startY, endX, endY int, grid Grid) (path [][2]int, err error) {
+func (j *JPSPlusFinder) preflight(startX, startY, endX, endY int32, grid Grid) (path [][2]int32, err error) {
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
@@ -481,7 +481,7 @@ func (j *JPSPlusFinder) preflight(startX, startY, endX, endY int, grid Grid) (pa
 
 // FindPath performs JPS+ pathfinding using the precomputed jump table.
 // Precompute(grid) must have been called first with the same grid.
-func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := j.preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return finishPath(path, dst, true), err
 	}
@@ -510,7 +510,7 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst 
 	return finishPath(p, dst, false), err
 }
 
-func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	j.grid = grid
 	openList := &minHeap{nodes: j.heapSlice[:0], state: states}
 	defer func() {
@@ -542,7 +542,7 @@ func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 				x1, y1 := j.pathBuf[i+1][0], j.pathBuf[i+1][1]
 				dx := x1 - x0
 				dy := y1 - y0
-				var sx, sy int
+				var sx, sy int32
 				if dx < 0 {
 					dx = -dx
 					sx = -1
@@ -560,7 +560,7 @@ func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 					if x0 == x1 && y0 == y1 {
 						break
 					}
-					j.expandBuf = append(j.expandBuf, [2]int{x0, y0})
+					j.expandBuf = append(j.expandBuf, [2]int32{x0, y0})
 					e2 := 2 * err
 					if e2 > -dy {
 						err -= dy
@@ -594,7 +594,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 	// relaxAdjacent offers a one-step move in (dx,dy). It keeps the search
 	// complete and optimal when the static jump table cannot encode every
 	// goal-dependent jump point.
-	relaxAdjacent := func(dx, dy int) {
+	relaxAdjacent := func(dx, dy int32) {
 		if dx != 0 && dy != 0 && !j.diagonalStepAllowed(x, y, dx, dy) {
 			return
 		}
@@ -607,7 +607,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 		if ns.Closed {
 			return
 		}
-		var moveCost float64 = 1
+		var moveCost float32 = 1
 		if dx != 0 && dy != 0 {
 			moveCost = SQRT2
 		}
@@ -615,7 +615,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 		if ns.Opened == 0 || ng < ns.G {
 			ns.G = ng
 			if ns.Opened == 0 {
-				ns.H = heuristic(float64(AbsInt(nx-endX)), float64(AbsInt(ny-endY)))
+				ns.H = heuristic(float32(AbsInt(nx-endX)), float32(AbsInt(ny-endY)))
 			}
 			ns.F = ns.G + ns.H*j.Weight
 			ns.Parent = states.index(node)
@@ -635,8 +635,8 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 		// Check if the end node lies in this direction
 		if endInDirection(x, y, endX, endY, dx, dy) {
 			endDist := absDirDist(endX-x, endY-y, dx, dy)
-			obstacleDist := int(-dist) // positive when no jump point (dist < 0)
-			if (dist <= 0 && endDist <= obstacleDist) || (dist > 0 && endDist <= int(dist)) {
+			obstacleDist := int32(-dist) // positive when no jump point (dist < 0)
+			if (dist <= 0 && endDist <= obstacleDist) || (dist > 0 && endDist <= int32(dist)) {
 				// End is reachable in this direction, add it as successor
 				gd := octileDist(AbsInt(endX-x), AbsInt(endY-y))
 				endNode := j.endNode
@@ -665,7 +665,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 		}
 
 		// Positive dist: jump point exists at this distance
-		jx, jy := x+dx*int(dist), y+dy*int(dist)
+		jx, jy := x+dx*int32(dist), y+dy*int32(dist)
 
 		if !grid.IsInside(jx, jy) || !grid.IsWalkableAt(jx, jy) {
 			continue
@@ -683,7 +683,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 		if ns.Opened == 0 || ng < ns.G {
 			ns.G = ng
 			if ns.Opened == 0 {
-				ns.H = heuristic(float64(AbsInt(jx-endX)), float64(AbsInt(jy-endY)))
+				ns.H = heuristic(float32(AbsInt(jx-endX)), float32(AbsInt(jy-endY)))
 			}
 			ns.F = ns.G + ns.H*j.Weight
 			ns.Parent = states.index(node)
@@ -706,7 +706,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 
 // diagonalStepAllowed applies the configured diagonal movement rule to a
 // one-step diagonal move from (x, y).
-func (j *JPSPlusFinder) diagonalStepAllowed(x, y, dx, dy int) bool {
+func (j *JPSPlusFinder) diagonalStepAllowed(x, y, dx, dy int32) bool {
 	grid := j.grid
 	switch j.DiagonalMovement {
 	case DiagonalNever:
@@ -721,7 +721,7 @@ func (j *JPSPlusFinder) diagonalStepAllowed(x, y, dx, dy int) bool {
 }
 
 // endInDirection checks if (ex,ey) is reachable in direction (dx,dy) from (x,y).
-func endInDirection(x, y, ex, ey, dx, dy int) bool {
+func endInDirection(x, y, ex, ey, dx, dy int32) bool {
 	rx, ry := ex-x, ey-y
 	if dx == 0 && dy == 0 {
 		return false
@@ -736,22 +736,22 @@ func endInDirection(x, y, ex, ey, dx, dy int) bool {
 }
 
 // absDirDist returns the number of steps from (rx,ry) in direction (dx,dy).
-func absDirDist(rx, ry, dx, dy int) int {
+func absDirDist(rx, ry, dx, dy int32) int32 {
 	if dx != 0 {
 		return AbsInt(rx / dx)
 	}
 	return AbsInt(ry / dy)
 }
 
-func octileDist(dx, dy int) float64 {
+func octileDist(dx, dy int32) float32 {
 	f := SQRT2 - 1
 	if dx < dy {
-		return f*float64(dx) + float64(dy)
+		return f*float32(dx) + float32(dy)
 	}
-	return f*float64(dy) + float64(dx)
+	return f*float32(dy) + float32(dx)
 }
 
-func dirToVec(dirIdx int) (int, int) {
+func dirToVec(dirIdx int) (int32, int32) {
 	switch dirIdx {
 	case dirN:
 		return 0, -1

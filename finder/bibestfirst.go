@@ -11,7 +11,7 @@ func NewBiBestFirstFinder(opts ...Option) *BiBestFirstFinder {
 	inner := NewBiAStarFinder(opts...)
 	f.BiAStarFinder = *inner
 	orig := f.Heuristic
-	f.Heuristic = func(dx, dy float64) float64 {
+	f.Heuristic = func(dx, dy float32) float32 {
 		return orig(dx, dy) * 1000000
 	}
 	f.customHeuristic = true

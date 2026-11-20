@@ -9,7 +9,7 @@ import (
 // Smoother is a path smoothing function. It takes a tile path and returns a
 // simplified path with fewer waypoints, typically by removing intermediate
 // tiles that have line-of-sight to each other.
-type Smoother func(path [][2]int) [][2]int
+type Smoother func(path [][2]int32) [][2]int32
 
 // GridType identifies the tile grid layout.
 type GridType int
@@ -26,23 +26,23 @@ const (
 // NewMatrix creates an empty (all zero) matrix with the given dimensions.
 // All cells are 0 (walkable), ready to pass to NewOrthogonalGrid, NewHexGrid,
 // or NewStaggeredGrid.
-func NewMatrix(w, h int) [][]int {
-	m := make([][]int, h)
+func NewMatrix(w, h int32) [][]int32 {
+	m := make([][]int32, int(h))
 	for i := range m {
-		m[i] = make([]int, w)
+		m[i] = make([]int32, int(w))
 	}
 	return m
 }
 
 // validWeight reports whether w is a finite positive movement multiplier.
-func validWeight(w float64) bool {
-	return w > 0 && !math.IsNaN(w) && !math.IsInf(w, 0)
+func validWeight(w float32) bool {
+	return w > 0 && !math.IsNaN(float64(w)) && !math.IsInf(float64(w), 0)
 }
 
 // PathBuff holds reusable tile and world-coordinate buffers for
 // FindPathWorld. The zero value means normal allocation.
 type PathBuff struct {
-	Tile  [][2]int
+	Tile  [][2]int32
 	World [][2]float32
 }
 
@@ -55,7 +55,7 @@ func NewPathBuff(tileCap, worldCap int) *PathBuff {
 		worldCap = 0
 	}
 	return &PathBuff{
-		Tile:  make([][2]int, 0, tileCap),
+		Tile:  make([][2]int32, 0, tileCap),
 		World: make([][2]float32, 0, worldCap),
 	}
 }
@@ -77,31 +77,31 @@ type Grid interface {
 	finder.Grid
 
 	// TileWidth returns the width of a tile in pixels.
-	TileWidth() int
+	TileWidth() int32
 	// TileHeight returns the height of a tile in pixels.
-	TileHeight() int
+	TileHeight() int32
 	// ObstacleCount returns the number of non-walkable tiles.
-	ObstacleCount() int
+	ObstacleCount() int32
 	// TileIndex returns the flat array index for tile (x, y).
 	// Equivalent to y*Width + x. Panics if outside the grid.
-	TileIndex(x, y int) int
+	TileIndex(x, y int32) int32
 	// TileXY returns the tile coordinates for a flat array index.
 	// Equivalent to (index % Width, index / Width).
-	TileXY(index int) (int, int)
+	TileXY(index int32) (int32, int32)
 
 	// SetWeightAt sets the per-tile movement cost multiplier for tile (x, y).
 	// Weight 1.0 is the default; higher values make movement more expensive.
-	SetWeightAt(x, y int, weight float64)
+	SetWeightAt(x, y int32, weight float32)
 	// GetWeightAt returns the movement cost multiplier for tile (x, y).
 	// Returns 1.0 for tiles outside the grid.
-	GetWeightAt(x, y int) float64
+	GetWeightAt(x, y int32) float32
 
 	// WorldToTile converts a world-space coordinate to tile-space.
 	// Results outside the grid should be checked with IsInside.
-	WorldToTile(wx, wy float32) (int, int)
+	WorldToTile(wx, wy float32) (int32, int32)
 	// TileToWorld converts a tile coordinate to world-space, returning
 	// the centre point of the tile.
-	TileToWorld(tx, ty int) (float32, float32)
+	TileToWorld(tx, ty int32) (float32, float32)
 	// IsWalkableAtWorld reports whether the tile at world position (wx, wy) is walkable.
 	IsWalkableAtWorld(wx, wy float32) bool
 	// SetWalkableAtWorld sets the walkability of the tile at world position (wx, wy).
@@ -110,18 +110,18 @@ type Grid interface {
 	// HasLineOfSight reports whether two tiles can see each other.
 	// Uses the appropriate algorithm for the grid type (Bresenham for orthogonal,
 	// world-space dense sampling for hex and staggered).
-	HasLineOfSight(x1, y1, x2, y2 int) bool
+	HasLineOfSight(x1, y1, x2, y2 int32) bool
 	// HasLineOfSightWorld reports whether two world positions can see
 	// each other. Converts to tile coordinates before checking LOS.
 	HasLineOfSightWorld(x1, y1, x2, y2 float32) bool
 	// FindNearestWalkable is like FindNearestWalkableWorld but returns tile
 	// coordinates instead of edge-clamped world coordinates.
-	FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, bool)
+	FindNearestWalkable(wx, wy float32, maxRadius int32) (int32, int32, bool)
 	// FindNearestWalkableWorld finds the nearest walkable tile within maxRadius
 	// (Chebyshev distance in tiles) from world position (wx, wy).
 	// Returns the closest point on the edge of the nearest walkable tile, or
 	// (0, 0, false) if no walkable tile exists within the search radius.
-	FindNearestWalkableWorld(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool)
+	FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edgeInset float32) (float32, float32, bool)
 
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
@@ -132,7 +132,7 @@ type Grid interface {
 	// dst is treated as dst[:0]; pass nil for normal allocation.
 	// Concurrent read-only searches are safe when the configured Finder is
 	// concurrency-safe; mutating the grid or finder during a search is not.
-	FindPath(x1, y1, x2, y2 int, dst [][2]int) ([][2]int, error)
+	FindPath(x1, y1, x2, y2 int32, dst [][2]int32) ([][2]int32, error)
 
 	// FindPathWorld finds a path between two world positions through the grid.
 	// buff.World is the world-space output; buff.Tile is the Finder's tile-space
@@ -145,5 +145,5 @@ type Grid interface {
 	// Multiple paths are drawn in different colours (1st=blue, 2nd=red dashed).
 	// Start/end markers are derived from the first path.
 	// Pass nil to use the default SVG options.
-	RenderSVG(cfg *SVGOpts, paths ...[][2]int) string
+	RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string
 }

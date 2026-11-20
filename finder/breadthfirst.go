@@ -7,7 +7,7 @@ type BreadthFirstFinder struct {
 	DiagonalMovement DiagonalMovement
 
 	neighborBuf []*Node
-	pathBuf     [][2]int
+	pathBuf     [][2]int32
 }
 
 // NewBreadthFirstFinder creates a new BreadthFirstFinder.
@@ -30,7 +30,7 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 }
 
 // FindPath finds a path using BFS.
-func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return finishPath(path, dst, true), err
 	}
@@ -51,7 +51,7 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid,
 	return finishPath(p, dst, false), err
 }
 
-func (f *BreadthFirstFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+func (f *BreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 	startState := states.get(startNode)

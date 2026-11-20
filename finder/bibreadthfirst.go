@@ -8,7 +8,7 @@ type BiBreadthFirstFinder struct {
 	DiagonalMovement DiagonalMovement
 
 	neighborBuf []*Node
-	pathBuf     [][2]int
+	pathBuf     [][2]int32
 }
 
 // NewBiBreadthFirstFinder creates a new BiBreadthFirstFinder.
@@ -31,7 +31,7 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 }
 
 // FindPath finds a path using bidirectional BFS.
-func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return finishPath(path, dst, true), err
 	}
@@ -52,7 +52,7 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int, grid Gri
 	return finishPath(p, dst, false), err
 }
 
-func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 

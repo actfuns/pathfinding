@@ -1,10 +1,10 @@
 package finder
 
 // SQRT2 is the square root of 2, used as the cost of a diagonal step.
-const SQRT2 = 1.4142135623730951
+const SQRT2 float32 = 1.4142135623730951
 
 // AbsInt returns the absolute value of x.
-func AbsInt(x int) int {
+func AbsInt(x int32) int32 {
 	if x < 0 {
 		return -x
 	}
@@ -12,7 +12,7 @@ func AbsInt(x int) int {
 }
 
 // MaxInt returns the larger of a and b.
-func MaxInt(a, b int) int {
+func MaxInt(a, b int32) int32 {
 	if a > b {
 		return a
 	}

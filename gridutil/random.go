@@ -12,45 +12,36 @@ func fastRand() uint32 {
 }
 
 // RandomWalkable returns a random walkable tile coordinate.
-func RandomWalkable(g GridLOS) (int, int, bool) {
+func RandomWalkable(g GridLOS) (int32, int32, bool) {
 	w, h := g.Width(), g.Height()
 	if w == 0 || h == 0 {
 		return 0, 0, false
 	}
 
-	// Fast path: random sampling.
 	for i := 0; i < 32; i++ {
-		x := int(fastRand() % uint32(w))
-		y := int(fastRand() % uint32(h))
-
+		x := int32(fastRand() % uint32(w))
+		y := int32(fastRand() % uint32(h))
 		if g.IsWalkableAt(x, y) {
 			return x, y, true
 		}
 	}
 
-	// Fallback: reservoir sampling over all walkable tiles.
 	count := 0
-	var chosenX, chosenY int
-
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	var chosenX, chosenY int32
+	for y := int32(0); y < h; y++ {
+		for x := int32(0); x < w; x++ {
 			if !g.IsWalkableAt(x, y) {
 				continue
 			}
-
 			count++
-
 			if fastRand()%uint32(count) == 0 {
-				chosenX = x
-				chosenY = y
+				chosenX, chosenY = x, y
 			}
 		}
 	}
-
 	if count == 0 {
 		return 0, 0, false
 	}
-
 	return chosenX, chosenY, true
 }
 
@@ -65,45 +56,35 @@ func RandomWalkableWorld(g GridWorld) (float32, float32, bool) {
 }
 
 // RandomWalkableInRadius returns a random walkable tile within radius tiles of (cx, cy).
-func RandomWalkableInRadius(g GridLOS, cx, cy, radius int) (int, int, bool) {
+func RandomWalkableInRadius(g GridLOS, cx, cy, radius int32) (int32, int32, bool) {
 	if radius < 0 {
 		return 0, 0, false
 	}
-
 	for i := 0; i < 32; i++ {
-		dx := int(fastRand()%uint32(2*radius+1)) - radius
-		dy := int(fastRand()%uint32(2*radius+1)) - radius
-
+		dx := int32(fastRand()%uint32(2*radius+1)) - radius
+		dy := int32(fastRand()%uint32(2*radius+1)) - radius
 		x, y := cx+dx, cy+dy
 		if g.IsWalkableAt(x, y) {
 			return x, y, true
 		}
 	}
-
 	count := 0
-	var chosenX, chosenY int
-
+	var chosenX, chosenY int32
 	for dy := -radius; dy <= radius; dy++ {
 		for dx := -radius; dx <= radius; dx++ {
 			x, y := cx+dx, cy+dy
-
 			if !g.IsWalkableAt(x, y) {
 				continue
 			}
-
 			count++
-
 			if fastRand()%uint32(count) == 0 {
-				chosenX = x
-				chosenY = y
+				chosenX, chosenY = x, y
 			}
 		}
 	}
-
 	if count == 0 {
 		return 0, 0, false
 	}
-
 	return chosenX, chosenY, true
 }
 
@@ -149,7 +130,7 @@ func RandomWalkableInRadiusWorld(g GridWorld, wx, wy float32, radius float32) (f
 	radiusSq := radius * radius
 
 	count := 0
-	var chosenTx, chosenTy int
+	var chosenTx, chosenTy int32
 
 	for ty := minTy; ty <= maxTy; ty++ {
 		for tx := minTx; tx <= maxTx; tx++ {
@@ -182,64 +163,49 @@ func RandomWalkableInRadiusWorld(g GridWorld, wx, wy float32, radius float32) (f
 
 // RandomInRing returns a random walkable tile with Chebyshev distance
 // between innerR and outerR from (cx, cy).
-func RandomInRing(g GridLOS, cx, cy, innerR, outerR int) (int, int, bool) {
+func RandomInRing(g GridLOS, cx, cy, innerR, outerR int32) (int32, int32, bool) {
 	if outerR < innerR {
 		innerR, outerR = outerR, innerR
 	}
-
 	if outerR < 0 {
 		return 0, 0, false
 	}
-
 	if innerR < 0 {
 		innerR = 0
 	}
-
 	for i := 0; i < 64; i++ {
-		dx := int(fastRand()%uint32(2*outerR+1)) - outerR
-		dy := int(fastRand()%uint32(2*outerR+1)) - outerR
-
+		dx := int32(fastRand()%uint32(2*outerR+1)) - outerR
+		dy := int32(fastRand()%uint32(2*outerR+1)) - outerR
 		x, y := cx+dx, cy+dy
-
 		dist := maxInt(abs(dx), abs(dy))
 		if dist < innerR || dist > outerR {
 			continue
 		}
-
 		if g.IsWalkableAt(x, y) {
 			return x, y, true
 		}
 	}
-
 	count := 0
-	var chosenX, chosenY int
-
+	var chosenX, chosenY int32
 	for dy := -outerR; dy <= outerR; dy++ {
 		for dx := -outerR; dx <= outerR; dx++ {
 			dist := maxInt(abs(dx), abs(dy))
 			if dist < innerR || dist > outerR {
 				continue
 			}
-
 			x, y := cx+dx, cy+dy
-
 			if !g.IsWalkableAt(x, y) {
 				continue
 			}
-
 			count++
-
 			if fastRand()%uint32(count) == 0 {
-				chosenX = x
-				chosenY = y
+				chosenX, chosenY = x, y
 			}
 		}
 	}
-
 	if count == 0 {
 		return 0, 0, false
 	}
-
 	return chosenX, chosenY, true
 }
 
@@ -289,7 +255,7 @@ func RandomInRingWorld(g GridWorld, wx, wy float32, innerR, outerR float32) (flo
 	maxTy := maxInt(maxInt(p1y, p2y), maxInt(p3y, p4y))
 
 	count := 0
-	var chosenTx, chosenTy int
+	var chosenTx, chosenTy int32
 	for ty := minTy; ty <= maxTy; ty++ {
 		for tx := minTx; tx <= maxTx; tx++ {
 			if !g.IsWalkableAt(tx, ty) {

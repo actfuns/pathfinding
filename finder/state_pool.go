@@ -120,7 +120,7 @@ func (p *boundedPool[T]) setMax(max int) {
 func newSearchStates() *searchStates {
 	return &searchStates{
 		neighborBuf:    make([]*Node, 0, 8),
-		neighborPosBuf: make([][2]int, 0, 8),
+		neighborPosBuf: make([][2]int32, 0, 8),
 	}
 }
 
@@ -148,7 +148,7 @@ func SetMaxConcurrentSearches(n int) {
 	statePool.setMax(n)
 }
 
-func acquireStates(width, height int, seq int64) (*searchStates, error) {
+func acquireStates(width, height int32, seq int64) (*searchStates, error) {
 	s, ok := statePool.acquire()
 	if !ok {
 		return nil, ErrSearchBusy
@@ -174,11 +174,11 @@ func releaseStates(s *searchStates) {
 	statePool.release(s)
 }
 
-func clonePath(path [][2]int) [][2]int {
+func clonePath(path [][2]int32) [][2]int32 {
 	if path == nil {
 		return nil
 	}
-	out := make([][2]int, len(path))
+	out := make([][2]int32, len(path))
 	copy(out, path)
 	return out
 }

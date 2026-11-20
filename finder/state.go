@@ -5,7 +5,7 @@ package finder
 // does not retain grid nodes.
 type nodeState struct {
 	SearchID    int64
-	G, H, F     float64
+	G, H, F     float32
 	Parent      int32
 	HeapIndex   int32
 	RetainCount int16
@@ -17,7 +17,7 @@ type nodeState struct {
 // searchStates is a reusable, generation-tagged state array indexed by the flat
 // tile index (Y*width + X).
 type searchStates struct {
-	width, height int
+	width, height int32
 	seq           int64
 	states        []nodeState
 
@@ -26,19 +26,19 @@ type searchStates struct {
 	neighborBuf    []*Node
 	queue          []*Node
 	queueB         []*Node
-	neighborPosBuf [][2]int
+	neighborPosBuf [][2]int32
 	heap           []heapEntry
 	heapB          []heapEntry
-	pathBuf        [][2]int
-	expandBuf      [][2]int
-	routeBuf       [][2]int
+	pathBuf        [][2]int32
+	expandBuf      [][2]int32
+	routeBuf       [][2]int32
 	neighborBufs   [][]*Node
 	onPath         []bool
 }
 
-func (s *searchStates) begin(width, height int, seq int64) {
+func (s *searchStates) begin(width, height int32, seq int64) {
 	s.width, s.height, s.seq = width, height, seq
-	n := width * height
+	n := int(width * height)
 	if n < 1 {
 		n = 1
 	}
@@ -65,17 +65,17 @@ func (s *searchStates) index(n *Node) int32 {
 	return int32(n.Y*s.width + n.X)
 }
 
-func (s *searchStates) xy(i int32) (int, int) {
-	return int(i) % s.width, int(i) / s.width
+func (s *searchStates) xy(i int32) (int32, int32) {
+	return i % s.width, i / s.width
 }
 
 // backtrace writes the path from start to node into buf (reversed internally)
 // using parent indices.
-func (s *searchStates) backtrace(node *Node, buf [][2]int) [][2]int {
+func (s *searchStates) backtrace(node *Node, buf [][2]int32) [][2]int32 {
 	buf = buf[:0]
 	for i := s.index(node); i >= 0; {
 		x, y := s.xy(i)
-		buf = append(buf, [2]int{x, y})
+		buf = append(buf, [2]int32{x, y})
 		i = s.at(i).Parent
 	}
 	for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
@@ -84,18 +84,18 @@ func (s *searchStates) backtrace(node *Node, buf [][2]int) [][2]int {
 	return buf
 }
 
-func (s *searchStates) biBacktrace(nodeA, nodeB *Node, buf [][2]int) [][2]int {
+func (s *searchStates) biBacktrace(nodeA, nodeB *Node, buf [][2]int32) [][2]int32 {
 	buf = buf[:0]
 	for i := s.index(nodeA); i >= 0; i = s.at(i).Parent {
 		x, y := s.xy(i)
-		buf = append(buf, [2]int{x, y})
+		buf = append(buf, [2]int32{x, y})
 	}
 	for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
 		buf[i], buf[j] = buf[j], buf[i]
 	}
 	for i := s.index(nodeB); i >= 0; i = s.at(i).Parent {
 		x, y := s.xy(i)
-		buf = append(buf, [2]int{x, y})
+		buf = append(buf, [2]int32{x, y})
 	}
 	return buf
 }

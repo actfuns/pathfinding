@@ -17,10 +17,10 @@ const (
 
 // gridOptions aggregates all configurable settings for grid construction.
 type gridOptions struct {
-	tileW, tileH int
+	tileW, tileH int32
 	finder       finder.Finder
 	smoothMode   SmoothMode
-	hexSide      int
+	hexSide      int32
 	staggerX     bool
 	staggerEven  bool
 	staggerAxis  string
@@ -33,7 +33,7 @@ type GridOption func(*gridOptions)
 // --- Shared options (apply to all grid types) ---
 
 // WithTileSize sets the tile dimensions for world coordinate conversion.
-func WithTileSize(w, h int) GridOption {
+func WithTileSize(w, h int32) GridOption {
 	return func(o *gridOptions) { o.tileW = w; o.tileH = h }
 }
 
@@ -60,7 +60,7 @@ func WithSmoothDense() GridOption {
 // --- Hex grid options ---
 
 // WithHexSide sets the side length (in pixels) of a hex tile for world coordinate conversion.
-func WithHexSide(side int) GridOption {
+func WithHexSide(side int32) GridOption {
 	return func(o *gridOptions) { o.hexSide = side }
 }
 

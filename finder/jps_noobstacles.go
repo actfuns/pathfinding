@@ -14,7 +14,7 @@ func NewJPFMoveDiagonallyIfNoObstacles(opts ...Option) *JPFMoveDiagonallyIfNoObs
 	return f
 }
 
-func noObstaclesJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int) (int, int, bool) {
+func noObstaclesJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int32) (int32, int32, bool) {
 	grid := b.grid
 	dx := x - px
 	dy := y - py
@@ -58,7 +58,7 @@ func noObstaclesJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py 
 	return 0, 0, false
 }
 
-func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int) [][2]int {
+func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int32) [][2]int32 {
 	parent := states.get(node).Parent
 	x, y := node.X, node.Y
 	grid := b.grid
@@ -72,13 +72,13 @@ func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node
 
 		if dx != 0 && dy != 0 {
 			if grid.IsWalkableAt(x, y+dy) {
-				neighbors = append(neighbors, [2]int{x, y + dy})
+				neighbors = append(neighbors, [2]int32{x, y + dy})
 			}
 			if grid.IsWalkableAt(x+dx, y) {
-				neighbors = append(neighbors, [2]int{x + dx, y})
+				neighbors = append(neighbors, [2]int32{x + dx, y})
 			}
 			if grid.IsWalkableAt(x, y+dy) && grid.IsWalkableAt(x+dx, y) {
-				neighbors = append(neighbors, [2]int{x + dx, y + dy})
+				neighbors = append(neighbors, [2]int32{x + dx, y + dy})
 			}
 		} else {
 			if dx != 0 {
@@ -87,19 +87,19 @@ func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node
 				isBottomWalkable := grid.IsWalkableAt(x, y-1)
 
 				if isNextWalkable {
-					neighbors = append(neighbors, [2]int{x + dx, y})
+					neighbors = append(neighbors, [2]int32{x + dx, y})
 					if isTopWalkable {
-						neighbors = append(neighbors, [2]int{x + dx, y + 1})
+						neighbors = append(neighbors, [2]int32{x + dx, y + 1})
 					}
 					if isBottomWalkable {
-						neighbors = append(neighbors, [2]int{x + dx, y - 1})
+						neighbors = append(neighbors, [2]int32{x + dx, y - 1})
 					}
 				}
 				if isTopWalkable {
-					neighbors = append(neighbors, [2]int{x, y + 1})
+					neighbors = append(neighbors, [2]int32{x, y + 1})
 				}
 				if isBottomWalkable {
-					neighbors = append(neighbors, [2]int{x, y - 1})
+					neighbors = append(neighbors, [2]int32{x, y - 1})
 				}
 			} else if dy != 0 {
 				isNextWalkable := grid.IsWalkableAt(x, y+dy)
@@ -107,19 +107,19 @@ func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node
 				isLeftWalkable := grid.IsWalkableAt(x-1, y)
 
 				if isNextWalkable {
-					neighbors = append(neighbors, [2]int{x, y + dy})
+					neighbors = append(neighbors, [2]int32{x, y + dy})
 					if isRightWalkable {
-						neighbors = append(neighbors, [2]int{x + 1, y + dy})
+						neighbors = append(neighbors, [2]int32{x + 1, y + dy})
 					}
 					if isLeftWalkable {
-						neighbors = append(neighbors, [2]int{x - 1, y + dy})
+						neighbors = append(neighbors, [2]int32{x - 1, y + dy})
 					}
 				}
 				if isRightWalkable {
-					neighbors = append(neighbors, [2]int{x + 1, y})
+					neighbors = append(neighbors, [2]int32{x + 1, y})
 				}
 				if isLeftWalkable {
-					neighbors = append(neighbors, [2]int{x - 1, y})
+					neighbors = append(neighbors, [2]int32{x - 1, y})
 				}
 			}
 		}
@@ -129,7 +129,7 @@ func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node
 	neighborNodes := grid.GetNeighbors(node, DiagonalOnlyWhenNoObstacles, b.neighborBuf)
 	neighbors := buf[:0]
 	for _, n := range neighborNodes {
-		neighbors = append(neighbors, [2]int{n.X, n.Y})
+		neighbors = append(neighbors, [2]int32{n.X, n.Y})
 	}
 	return neighbors
 }
