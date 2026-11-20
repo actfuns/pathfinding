@@ -13,16 +13,17 @@ import (
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
 // World-space helpers convert using tileW/tileH.
 type OrthogonalGrid struct {
-	tileW                  int32 // world units per tile horizontally
-	tileH                  int32 // world units per tile vertically
-	width                  int32 // tiles across
-	height                 int32 // tiles down
-	obstacleCount          int32 // number of non-walkable tiles
-	walkabilityFingerprint uint64
-	nodes                  []finder.Node
-	finder                 finder.Finder
-	smoothMode             SmoothMode
-	smoother               Smoother // smoothing function; nil = default
+	tileW                     int32 // world units per tile horizontally
+	tileH                     int32 // world units per tile vertically
+	width                     int32 // tiles across
+	height                    int32 // tiles down
+	obstacleCount             int32 // number of non-walkable tiles
+	walkabilityFingerprint    uint64
+	heuristicWeightLowerBound float32
+	nodes                     []finder.Node
+	finder                    finder.Finder
+	smoothMode                SmoothMode
+	smoother                  Smoother // smoothing function; nil = default
 }
 
 // Finder returns the pathfinder associated with this grid.
@@ -53,6 +54,7 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) Grid {
 	}
 	g := &OrthogonalGrid{width: int32(w), height: int32(h), tileW: cfg.tileW, tileH: cfg.tileH, obstacleCount: int32(obs), smoothMode: cfg.smoothMode, nodes: nodes, finder: cfg.finder}
 	g.walkabilityFingerprint = fingerprint
+	g.heuristicWeightLowerBound = 1
 	if cfg.finder == nil {
 		g.finder = finder.NewAStarFinder()
 	} else {
@@ -147,8 +149,11 @@ func (g *OrthogonalGrid) SetWeightAt(x, y int32, weight float32) {
 	if !validWeight(weight) {
 		panic("grid: weight must be a finite positive number")
 	}
-	g.nodes[g.index(x, y)].Weight = weight
+	setNodeWeight(g.nodes, g.index(x, y), weight, &g.heuristicWeightLowerBound)
 }
+
+// HeuristicWeightLowerBound returns a lower bound for tile movement weights.
+func (g *OrthogonalGrid) HeuristicWeightLowerBound() float32 { return g.heuristicWeightLowerBound }
 
 // GetWeightAt returns the movement cost multiplier for the tile at (x, y).
 // Returns the default weight (1.0) for tiles outside the grid.
@@ -428,6 +433,7 @@ func (g *OrthogonalGrid) initSmoother() {
 func (g *OrthogonalGrid) clone() *OrthogonalGrid {
 	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, smoothMode: g.smoothMode, finder: g.finder}
 	ng.walkabilityFingerprint = g.walkabilityFingerprint
+	ng.heuristicWeightLowerBound = g.heuristicWeightLowerBound
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	copy(ng.nodes, g.nodes)
 	ng.initSmoother()
@@ -523,6 +529,8 @@ func (g *OrthogonalGrid) FindPath(x1, y1, x2, y2 int32, dst [][2]int32) ([][2]in
 	return path, nil
 }
 
+// FindPathWorld uses the configured finder and then applies any configured
+// geometric smoothing before converting the path to world coordinates.
 func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
 	var dst [][2]float32
 	var tileDst [][2]int32
@@ -537,20 +545,6 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuf
 	ex, ey := g.WorldToTile(wx2, wy2)
 	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
 		return nil, finder.ErrOutOfBounds
-	}
-	if g.obstacleCount == 0 {
-		var out [][2]float32
-		if dst != nil && cap(dst) >= 2 {
-			out = dst[:2]
-		} else {
-			out = make([][2]float32, 2)
-		}
-		out[0][0], out[0][1] = wx1, wy1
-		out[1][0], out[1][1] = wx2, wy2
-		if buff != nil {
-			buff.World = out
-		}
-		return out, nil
 	}
 	path, err := g.finder.FindPath(sx, sy, ex, ey, g, tileDst)
 	if err != nil {
@@ -568,11 +562,16 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuf
 	if buff != nil {
 		buff.Tile = path
 	}
+	worldLen := len(path)
+	if worldLen == 1 && (wx1 != wx2 || wy1 != wy2) {
+		// Distinct world positions in one tile still have two endpoints.
+		worldLen = 2
+	}
 	var out [][2]float32
-	if dst != nil && cap(dst) >= len(path) {
-		out = dst[:len(path)]
+	if cap(dst) >= worldLen {
+		out = dst[:worldLen]
 	} else {
-		out = make([][2]float32, len(path))
+		out = make([][2]float32, worldLen)
 	}
 	for i, p := range path {
 		out[i][0], out[i][1] = g.TileToWorld(p[0], p[1])

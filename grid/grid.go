@@ -44,6 +44,21 @@ func validWeight(w float32) bool {
 	return w > 0 && !math.IsNaN(float64(w)) && !math.IsInf(float64(w), 0)
 }
 
+// setNodeWeight maintains a lower bound capped at the default weight of 1.
+func setNodeWeight(nodes []finder.Node, index int, weight float32, lowerBound *float32) {
+	previous := nodes[index].Weight
+	nodes[index].Weight = weight
+	if weight < *lowerBound {
+		*lowerBound = weight
+	} else if previous == *lowerBound && previous < 1 && weight > previous {
+		bound := float32(1)
+		for _, node := range nodes {
+			bound = min(bound, node.Weight)
+		}
+		*lowerBound = bound
+	}
+}
+
 // PathBuff holds reusable tile and world-coordinate buffers for
 // FindPathWorld. The zero value means normal allocation.
 type PathBuff struct {

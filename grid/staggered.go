@@ -14,15 +14,16 @@ import (
 // but overrides screenToTileCoords with a 4-corner detection + 45° rotation
 // (exactly as Tiled's StaggeredRenderer does).
 type StaggeredGrid struct {
-	staggerAxis   string // "x" or "y" — which axis is staggered
-	staggerIndex  string // "even" or "odd" — which indexes are shifted
-	tileW         int32  // pixel width of a tile
-	tileH         int32  // pixel height of a tile
-	width         int32  // tiles across
-	height        int32  // tiles down
-	nodes         []finder.Node
-	finder        finder.Finder
-	obstacleCount int32
+	staggerAxis               string // "x" or "y" — which axis is staggered
+	staggerIndex              string // "even" or "odd" — which indexes are shifted
+	tileW                     int32  // pixel width of a tile
+	tileH                     int32  // pixel height of a tile
+	width                     int32  // tiles across
+	height                    int32  // tiles down
+	nodes                     []finder.Node
+	finder                    finder.Finder
+	obstacleCount             int32
+	heuristicWeightLowerBound float32
 
 	// Precomputed cardinal and diagonal neighbor offsets
 	cardinalOffsets  [4][2]int32
@@ -58,16 +59,17 @@ func NewStaggeredGrid(matrix [][]int32, opts ...GridOption) Grid {
 		opt(&cfg)
 	}
 	g := &StaggeredGrid{
-		staggerAxis:   cfg.staggerAxis,
-		staggerIndex:  cfg.staggerIndex,
-		tileW:         cfg.tileW,
-		tileH:         cfg.tileH,
-		width:         int32(w),
-		height:        int32(h),
-		obstacleCount: int32(obs),
-		smoothMode:    cfg.smoothMode,
-		nodes:         nodes,
-		finder:        cfg.finder,
+		staggerAxis:               cfg.staggerAxis,
+		staggerIndex:              cfg.staggerIndex,
+		tileW:                     cfg.tileW,
+		tileH:                     cfg.tileH,
+		width:                     int32(w),
+		height:                    int32(h),
+		obstacleCount:             int32(obs),
+		heuristicWeightLowerBound: 1,
+		smoothMode:                cfg.smoothMode,
+		nodes:                     nodes,
+		finder:                    cfg.finder,
 	}
 	if cfg.finder == nil {
 		g.finder = finder.NewAStarFinder()
@@ -189,8 +191,11 @@ func (g *StaggeredGrid) SetWeightAt(x, y int32, weight float32) {
 	if !validWeight(weight) {
 		panic("grid: weight must be a finite positive number")
 	}
-	g.nodes[g.index(x, y)].Weight = weight
+	setNodeWeight(g.nodes, g.index(x, y), weight, &g.heuristicWeightLowerBound)
 }
+
+// HeuristicWeightLowerBound returns a lower bound for tile movement weights.
+func (g *StaggeredGrid) HeuristicWeightLowerBound() float32 { return g.heuristicWeightLowerBound }
 
 func (g *StaggeredGrid) GetWeightAt(x, y int32) float32 {
 	if !g.IsInside(x, y) {
@@ -233,18 +238,19 @@ func (g *StaggeredGrid) initSmoother() {
 // finders keep per-call scratch and can be searched concurrently.
 func (g *StaggeredGrid) clone() *StaggeredGrid {
 	ng := &StaggeredGrid{
-		cardinalOffsets:  g.cardinalOffsets,
-		diagNormOffsets:  g.diagNormOffsets,
-		diagShiftOffsets: g.diagShiftOffsets,
-		staggerAxis:      g.staggerAxis,
-		staggerIndex:     g.staggerIndex,
-		tileW:            g.tileW,
-		tileH:            g.tileH,
-		width:            g.width,
-		height:           g.height,
-		obstacleCount:    g.obstacleCount,
-		finder:           g.finder,
-		smoothMode:       g.smoothMode,
+		cardinalOffsets:           g.cardinalOffsets,
+		diagNormOffsets:           g.diagNormOffsets,
+		diagShiftOffsets:          g.diagShiftOffsets,
+		staggerAxis:               g.staggerAxis,
+		staggerIndex:              g.staggerIndex,
+		tileW:                     g.tileW,
+		tileH:                     g.tileH,
+		width:                     g.width,
+		height:                    g.height,
+		obstacleCount:             g.obstacleCount,
+		heuristicWeightLowerBound: g.heuristicWeightLowerBound,
+		finder:                    g.finder,
+		smoothMode:                g.smoothMode,
 	}
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	copy(ng.nodes, g.nodes)

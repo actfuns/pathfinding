@@ -34,9 +34,10 @@ type HexGrid struct {
 	renW     int32 // colW + sideOffX  (= effective tileW for render)
 	renH     int32 // rowH + sideOffY  (= effective tileH for render)
 
-	nodes         []finder.Node
-	finder        finder.Finder
-	obstacleCount int32
+	nodes                     []finder.Node
+	finder                    finder.Finder
+	obstacleCount             int32
+	heuristicWeightLowerBound float32
 
 	// Precomputed neighbor offsets (indexed by parity)
 	neighborsEven [6][2]int32
@@ -70,17 +71,18 @@ func NewHexGrid(matrix [][]int32, opts ...GridOption) Grid {
 		opt(&cfg)
 	}
 	g := &HexGrid{
-		width:         int32(w),
-		height:        int32(h),
-		tileW:         cfg.tileW,
-		tileH:         cfg.tileH,
-		hexSide:       cfg.hexSide,
-		staggerX:      cfg.staggerX,
-		staggerEven:   cfg.staggerEven,
-		obstacleCount: int32(obs),
-		smoothMode:    cfg.smoothMode,
-		nodes:         nodes,
-		finder:        cfg.finder,
+		width:                     int32(w),
+		height:                    int32(h),
+		tileW:                     cfg.tileW,
+		tileH:                     cfg.tileH,
+		hexSide:                   cfg.hexSide,
+		staggerX:                  cfg.staggerX,
+		staggerEven:               cfg.staggerEven,
+		obstacleCount:             int32(obs),
+		heuristicWeightLowerBound: 1,
+		smoothMode:                cfg.smoothMode,
+		nodes:                     nodes,
+		finder:                    cfg.finder,
 	}
 	if cfg.finder == nil {
 		g.finder = finder.NewAStarFinder()
@@ -220,8 +222,11 @@ func (g *HexGrid) SetWeightAt(x, y int32, weight float32) {
 	if !validWeight(weight) {
 		panic("grid: weight must be a finite positive number")
 	}
-	g.nodes[g.index(x, y)].Weight = weight
+	setNodeWeight(g.nodes, g.index(x, y), weight, &g.heuristicWeightLowerBound)
 }
+
+// HeuristicWeightLowerBound returns a lower bound for tile movement weights.
+func (g *HexGrid) HeuristicWeightLowerBound() float32 { return g.heuristicWeightLowerBound }
 
 func (g *HexGrid) GetWeightAt(x, y int32) float32 {
 	if !g.IsInside(x, y) {
@@ -264,26 +269,27 @@ func (g *HexGrid) initSmoother() {
 // parameters but owns its own node slice.
 func (g *HexGrid) clone() *HexGrid {
 	ng := &HexGrid{
-		width:         g.width,
-		height:        g.height,
-		staggerX:      g.staggerX,
-		staggerEven:   g.staggerEven,
-		tileW:         g.tileW,
-		tileH:         g.tileH,
-		hexSide:       g.hexSide,
-		sideLenX:      g.sideLenX,
-		sideLenY:      g.sideLenY,
-		sideOffX:      g.sideOffX,
-		sideOffY:      g.sideOffY,
-		colW:          g.colW,
-		rowH:          g.rowH,
-		renW:          g.renW,
-		renH:          g.renH,
-		neighborsEven: g.neighborsEven,
-		neighborsOdd:  g.neighborsOdd,
-		obstacleCount: g.obstacleCount,
-		finder:        g.finder,
-		smoothMode:    g.smoothMode,
+		width:                     g.width,
+		height:                    g.height,
+		staggerX:                  g.staggerX,
+		staggerEven:               g.staggerEven,
+		tileW:                     g.tileW,
+		tileH:                     g.tileH,
+		hexSide:                   g.hexSide,
+		sideLenX:                  g.sideLenX,
+		sideLenY:                  g.sideLenY,
+		sideOffX:                  g.sideOffX,
+		sideOffY:                  g.sideOffY,
+		colW:                      g.colW,
+		rowH:                      g.rowH,
+		renW:                      g.renW,
+		renH:                      g.renH,
+		neighborsEven:             g.neighborsEven,
+		neighborsOdd:              g.neighborsOdd,
+		obstacleCount:             g.obstacleCount,
+		heuristicWeightLowerBound: g.heuristicWeightLowerBound,
+		finder:                    g.finder,
+		smoothMode:                g.smoothMode,
 	}
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	copy(ng.nodes, g.nodes)

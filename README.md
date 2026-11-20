@@ -418,7 +418,7 @@ path, _ := f.FindPath(0, 0, 10, 10, grid, nil)
 | **零分配 A\*** | AStar Finder 内部复用 Node 和 OpenSet 缓冲区，benchmark 显示 0 B/op |
 | **LOS Smoothing** | `WithSmoothBresenham()` 等选项基于 Bresenham 直线可视性自动消除冗余路径点，开销仅 ~25% |
 | **可插拔 Finder** | 通过 `WithFinder()` 可替换底层寻路算法 |
-| **障碍物计数** | `obstacleCount` 跟踪不可通行瓦片数，全空时 FindPath 直接返回线段，不走算法 |
+| **世界坐标路径** | `FindPathWorld` 使用配置的 Finder 搜索，适用的地形权重和对角规则由 Finder 决定。启用平滑时，随后按几何视线合并路径点 |
 
 ## 性能基准
 
