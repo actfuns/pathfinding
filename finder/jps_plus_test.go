@@ -2,11 +2,89 @@ package finder_test
 
 import (
 	"errors"
+	"math/rand"
 	"testing"
 
 	"github.com/actfuns/pathfinding/finder"
 	"github.com/actfuns/pathfinding/grid"
 )
+
+func TestJPSPlusDiagonalAlwaysMatchesAStar(t *testing.T) {
+	const size = 16
+	rng := rand.New(rand.NewSource(31))
+	option := finder.WithDiagonal(finder.DiagonalAlways)
+	astar := finder.NewAStarFinder(option)
+
+	for _, density := range []int{0, 10, 30, 55} {
+		for sample := 0; sample < 8; sample++ {
+			matrix := make([][]int32, size)
+			for y := range matrix {
+				matrix[y] = make([]int32, size)
+				for x := range matrix[y] {
+					if rng.Intn(100) < density {
+						matrix[y][x] = 1
+					}
+				}
+			}
+			g := grid.NewOrthogonalGrid(matrix)
+			plus := finder.NewJPSPlusFinder(option)
+			if err := plus.Precompute(g); err != nil {
+				t.Fatal(err)
+			}
+			data, err := plus.PrecomputedData()
+			if err != nil {
+				t.Fatal(err)
+			}
+			reloaded := finder.NewJPSPlusFinder(option)
+			if err := reloaded.LoadPrecomputed(data); err != nil {
+				t.Fatal(err)
+			}
+
+			for query := 0; query < 100; query++ {
+				start := [2]int32{rng.Int31n(size), rng.Int31n(size)}
+				end := [2]int32{rng.Int31n(size), rng.Int31n(size)}
+				if !g.IsWalkableAt(start[0], start[1]) || !g.IsWalkableAt(end[0], end[1]) {
+					continue
+				}
+				want, err := astar.FindPath(start[0], start[1], end[0], end[1], g, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := reloaded.FindPath(start[0], start[1], end[0], end[1], g, nil)
+				if err != nil || (got == nil) != (want == nil) {
+					t.Fatalf("density %d map %d, %v to %v: got %v, err %v, want %v", density, sample, start, end, got, err, want)
+				}
+				if got == nil {
+					continue
+				}
+				if got[0] != start || got[len(got)-1] != end {
+					t.Fatalf("wrong endpoints for %v to %v: %v", start, end, got)
+				}
+				steps := func(path [][2]int32) (cardinal, diagonal int) {
+					for i := 1; i < len(path); i++ {
+						prev, next := path[i-1], path[i]
+						dx, dy := finder.AbsInt(next[0]-prev[0]), finder.AbsInt(next[1]-prev[1])
+						if max(dx, dy) != 1 || !g.IsWalkableAt(next[0], next[1]) {
+							t.Fatalf("invalid step %v to %v", prev, next)
+						}
+						if dx != 0 && dy != 0 {
+							diagonal++
+						} else {
+							cardinal++
+						}
+					}
+					return cardinal, diagonal
+				}
+				gotCardinal, gotDiagonal := steps(got)
+				wantCardinal, wantDiagonal := steps(want)
+				if gotCardinal != wantCardinal || gotDiagonal != wantDiagonal {
+					t.Fatalf("density %d map %d, %v to %v: got %d cardinal and %d diagonal steps, want %d and %d",
+						density, sample, start, end, gotCardinal, gotDiagonal, wantCardinal, wantDiagonal)
+				}
+			}
+		}
+	}
+}
 
 func TestJPSPlusNeverPrecompute(t *testing.T) {
 	matrix := [][]int32{

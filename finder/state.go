@@ -27,6 +27,7 @@ type searchStates struct {
 	queue          []*Node
 	queueB         []*Node
 	neighborPosBuf [][2]int32
+	jps            jpsSearch
 	heap           []heapEntry
 	heapB          []heapEntry
 	pathBuf        [][2]int32

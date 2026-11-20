@@ -20,6 +20,7 @@ type JumpPointFinderBase struct {
 // Finder itself stays immutable so one Finder can serve concurrent searches.
 type jpsSearch struct {
 	*JumpPointFinderBase
+	plus        *JPSPlusFinder
 	states      *searchStates
 	grid        Grid
 	walk        walkableView
@@ -89,13 +90,15 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int32, grid Gr
 		return nil, err
 	}
 	defer releaseStates(states)
-	p, err := b.findPath(startX, startY, endX, endY, grid, states)
+	p, err := findJPSPath(startX, startY, endX, endY, grid, states, b, nil)
 	return finishPath(p, dst, false), err
 }
 
-func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
-	s := &jpsSearch{
+func findJPSPath(startX, startY, endX, endY int32, grid Grid, states *searchStates, b *JumpPointFinderBase, plus *JPSPlusFinder) ([][2]int32, error) {
+	s := &states.jps
+	*s = jpsSearch{
 		JumpPointFinderBase: b,
+		plus:                plus,
 		states:              states,
 		grid:                grid,
 		walk:                newWalkableView(grid),
@@ -105,7 +108,10 @@ func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int32, grid Gr
 		endY:                endY,
 		neighborBuf:         states.neighborBuf[:0],
 	}
-	defer func() { states.neighborBuf = s.neighborBuf }()
+	defer func() {
+		states.neighborBuf = s.neighborBuf
+		*s = jpsSearch{}
+	}()
 	openList := &minHeap{nodes: states.heap[:0], state: states}
 	defer func() {
 		clear(openList.nodes[:cap(openList.nodes)])
@@ -183,17 +189,31 @@ func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int32, grid Gr
 
 func (s *jpsSearch) identifySuccessors(node *Node, openList *minHeap) {
 	grid := s.grid
-	heuristic := s.Heuristic
 	endX := s.endNode.X
 	endY := s.endNode.Y
 	x, y := node.X, node.Y
 	nodeIdx := s.states.index(node)
 
 	// FindPath guarantees supportsJPS(grid), so canonical pruning is safe.
-	neighbors := s.findNeighborsFn(s, node, s.states.neighborPosBuf[:0])
+	var heuristic HeuristicFunc
+	var weight float32
+	neighbors := s.states.neighborPosBuf[:0]
+	if s.plus != nil {
+		heuristic, weight = s.plus.Heuristic, s.plus.Weight
+		neighbors = alwaysFindNeighbors(s, node, neighbors)
+	} else {
+		heuristic, weight = s.Heuristic, s.Weight
+		neighbors = s.findNeighborsFn(s, node, neighbors)
+	}
 	s.states.neighborPosBuf = neighbors[:0]
 	for _, neighbor := range neighbors {
-		jx, jy, ok := s.jumpFn(s, neighbor[0], neighbor[1], x, y)
+		var jx, jy int32
+		var ok bool
+		if s.plus != nil {
+			jx, jy, ok = s.plus.jumpAlways(s, neighbor[0], neighbor[1], x, y)
+		} else {
+			jx, jy, ok = s.jumpFn(s, neighbor[0], neighbor[1], x, y)
+		}
 		if !ok {
 			continue
 		}
@@ -212,7 +232,7 @@ func (s *jpsSearch) identifySuccessors(node *Node, openList *minHeap) {
 			if ns.Opened == 0 {
 				ns.H = heuristic(float32(AbsInt(jx-endX)), float32(AbsInt(jy-endY)))
 			}
-			ns.F = ns.G + ns.H*s.Weight
+			ns.F = ns.G + ns.H*weight
 			ns.Parent = nodeIdx
 
 			if ns.Opened == 0 {

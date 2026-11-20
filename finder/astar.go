@@ -74,11 +74,15 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 	stepCost := gridStepCost(grid)
 	openList := &minHeap{nodes: states.heap[:0], tieBreak: true, state: states}
 	defer func() {
-		clear(openList.nodes[:cap(openList.nodes)])
 		states.heap = openList.nodes[:0]
 	}()
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
+	endIdx := states.index(endNode)
+	var nodes []Node
+	if view, ok := grid.(nodesView); ok {
+		nodes = view.NodesView()
+	}
 
 	startState := states.get(startNode)
 	startState.G = 0
@@ -94,13 +98,19 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 		nodeIdx := openList.Pop()
 		nodeState := &states.states[nodeIdx]
 		nodeState.Closed = true
-		node := grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
 
-		if node == endNode {
+		if nodeIdx == endIdx {
 			states.pathBuf = states.backtrace(endNode, states.pathBuf)
 			return states.pathBuf, nil
 		}
 
+		var node *Node
+		if nodes != nil {
+			node = &nodes[nodeIdx]
+		} else {
+			node = grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
+		}
+		nodeG := nodeState.G
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
@@ -113,11 +123,11 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 			x, y := neighbor.X, neighbor.Y
 			var ng float32
 			if stepCost != nil {
-				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
-			} else if x-node.X == 0 || y-node.Y == 0 {
-				ng = nodeState.G + neighbor.Weight
+				ng = nodeG + stepCost(x-node.X, y-node.Y)*neighbor.Weight
+			} else if x == node.X || y == node.Y {
+				ng = nodeG + neighbor.Weight
 			} else {
-				ng = nodeState.G + SQRT2*neighbor.Weight
+				ng = nodeG + SQRT2*neighbor.Weight
 			}
 
 			if ns.Opened == 0 || ng < ns.G {

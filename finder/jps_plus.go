@@ -21,8 +21,9 @@ const (
 
 // Jump-table format magics: JPS (int8) and JPS2 (int16).
 const (
-	jpsPlusMagic8  uint32 = 0x4A5053
-	jpsPlusMagic16 uint32 = 0x4A505332
+	jpsPlusMagic8        uint32 = 0x4A5053
+	jpsPlusMagic16       uint32 = 0x4A505332
+	jpsPlusCanonicalFlag uint32 = 1 << 31
 )
 
 var jpsCardinalDirs = [4][2]int32{
@@ -64,10 +65,8 @@ var jpsDiagonalIdx = map[[2]int32]int{
 // Precompute returns ErrUnsupportedGrid for hex/staggered grids; FindPath also
 // rejects them.
 //
-// The static table cannot encode jump points that depend on the goal, so the
-// search also relaxes one-step moves from every expanded node. This keeps the
-// result identical to A* for all diagonal modes while retaining the jump-table
-// acceleration on open maps.
+// DiagonalAlways uses canonical JPS pruning with goal-dependent jumps resolved
+// at query time. Other modes and legacy tables also relax one-step moves.
 //
 // JPS+ assumes every step has the same cost (tile Weight == 1). Tile weights are
 // ignored; use A* or Dijkstra for weighted grids.
@@ -86,9 +85,10 @@ type JPSPlusFinder struct {
 	// Layout: (y*width + x)*8 + dir
 	// Positive = jump point at that distance; negative = obstacle at abs(distance).
 	// int8 is used when both dimensions are <= 128; int16 otherwise.
-	jump8  []int8
-	jump16 []int16
-	wide   bool
+	jump8     []int8
+	jump16    []int16
+	wide      bool
+	canonical bool
 
 	// Pre-allocated direction slice (avoid allocation in hot path)
 	dirs []int
@@ -138,6 +138,7 @@ func (j *JPSPlusFinder) precompute(grid Grid, wide bool) {
 	j.width = grid.Width()
 	j.height = grid.Height()
 	j.wide = wide
+	j.canonical = j.DiagonalMovement == DiagonalAlways && j.width <= 32768 && j.height <= 32768
 	size := int(j.width * j.height * 8)
 	if j.wide {
 		if cap(j.jump16) < size {
@@ -155,6 +156,11 @@ func (j *JPSPlusFinder) precompute(grid Grid, wide bool) {
 			clear(j.jump8)
 		}
 		j.jump16 = nil
+	}
+
+	if j.canonical {
+		j.computeAlwaysDistances(grid)
+		return
 	}
 
 	// Phase 1: detect primary jump points (forced neighbors)
@@ -345,6 +351,9 @@ func (j *JPSPlusFinder) PrecomputedData() ([]byte, error) {
 		magic = jpsPlusMagic16
 		cellBytes = 2
 	}
+	if j.canonical {
+		magic |= jpsPlusCanonicalFlag
+	}
 	// Format: magic(4) + width(4) + height(4) + table
 	size := 12 + int(j.width*j.height*8)*cellBytes
 	buf := make([]byte, size)
@@ -365,13 +374,14 @@ func (j *JPSPlusFinder) PrecomputedData() ([]byte, error) {
 
 // LoadPrecomputed loads previously exported jump table data.
 // Must be called before FindPath with a grid of matching dimensions.
+// Canonical tables also require DiagonalAlways.
 func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 	if len(data) < 12 {
 		return errors.New("JPSPlusFinder: precomputed data too short")
 	}
 	magic := binary.LittleEndian.Uint32(data[0:4])
 	var wide bool
-	switch magic {
+	switch magic &^ jpsPlusCanonicalFlag {
 	case jpsPlusMagic8:
 	case jpsPlusMagic16:
 		wide = true
@@ -391,6 +401,7 @@ func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 	j.width = int32(w)
 	j.height = int32(h)
 	j.wide = wide
+	j.canonical = magic&jpsPlusCanonicalFlag != 0
 	if wide {
 		if cap(j.jump16) < tableSize {
 			j.jump16 = make([]int16, tableSize)
@@ -465,7 +476,8 @@ func (j *JPSPlusFinder) preflight(startX, startY, endX, endY int32, grid Grid) (
 	if !j.hasTable() {
 		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
 	}
-	if grid.Width() != j.width || grid.Height() != j.height {
+	if grid.Width() != j.width || grid.Height() != j.height ||
+		(j.canonical && j.DiagonalMovement != DiagonalAlways) {
 		return nil, ErrPrecomputedMismatch
 	}
 	return nil, nil
@@ -486,6 +498,10 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 		return nil, err
 	}
 	defer releaseStates(states)
+	if j.canonical {
+		p, err := findJPSPath(startX, startY, endX, endY, grid, states, nil, j)
+		return finishPath(p, dst, false), err
+	}
 	p, err := j.findPath(startX, startY, endX, endY, grid, states)
 	return finishPath(p, dst, false), err
 }
@@ -565,19 +581,18 @@ func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 			return expandBuf, nil
 		}
 
-		j.identifySuccessors(node, endNode, states, openList, &walk)
+		j.identifySuccessors(node, endNode, nodeIdx, endIdx, states, openList, &walk)
 	}
 	return nil, nil
 }
 
-func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *searchStates, openList *minHeap, walk *walkableView) {
+func (j *JPSPlusFinder) identifySuccessors(node, endNode *Node, nodeIdx, endIdx int32, states *searchStates, openList *minHeap, walk *walkableView) {
 	x, y := node.X, node.Y
 	endX, endY := endNode.X, endNode.Y
 	heuristic := j.Heuristic
-	nodeState := states.get(node)
-	nodeIdx := states.index(node)
-	endState := states.get(endNode)
-	endIdx := states.index(endNode)
+	// The current node was just popped and the end state was initialized before the search.
+	nodeG := states.states[nodeIdx].G
+	endState := &states.states[endIdx]
 
 	// Use diagonal movement setting to determine which directions to check
 	dirs := j.dirs
@@ -593,8 +608,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 		if !walk.at(nx, ny) {
 			return
 		}
-		adjNode := walk.nodeAt(nx, ny)
-		adjIdx := states.index(adjNode)
+		adjIdx := ny*states.width + nx
 		ns := states.at(adjIdx)
 		if ns.Closed {
 			return
@@ -603,7 +617,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 		if dx != 0 && dy != 0 {
 			moveCost = SQRT2
 		}
-		ng := nodeState.G + moveCost
+		ng := nodeG + moveCost
 		if ns.Opened == 0 || ng < ns.G {
 			ns.G = ng
 			if ns.Opened == 0 {
@@ -632,7 +646,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 				// End is reachable in this direction, add it as successor
 				gd := octileDist(AbsInt(endX-x), AbsInt(endY-y))
 				ens := endState
-				ng := nodeState.G + gd
+				ng := nodeG + gd
 				if !ens.Closed && (ens.Opened == 0 || ng < ens.G) {
 					ens.G = ng
 					if ens.Opened == 0 {
@@ -662,15 +676,14 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 			continue
 		}
 
-		jumpNode := walk.nodeAt(jx, jy)
-		jumpIdx := states.index(jumpNode)
+		jumpIdx := jy*states.width + jx
 		ns := states.at(jumpIdx)
 		if ns.Closed {
 			continue
 		}
 
 		gd := octileDist(AbsInt(jx-x), AbsInt(jy-y))
-		ng := nodeState.G + gd
+		ng := nodeG + gd
 
 		if ns.Opened == 0 || ng < ns.G {
 			ns.G = ng

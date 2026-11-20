@@ -15,47 +15,47 @@ func NewJPFAlwaysMoveDiagonally(opts ...Option) *JPFAlwaysMoveDiagonally {
 }
 
 func alwaysJump(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
-	dx := x - px
-	dy := y - py
+	return scanAlways(s, x, y, x-px, y-py)
+}
 
-	if !s.walk.at(x, y) {
-		return 0, 0, false
-	}
-
-	if s.TrackRecursion {
-		s.states.get(s.grid.GetNodeAt(x, y)).Tested = true
-	}
-
-	if x == s.endX && y == s.endY {
-		return x, y, true
-	}
-
-	if dx != 0 && dy != 0 {
-		if (s.walk.at(x-dx, y+dy) && !s.walk.at(x-dx, y)) ||
-			(s.walk.at(x+dx, y-dy) && !s.walk.at(x, y-dy)) {
+// scanAlways advances along one ray. Only diagonal rays need to probe other rays.
+func scanAlways(s *jpsSearch, x, y, dx, dy int32) (int32, int32, bool) {
+	for s.walk.at(x, y) {
+		if s.TrackRecursion {
+			s.states.get(s.walk.nodeAt(x, y)).Tested = true
+		}
+		if x == s.endX && y == s.endY {
 			return x, y, true
 		}
-		if _, _, ok := alwaysJump(s, x+dx, y, x, y); ok {
-			return x, y, true
-		}
-		if _, _, ok := alwaysJump(s, x, y+dy, x, y); ok {
-			return x, y, true
-		}
-	} else {
-		if dx != 0 {
-			if (s.walk.at(x+dx, y+1) && !s.walk.at(x, y+1)) ||
-				(s.walk.at(x+dx, y-1) && !s.walk.at(x, y-1)) {
+
+		switch {
+		case dy == 0:
+			if (!s.walk.at(x, y+1) && s.walk.at(x+dx, y+1)) ||
+				(!s.walk.at(x, y-1) && s.walk.at(x+dx, y-1)) {
 				return x, y, true
 			}
-		} else {
-			if (s.walk.at(x+1, y+dy) && !s.walk.at(x+1, y)) ||
-				(s.walk.at(x-1, y+dy) && !s.walk.at(x-1, y)) {
+		case dx == 0:
+			if (!s.walk.at(x+1, y) && s.walk.at(x+1, y+dy)) ||
+				(!s.walk.at(x-1, y) && s.walk.at(x-1, y+dy)) {
+				return x, y, true
+			}
+		default:
+			if (!s.walk.at(x-dx, y) && s.walk.at(x-dx, y+dy)) ||
+				(!s.walk.at(x, y-dy) && s.walk.at(x+dx, y-dy)) {
+				return x, y, true
+			}
+			if _, _, ok := scanAlways(s, x+dx, y, dx, 0); ok {
+				return x, y, true
+			}
+			if _, _, ok := scanAlways(s, x, y+dy, 0, dy); ok {
 				return x, y, true
 			}
 		}
-	}
 
-	return alwaysJump(s, x+dx, y+dy, x, y)
+		x += dx
+		y += dy
+	}
+	return 0, 0, false
 }
 
 func alwaysFindNeighbors(s *jpsSearch, node *Node, buf [][2]int32) [][2]int32 {
