@@ -71,6 +71,12 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst 
 
 func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
+	heuristicWeight := f.Weight
+	if !f.customHeuristic {
+		if terrain, ok := grid.(interface{ HeuristicWeightLowerBound() float32 }); ok {
+			heuristicWeight *= terrain.HeuristicWeightLowerBound()
+		}
+	}
 	stepCost := gridStepCost(grid)
 	openList := &minHeap{nodes: states.heap[:0], tieBreak: true, state: states}
 	defer func() {
@@ -133,7 +139,7 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 			if ns.Opened == 0 || ng < ns.G {
 				ns.G = ng
 				if ns.Opened == 0 {
-					ns.H = f.Weight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
+					ns.H = heuristicWeight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
 				}
 				ns.F = ns.G + ns.H
 				ns.Parent = nodeIdx
