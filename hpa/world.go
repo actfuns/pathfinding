@@ -8,41 +8,41 @@ import (
 
 // Portal represents a portal on a chunk border or a diagonal corner portal.
 type Portal struct {
-	CenterX int // world X of portal center
-	CenterY int // world Y of portal center
-	Length  int // number of cells this portal spans
-	Offset  int // offset along the chunk edge (0-based)
+	CenterX int32 // world X of portal center
+	CenterY int32 // world Y of portal center
+	Length  int32 // number of cells this portal spans
+	Offset  int32 // offset along the chunk edge (0-based)
 
 	// External connections to neighboring chunks (portal keys)
 	ExternalCount   int
-	ExternalPortals []int
-	ExternalCosts   []int
+	ExternalPortals []int32
+	ExternalCosts   []int32
 
 	// Internal connections to other portals in the same chunk
 	InternalCount   int
-	InternalPortals []int // portal key of connected portal
-	InternalCosts   []int // movement cost (octile * 10)
+	InternalPortals []int32 // portal key of connected portal
+	InternalCosts   []int32 // movement cost (octile * 10)
 }
 
-func newPortal(cx, cy int) *Portal {
+func newPortal(cx, cy int32) *Portal {
 	return &Portal{CenterX: cx, CenterY: cy}
 }
 
 // PortalKey encodes chunk ID, edge position, and direction.
 // key = position + direction*chunkSize + chunkID*chunkSize*4
-func PortalKey(chunkID, pos, dir, chunkSize int) int {
+func PortalKey(chunkID, pos, dir, chunkSize int32) int32 {
 	return pos + dir*chunkSize + chunkID*chunkSize*4
 }
 
-func portalKeyChunkID(key, chunkSize int) int {
+func portalKeyChunkID(key, chunkSize int32) int32 {
 	return key / (chunkSize * 4)
 }
 
-func portalKeyPos(key, chunkSize int) int {
+func portalKeyPos(key, chunkSize int32) int32 {
 	return key % (chunkSize * 4) % chunkSize
 }
 
-func portalKeyDir(key, chunkSize int) int {
+func portalKeyDir(key, chunkSize int32) int32 {
 	return key % (chunkSize * 4) / chunkSize
 }
 
@@ -54,15 +54,15 @@ type HPAWorld struct {
 	// NumPortals is the total number of allocated portals.
 	NumPortals int
 	// ChunkMapX is the number of chunks along the X axis.
-	ChunkMapX int
+	ChunkMapX int32
 	// ChunkMapY is the number of chunks along the Y axis.
-	ChunkMapY int
+	ChunkMapY int32
 	// PaddedWidth is the grid width rounded up to a multiple of ChunkSize.
-	PaddedWidth int
+	PaddedWidth int32
 	// PaddedHeight is the grid height rounded up to a multiple of ChunkSize.
-	PaddedHeight int
+	PaddedHeight int32
 	// ChunkSize is the edge length of a single chunk in cells.
-	ChunkSize int
+	ChunkSize int32
 	// Diagonal is the movement rule used for portal connectivity.
 	Diagonal finder.DiagonalMovement
 }
@@ -78,13 +78,13 @@ const (
 // BuildWorld constructs the HPA world: partition grid into chunks, detect edge
 // portals (compressed — one per run of consecutive walkable cells), connect
 // external portals (adjacent chunk), and connect internal portals (BFS within chunk).
-func BuildWorld(grid finder.Grid, chunkSize int) *HPAWorld {
+func BuildWorld(grid finder.Grid, chunkSize int32) *HPAWorld {
 	return BuildWorldWithDiagonal(grid, chunkSize, finder.DiagonalNever)
 }
 
 // BuildWorldWithDiagonal builds the portal graph using the given diagonal
 // movement rule for cross-chunk and intra-chunk connectivity.
-func BuildWorldWithDiagonal(grid finder.Grid, chunkSize int, diagonal finder.DiagonalMovement) *HPAWorld {
+func BuildWorldWithDiagonal(grid finder.Grid, chunkSize int32, diagonal finder.DiagonalMovement) *HPAWorld {
 	cs := chunkSize
 	if cs < 2 {
 		cs = 16
@@ -94,7 +94,7 @@ func BuildWorldWithDiagonal(grid finder.Grid, chunkSize int, diagonal finder.Dia
 	cmy := ph / cs
 
 	w := &HPAWorld{
-		Portals:      make([]*Portal, cmx*cmy*cs*4),
+		Portals:      make([]*Portal, int(cmx*cmy*cs*4)),
 		ChunkMapX:    cmx,
 		ChunkMapY:    cmy,
 		PaddedWidth:  pw,
@@ -107,23 +107,23 @@ func BuildWorldWithDiagonal(grid finder.Grid, chunkSize int, diagonal finder.Dia
 	tmpNode := &finder.Node{}
 
 	// Phase 1: create compressed portals per chunk edge
-	for cy := 0; cy < cmy; cy++ {
-		for cx := 0; cx < cmx; cx++ {
+	for cy := int32(0); cy < cmy; cy++ {
+		for cx := int32(0); cx < cmx; cx++ {
 			buildChunkPortals(grid, w, cx, cy)
 		}
 	}
 	// Phase 1b: resolve external connections (after all portals exist)
 	connectExternals(grid, w, neighborBuf)
 	// Phase 2: connect portals within the same chunk via BFS
-	for cy := 0; cy < cmy; cy++ {
-		for cx := 0; cx < cmx; cx++ {
+	for cy := int32(0); cy < cmy; cy++ {
+		for cx := int32(0); cx < cmx; cx++ {
 			connectInternals(grid, w, cx, cy, neighborBuf, tmpNode)
 		}
 	}
 	return w
 }
 
-func padSize(w, h, cs int) (int, int) {
+func padSize(w, h, cs int32) (int32, int32) {
 	rw := w
 	if rem := w % cs; rem != 0 {
 		rw = w + cs - rem
@@ -135,7 +135,7 @@ func padSize(w, h, cs int) (int, int) {
 	return rw, rh
 }
 
-func buildChunkPortals(grid finder.Grid, w *HPAWorld, cx, cy int) {
+func buildChunkPortals(grid finder.Grid, w *HPAWorld, cx, cy int32) {
 	cs := w.ChunkSize
 	chunkID := cy*w.ChunkMapX + cx
 	ox := cx * cs
@@ -149,10 +149,10 @@ func buildChunkPortals(grid finder.Grid, w *HPAWorld, cx, cy int) {
 
 // edgePortals creates compressed portals along a chunk edge.
 // Consecutive walkable cells are merged into a single portal.
-func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, _ int, vertical bool) {
-	pos := 0
+func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, _ int32, vertical bool) {
+	pos := int32(0)
 	for pos < cs {
-		var cx, cy int
+		var cx, cy int32
 		if vertical {
 			cx, cy = ox, oy+pos
 		} else {
@@ -166,7 +166,7 @@ func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, _ int,
 		runStart := pos
 		// Extend run while consecutive cells are walkable
 		for pos < cs {
-			var nx, ny int
+			var nx, ny int32
 			if vertical {
 				nx, ny = ox, oy+pos
 			} else {
@@ -181,7 +181,7 @@ func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, _ int,
 		runLength := runEnd - runStart + 1
 		centerPos := runStart + runLength/2
 
-		var centerX, centerY int
+		var centerX, centerY int32
 		if vertical {
 			centerX, centerY = ox, oy+centerPos
 		} else {
@@ -199,9 +199,9 @@ func edgePortals(grid finder.Grid, w *HPAWorld, chunkID, ox, oy, cs, dir, _ int,
 
 // findPortalAtEdgeOffset finds the compressed portal key on the given chunk
 // edge whose offset range covers the specified offset. Returns -1 if not found.
-func findPortalAtEdgeOffset(w *HPAWorld, chunkID, offset, dir int) int {
+func findPortalAtEdgeOffset(w *HPAWorld, chunkID, offset, dir int32) int32 {
 	cs := w.ChunkSize
-	for pos := 0; pos < cs; pos++ {
+	for pos := int32(0); pos < cs; pos++ {
 		key := PortalKey(chunkID, pos, dir, cs)
 		p := w.Portals[key]
 		if p != nil && offset >= p.Offset && offset < p.Offset+p.Length {
@@ -216,20 +216,20 @@ func findPortalAtEdgeOffset(w *HPAWorld, chunkID, offset, dir int) int {
 func connectExternals(grid finder.Grid, w *HPAWorld, nb []*finder.Node) {
 	cs := w.ChunkSize
 	totalChunks := w.ChunkMapX * w.ChunkMapY
-	dirs := []int{DirN, DirE, DirS, DirW}
-	oppDirs := []int{DirS, DirW, DirN, DirE}
+	dirs := []int32{DirN, DirE, DirS, DirW}
+	oppDirs := []int32{DirS, DirW, DirN, DirE}
 
-	for chunkID := 0; chunkID < totalChunks; chunkID++ {
+	for chunkID := int32(0); chunkID < totalChunks; chunkID++ {
 		chunkCy := chunkID / w.ChunkMapX
 		chunkCx := chunkID - chunkCy*w.ChunkMapX
 		ox := chunkCx * cs
 		oy := chunkCy * cs
 
-		for di := 0; di < 4; di++ {
-			dir := dirs[di]
-			oppDir := oppDirs[di]
+		for di := int32(0); di < 4; di++ {
+			dir := dirs[int(di)]
+			oppDir := oppDirs[int(di)]
 
-			for pos := 0; pos < cs; pos++ {
+			for pos := int32(0); pos < cs; pos++ {
 				key := PortalKey(chunkID, pos, dir, cs)
 				p := w.Portals[key]
 				if p == nil {
@@ -238,7 +238,7 @@ func connectExternals(grid finder.Grid, w *HPAWorld, nb []*finder.Node) {
 
 				// Check each cell in this compressed portal's range for cross-chunk neighbors
 				for cellPos := p.Offset; cellPos < p.Offset+p.Length; cellPos++ {
-					var cx, cy int
+					var cx, cy int32
 					switch dir {
 					case DirN:
 						cx, cy = ox+cellPos, oy
@@ -299,15 +299,15 @@ func connectExternals(grid finder.Grid, w *HPAWorld, nb []*finder.Node) {
 	}
 }
 
-func connectInternals(grid finder.Grid, w *HPAWorld, cx, cy int, nb []*finder.Node, tmpNode *finder.Node) {
+func connectInternals(grid finder.Grid, w *HPAWorld, cx, cy int32, nb []*finder.Node, tmpNode *finder.Node) {
 	cs := w.ChunkSize
 	chunkID := cy*w.ChunkMapX + cx
 	ox := cx * cs
 	oy := cy * cs
 
-	var keys []int
-	for dir := 0; dir < 4; dir++ {
-		for pos := 0; pos < cs; pos++ {
+	var keys []int32
+	for dir := int32(0); dir < 4; dir++ {
+		for pos := int32(0); pos < cs; pos++ {
 			key := PortalKey(chunkID, pos, dir, cs)
 			if w.Portals[key] != nil {
 				keys = append(keys, key)
@@ -337,31 +337,31 @@ func connectInternals(grid finder.Grid, w *HPAWorld, cx, cy int, nb []*finder.No
 	}
 }
 
-func bfsCostsInChunk(grid finder.Grid, sx, sy, ox, oy, cs int, diagonal finder.DiagonalMovement,
-	nb []*finder.Node, costsBuf []int, queueBuf [][2]int, tmpNode *finder.Node) ([]int, [][2]int) {
+func bfsCostsInChunk(grid finder.Grid, sx, sy, ox, oy, cs int32, diagonal finder.DiagonalMovement,
+	nb []*finder.Node, costsBuf []int32, queueBuf [][2]int32, tmpNode *finder.Node) ([]int32, [][2]int32) {
 	if !grid.IsWalkableAt(sx, sy) {
 		return nil, nil
 	}
 	size := cs * cs
 
 	costs := costsBuf
-	if cap(costs) < size {
-		costs = make([]int, size)
+	if cap(costs) < int(size) {
+		costs = make([]int32, int(size))
 	}
-	costs = costs[:size]
+	costs = costs[:int(size)]
 	for i := range costs {
 		costs[i] = -1
 	}
 
 	queue := queueBuf[:0]
-	if cap(queue) < size {
-		queue = make([][2]int, 0, size)
+	if cap(queue) < int(size) {
+		queue = make([][2]int32, 0, int(size))
 	}
 
-	toKey := func(x, y int) int {
+	toKey := func(x, y int32) int32 {
 		return (y-oy)*cs + (x - ox)
 	}
-	inside := func(x, y int) bool {
+	inside := func(x, y int32) bool {
 		return x >= ox && x < ox+cs && y >= oy && y < oy+cs
 	}
 
@@ -372,7 +372,7 @@ func bfsCostsInChunk(grid finder.Grid, sx, sy, ox, oy, cs int, diagonal finder.D
 
 	sKey := toKey(sx, sy)
 	costs[sKey] = 0
-	queue = append(queue, [2]int{sx, sy})
+	queue = append(queue, [2]int32{sx, sy})
 
 	for head := 0; head < len(queue); head++ {
 		cur := queue[head]
@@ -392,14 +392,14 @@ func bfsCostsInChunk(grid finder.Grid, sx, sy, ox, oy, cs int, diagonal finder.D
 			nc := cc + stepCost10(nx-cx, ny-cy)
 			if costs[nk] < 0 || nc < costs[nk] {
 				costs[nk] = nc
-				queue = append(queue, [2]int{nx, ny})
+				queue = append(queue, [2]int32{nx, ny})
 			}
 		}
 	}
 	return costs, queue[:0]
 }
 
-func stepCost10(dx, dy int) int {
+func stepCost10(dx, dy int32) int32 {
 	if dx != 0 && dy != 0 {
 		return 14
 	}
@@ -407,7 +407,7 @@ func stepCost10(dx, dy int) int {
 }
 
 // octile10 returns the octile distance between two points in HPA cost units.
-func octile10(dx, dy int) int {
+func octile10(dx, dy int32) int32 {
 	if dx < 0 {
 		dx = -dx
 	}
@@ -417,10 +417,10 @@ func octile10(dx, dy int) int {
 	if dx < dy {
 		dx, dy = dy, dx
 	}
-	return int(math.Round((float64(dx) + (finder.SQRT2-1)*float64(dy)) * 10))
+	return int32(math.Round(float64((float32(dx) + (finder.SQRT2-1)*float32(dy)) * 10)))
 }
 
-func getBfsCost(costs []int, wx, wy, ox, oy, cs int) int {
+func getBfsCost(costs []int32, wx, wy, ox, oy, cs int32) int32 {
 	dx, dy := wx-ox, wy-oy
 	if dx < 0 || dx >= cs || dy < 0 || dy >= cs || costs == nil {
 		return -1
@@ -429,17 +429,17 @@ func getBfsCost(costs []int, wx, wy, ox, oy, cs int) int {
 }
 
 // ChunkOf returns the chunk coordinates for a world position.
-func ChunkOf(x, y, chunkSize int) (int, int) {
+func ChunkOf(x, y, chunkSize int32) (int32, int32) {
 	return x / chunkSize, y / chunkSize
 }
 
 // ChunkIDOf returns the chunk ID for a world position.
-func (w *HPAWorld) ChunkIDOf(x, y int) int {
+func (w *HPAWorld) ChunkIDOf(x, y int32) int32 {
 	cx, cy := ChunkOf(x, y, w.ChunkSize)
 	return cy*w.ChunkMapX + cx
 }
 
 // IsSingleChunk reports whether two positions are in the same chunk.
-func (w *HPAWorld) IsSingleChunk(x1, y1, x2, y2 int) bool {
+func (w *HPAWorld) IsSingleChunk(x1, y1, x2, y2 int32) bool {
 	return w.ChunkIDOf(x1, y1) == w.ChunkIDOf(x2, y2)
 }

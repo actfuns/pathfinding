@@ -14,9 +14,9 @@ func BenchmarkOrthogonalAlloc(b *testing.B) {
 		label  string
 		w, h   int
 		obs    float64
-		sx, sy int
-		ex, ey int
-		chunk  int
+		sx, sy int32
+		ex, ey int32
+		chunk  int32
 	}{
 		{"100x100", 100, 100, 0.2, 0, 0, 99, 99, 16},
 		{"200x200", 200, 200, 0.1, 0, 0, 199, 199, 16},

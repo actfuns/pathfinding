@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Create a 5x5 grid with a wall in the middle
-	matrix := [][]int{
+	matrix := [][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 1, 1, 1, 0},
 		{0, 0, 0, 1, 0},

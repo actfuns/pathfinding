@@ -8,9 +8,9 @@ import (
 )
 
 func TestConcurrentReadOnlyFindPath(t *testing.T) {
-	m := make([][]int, 48)
+	m := make([][]int32, 48)
 	for y := range m {
-		m[y] = make([]int, 48)
+		m[y] = make([]int32, 48)
 		for x := range m[y] {
 			if (x*7+y*11)%19 == 0 {
 				m[y][x] = 1
@@ -25,9 +25,9 @@ func TestConcurrentReadOnlyFindPath(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			dst := make([][2]int, 0, 256)
+			dst := make([][2]int32, 0, 256)
 			wdst := make([][2]float32, 0, 256)
-			tdst := make([][2]int, 0, 256)
+			tdst := make([][2]int32, 0, 256)
 			for j := 0; j < 100; j++ {
 				p, err := g.FindPath(0, 0, 47, 47, nil)
 				if err != nil || p == nil {
@@ -53,9 +53,9 @@ func TestConcurrentReadOnlyFindPath(t *testing.T) {
 }
 
 func TestConcurrentJPSPlusReadOnlyFindPath(t *testing.T) {
-	m := make([][]int, 48)
+	m := make([][]int32, 48)
 	for y := range m {
-		m[y] = make([]int, 48)
+		m[y] = make([]int32, 48)
 		for x := range m[y] {
 			if (x*5+y*13)%23 == 0 {
 				m[y][x] = 1
@@ -73,7 +73,7 @@ func TestConcurrentJPSPlusReadOnlyFindPath(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			dst := make([][2]int, 0, 256)
+			dst := make([][2]int32, 0, 256)
 			for j := 0; j < 50; j++ {
 				p, err := g.FindPath(0, 0, 47, 47, dst[:0])
 				if err != nil || p == nil {

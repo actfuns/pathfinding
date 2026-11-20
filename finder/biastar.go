@@ -8,7 +8,7 @@ type BiAStarFinder struct {
 	Heuristic HeuristicFunc
 	// Weight is the heuristic weight multiplier. Higher values make the
 	// pathfinder more greedy. Defaults to 1.
-	Weight float64
+	Weight float32
 	// DiagonalMovement specifies whether diagonal moves are allowed and under
 	// what conditions. Defaults to DiagonalNever.
 	DiagonalMovement DiagonalMovement
@@ -17,7 +17,7 @@ type BiAStarFinder struct {
 	neighborBuf     []*Node
 	startHeapSlice  []heapEntry
 	endHeapSlice    []heapEntry
-	pathBuf         [][2]int
+	pathBuf         [][2]int32
 }
 
 // NewBiAStarFinder creates a new BiAStarFinder.
@@ -52,7 +52,7 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 }
 
 // FindPath finds a path using bidirectional A*.
-func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return finishPath(path, dst, true), err
 	}
@@ -77,7 +77,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst 
 	return finishPath(p, dst, false), err
 }
 
-func (f *BiAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
 	startNode := grid.GetNodeAt(startX, startY)
@@ -128,7 +128,7 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 			}
 
 			x, y := neighbor.X, neighbor.Y
-			var ng float64
+			var ng float32
 			if stepCost != nil {
 				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
 			} else if x-node.X == 0 || y-node.Y == 0 {
@@ -140,7 +140,7 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 			if ns.Opened == 0 || ng < ns.G {
 				ns.G = ng
 				if ns.Opened == 0 {
-					ns.H = f.Weight * heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
+					ns.H = f.Weight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
 				}
 				ns.F = ns.G + ns.H
 				ns.Parent = states.index(node)
@@ -170,7 +170,7 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 			}
 
 			x, y := neighbor.X, neighbor.Y
-			var ng float64
+			var ng float32
 			if stepCost != nil {
 				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
 			} else if x-node.X == 0 || y-node.Y == 0 {
@@ -182,7 +182,7 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 			if ns.Opened == 0 || ng < ns.G {
 				ns.G = ng
 				if ns.Opened == 0 {
-					ns.H = f.Weight * heuristic(float64(AbsInt(x-startX)), float64(AbsInt(y-startY)))
+					ns.H = f.Weight * heuristic(float32(AbsInt(x-startX)), float32(AbsInt(y-startY)))
 				}
 				ns.F = ns.G + ns.H
 				ns.Parent = states.index(node)

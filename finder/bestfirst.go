@@ -12,7 +12,7 @@ func NewBestFirstFinder(opts ...Option) *BestFirstFinder {
 	inner := NewAStarFinder(opts...)
 	f.AStarFinder = *inner
 	orig := f.Heuristic
-	f.Heuristic = func(dx, dy float64) float64 {
+	f.Heuristic = func(dx, dy float32) float32 {
 		return orig(dx, dy) * 1000000
 	}
 	f.customHeuristic = true

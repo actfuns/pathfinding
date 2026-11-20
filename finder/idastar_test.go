@@ -11,7 +11,7 @@ import (
 )
 
 func TestIDAStarAgainstJS(t *testing.T) {
-	testFinderAgainstJS(t, "IDAStar", func() finder.Finder { return finder.NewIDAStarFinder() }, [][][2]int{
+	testFinderAgainstJS(t, "IDAStar", func() finder.Finder { return finder.NewIDAStarFinder() }, [][][2]int32{
 		{{0, 0}, {1, 0}, {1, 1}},
 		{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
 		{{0, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 5}, {3, 5}, {4, 5}, {4, 4}, {4, 3}, {3, 3}},
@@ -24,9 +24,9 @@ func TestIDAStarAgainstJS(t *testing.T) {
 // told the search gave up.
 func TestIDATimeLimitGivesUp(t *testing.T) {
 	rng := rand.New(rand.NewSource(3))
-	m := make([][]int, 120)
+	m := make([][]int32, 120)
 	for y := range m {
-		row := make([]int, 120)
+		row := make([]int32, 120)
 		for x := range row {
 			if rng.Float64() < 0.2 {
 				row[x] = 1
@@ -40,7 +40,7 @@ func TestIDATimeLimitGivesUp(t *testing.T) {
 	for _, limit := range []float64{0.001, 0.01} {
 		f := finder.NewIDAStarFinder(finder.WithTimeLimit(limit))
 		type result struct {
-			path [][2]int
+			path [][2]int32
 			err  error
 		}
 		out := make(chan result, 1)
@@ -67,7 +67,7 @@ func TestIDATimeLimitGivesUp(t *testing.T) {
 // Giving up is not the same as "no path": the caller must be able to tell them
 // apart, or a busy map would permanently strand a unit that has a valid route.
 func TestNoPathIsNotAnError(t *testing.T) {
-	matrix := [][]int{
+	matrix := [][]int32{
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 0, 0},
@@ -84,7 +84,7 @@ func TestNoPathIsNotAnError(t *testing.T) {
 	}
 
 	// Truly unreachable: nil path, nil error.
-	blocked := [][]int{{0, 1, 0}, {0, 1, 0}, {0, 1, 0}}
+	blocked := [][]int32{{0, 1, 0}, {0, 1, 0}, {0, 1, 0}}
 	gb := grid.NewOrthogonalGrid(blocked)
 	path, err = f.FindPath(0, 0, 2, 0, gb, nil)
 	if err != nil {
@@ -98,7 +98,7 @@ func TestNoPathIsNotAnError(t *testing.T) {
 // IDA* must terminate with (nil, nil) when no route exists instead of looping
 // forever on cycles with an ever-increasing cutoff.
 func TestIDAStarUnreachableTerminates(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 1, 0},
 		{0, 1, 0},
 		{0, 1, 0},
@@ -106,7 +106,7 @@ func TestIDAStarUnreachableTerminates(t *testing.T) {
 	f := finder.NewIDAStarFinder()
 
 	done := make(chan struct{})
-	var path [][2]int
+	var path [][2]int32
 	var err error
 	go func() {
 		path, err = f.FindPath(0, 0, 2, 0, g, nil)
@@ -128,8 +128,8 @@ func TestIDAStarUnreachableTerminates(t *testing.T) {
 // Routes longer than the old fixed 512-entry buffer must work.
 func TestIDAStarLongCorridor(t *testing.T) {
 	const n = 600
-	row := make([]int, n)
-	g := grid.NewOrthogonalGrid([][]int{row})
+	row := make([]int32, n)
+	g := grid.NewOrthogonalGrid([][]int32{row})
 	f := finder.NewIDAStarFinder()
 
 	path, err := f.FindPath(0, 0, n-1, 0, g, nil)
@@ -139,7 +139,7 @@ func TestIDAStarLongCorridor(t *testing.T) {
 	if len(path) != n {
 		t.Fatalf("path length = %d, want %d", len(path), n)
 	}
-	if path[len(path)-1] != [2]int{n - 1, 0} {
+	if path[len(path)-1] != [2]int32{n - 1, 0} {
 		t.Errorf("path ends at %v, want (%d,0)", path[len(path)-1], n-1)
 	}
 }
@@ -147,14 +147,14 @@ func TestIDAStarLongCorridor(t *testing.T) {
 // (0,0) is a real coordinate, not a terminator: a path ending there must
 // include it.
 func TestIDAStarEndAtOrigin(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{{0, 0, 0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0, 0, 0}})
 	f := finder.NewIDAStarFinder()
 
 	path, err := f.FindPath(2, 0, 0, 0, g, nil)
 	if err != nil {
 		t.Fatalf("FindPath error: %v", err)
 	}
-	want := [][2]int{{2, 0}, {1, 0}, {0, 0}}
+	want := [][2]int32{{2, 0}, {1, 0}, {0, 0}}
 	if !pathEqual(path, want) {
 		t.Errorf("path = %v, want %v", path, want)
 	}
@@ -164,7 +164,7 @@ func TestIDAStarEndAtOrigin(t *testing.T) {
 // Sharing one buffer made a parent iterate a list that a child had overwritten,
 // producing paths with non-adjacent steps.
 func TestIDAStarRecursiveNeighborBuffers(t *testing.T) {
-	matrix := [][]int{
+	matrix := [][]int32{
 		{0, 1, 0},
 		{0, 0, 0},
 		{0, 0, 0},
@@ -214,7 +214,7 @@ func TestIDAStarRecursiveNeighborBuffers(t *testing.T) {
 	}
 }
 
-func tilePathCost(path [][2]int) float64 {
+func tilePathCost(path [][2]int32) float64 {
 	var c float64
 	for i := 1; i < len(path); i++ {
 		if path[i][0] == path[i-1][0] || path[i][1] == path[i-1][1] {

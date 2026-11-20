@@ -23,10 +23,10 @@ import (
 // TileToWorld adds the half-tile centre offset: (renW/2, tileH/2).
 
 func TestHexPointyTileToWorld(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, WithTileSize(64, 64), WithHexSide(32))
+	g := NewHexGrid([][]int32{{0}}, WithTileSize(64, 64), WithHexSide(32))
 
 	tests := []struct {
-		tx, ty int
+		tx, ty int32
 		px, py float32
 	}{
 		{0, 0, 48, 32},
@@ -45,12 +45,12 @@ func TestHexPointyTileToWorld(t *testing.T) {
 }
 
 func TestHexPointyWorldToTile(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, WithTileSize(64, 64), WithHexSide(32))
+	g := NewHexGrid([][]int32{{0}}, WithTileSize(64, 64), WithHexSide(32))
 
 	// Test known pixel-to-tile mappings (derived from screenToTileCoords algorithm)
 	tests := []struct {
 		px, py float32
-		tx, ty int
+		tx, ty int32
 	}{
 		{16, 0, -1, -1}, // tile (0,0) screen top-left is outside the hex
 		{80, 0, 0, -1},
@@ -66,11 +66,11 @@ func TestHexPointyWorldToTile(t *testing.T) {
 }
 
 func TestHexPointyConsistent(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, WithTileSize(64, 64), WithHexSide(32))
+	g := NewHexGrid([][]int32{{0}}, WithTileSize(64, 64), WithHexSide(32))
 
 	// Sampling points that should map to specific tiles (verified through
 	// the 4-candidate-center algorithm distances)
-	pointToTile := map[[2]float32][2]int{
+	pointToTile := map[[2]float32][2]int32{
 		{20, 5}:  {-1, -1},
 		{40, 5}:  {0, 0}, // near tile (0,0) top area
 		{60, 20}: {0, 0}, // inside tile (1,0)
@@ -101,10 +101,10 @@ func TestHexPointyConsistent(t *testing.T) {
 // TileToWorld adds the half-tile centre offset: (tileW/2, renH/2).
 
 func TestHexFlatTileToWorld(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, WithTileSize(64, 64), WithHexSide(32), WithHexFlatTop())
+	g := NewHexGrid([][]int32{{0}}, WithTileSize(64, 64), WithHexSide(32), WithHexFlatTop())
 
 	tests := []struct {
-		tx, ty int
+		tx, ty int32
 		px, py float32
 	}{
 		{0, 0, 32, 48},
@@ -122,9 +122,9 @@ func TestHexFlatTileToWorld(t *testing.T) {
 }
 
 func TestHexFlatWorldToTile(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, WithTileSize(64, 64), WithHexSide(32), WithHexFlatTop())
+	g := NewHexGrid([][]int32{{0}}, WithTileSize(64, 64), WithHexSide(32), WithHexFlatTop())
 
-	pointToTile := map[[2]float32][2]int{
+	pointToTile := map[[2]float32][2]int32{
 		{10, 20}:  {0, 0},
 		{50, 50}:  {0, 0},
 		{10, 85}:  {0, 1},
@@ -141,7 +141,7 @@ func TestHexFlatWorldToTile(t *testing.T) {
 
 // Neighbor tests (hex has 6 neighbors regardless of diagonal mode)
 func TestHexGetNeighborsPointyEvenRow(t *testing.T) {
-	g := NewHexGrid([][]int{
+	g := NewHexGrid([][]int32{
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
@@ -156,12 +156,12 @@ func TestHexGetNeighborsPointyEvenRow(t *testing.T) {
 	}
 
 	// Even row pointy: NW(-1,-1), NE(0,-1), W(-1,0), SW(-1,1), SE(0,1), E(1,0)
-	expected := map[[2]int]bool{
+	expected := map[[2]int32]bool{
 		{1, 1}: true, {2, 1}: true, {1, 2}: true,
 		{1, 3}: true, {2, 3}: true, {3, 2}: true,
 	}
 	for _, n := range neighbors {
-		key := [2]int{n.X, n.Y}
+		key := [2]int32{n.X, n.Y}
 		if !expected[key] {
 			t.Errorf("unexpected (%d,%d)", n.X, n.Y)
 		}
@@ -173,7 +173,7 @@ func TestHexGetNeighborsPointyEvenRow(t *testing.T) {
 }
 
 func TestHexGetNeighborsPointyOddRow(t *testing.T) {
-	g := NewHexGrid([][]int{
+	g := NewHexGrid([][]int32{
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
@@ -191,12 +191,12 @@ func TestHexGetNeighborsPointyOddRow(t *testing.T) {
 	// Wait — let me check the actual code
 	// In hex.go GetNeighbors, pointy-top, odd y:
 	// NE(1,0), NW(0,-1), W(-1,-1), SW(-1,0), SE(0,1), E(1,1)
-	expected := map[[2]int]bool{
+	expected := map[[2]int32]bool{
 		{3, 1}: true, {2, 0}: true, {3, 0}: true,
 		{1, 1}: true, {2, 2}: true, {3, 2}: true,
 	}
 	for _, n := range neighbors {
-		key := [2]int{n.X, n.Y}
+		key := [2]int32{n.X, n.Y}
 		if !expected[key] {
 			t.Errorf("unexpected (%d,%d)", n.X, n.Y)
 		}
@@ -208,7 +208,7 @@ func TestHexGetNeighborsPointyOddRow(t *testing.T) {
 }
 
 func TestHexGetNeighborsFlatEvenCol(t *testing.T) {
-	g := NewHexGrid([][]int{
+	g := NewHexGrid([][]int32{
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
@@ -224,12 +224,12 @@ func TestHexGetNeighborsFlatEvenCol(t *testing.T) {
 	}
 
 	// Even col flat: NW(-1,-1), N(0,-1), NE(1,-1), E(1,0), S(0,1), W(-1,0)
-	expected := map[[2]int]bool{
+	expected := map[[2]int32]bool{
 		{1, 1}: true, {2, 1}: true, {3, 1}: true,
 		{3, 2}: true, {2, 3}: true, {1, 2}: true,
 	}
 	for _, n := range neighbors {
-		key := [2]int{n.X, n.Y}
+		key := [2]int32{n.X, n.Y}
 		expected[key] = false
 	}
 	for k, v := range expected {
@@ -242,9 +242,9 @@ func TestHexGetNeighborsFlatEvenCol(t *testing.T) {
 // Round-trip consistency: TileToWorld then WorldToTile should return same tile
 // for any point at the tile's screen position from TileToWorld.
 func TestHexPointySelfConsistent(t *testing.T) {
-	g := NewHexGrid([][]int{{0}}, WithTileSize(64, 64), WithHexSide(32))
+	g := NewHexGrid([][]int32{{0}}, WithTileSize(64, 64), WithHexSide(32))
 
-	tiles := [][2]int{{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}}
+	tiles := [][2]int32{{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}}
 	for _, tile := range tiles {
 		px, py := g.TileToWorld(tile[0], tile[1])
 		tx, ty := g.WorldToTile(px, py)
@@ -263,7 +263,7 @@ func TestHexSVG(t *testing.T) {
 	scenarios := []svgScenario{
 		{
 			name: "simple 3x3", startX: 0, startY: 0, endX: 2, endY: 2,
-			matrix: [][]int{
+			matrix: [][]int32{
 				{0, 0, 0},
 				{0, 1, 0},
 				{0, 0, 0},
@@ -271,7 +271,7 @@ func TestHexSVG(t *testing.T) {
 		},
 		{
 			name: "4x3 with obstacles", startX: 0, startY: 0, endX: 3, endY: 2,
-			matrix: [][]int{
+			matrix: [][]int32{
 				{0, 0, 0, 0},
 				{0, 1, 1, 0},
 				{0, 0, 0, 0},
@@ -279,10 +279,10 @@ func TestHexSVG(t *testing.T) {
 		},
 		{
 			name: "all open 8x6", startX: 0, startY: 0, endX: 7, endY: 5,
-			matrix: func() [][]int {
-				m := make([][]int, 6)
+			matrix: func() [][]int32 {
+				m := make([][]int32, 6)
 				for i := range m {
-					m[i] = make([]int, 8)
+					m[i] = make([]int32, 8)
 				}
 				return m
 			}(),
@@ -290,7 +290,7 @@ func TestHexSVG(t *testing.T) {
 		{
 			name: "weighted terrain 5x5", startX: 0, startY: 0, endX: 4, endY: 4,
 			matrix: NewMatrix(5, 5),
-			weights: [][]float64{
+			weights: [][]float32{
 				{1.0, 1.0, 1.0, 1.0, 1.0},
 				{1.0, 0.3, 0.3, 0.3, 1.0},
 				{1.0, 0.3, 5.0, 0.3, 1.0},
@@ -301,13 +301,13 @@ func TestHexSVG(t *testing.T) {
 	}
 
 	t.Run("pointy-top", func(t *testing.T) {
-		runSVGTest(t, "hex_pointy", scenarios, func(matrix [][]int) gridForSVG {
+		runSVGTest(t, "hex_pointy", scenarios, func(matrix [][]int32) gridForSVG {
 			return NewHexGrid(matrix, WithTileSize(55, 64), WithHexSide(32))
 		})
 	})
 
 	t.Run("flat-top", func(t *testing.T) {
-		runSVGTest(t, "hex_flat", scenarios, func(matrix [][]int) gridForSVG {
+		runSVGTest(t, "hex_flat", scenarios, func(matrix [][]int32) gridForSVG {
 			return NewHexGrid(matrix, WithTileSize(64, 55), WithHexSide(32), WithHexFlatTop())
 		})
 	})
@@ -315,7 +315,7 @@ func TestHexSVG(t *testing.T) {
 
 func TestHexFindNearestWalkable(t *testing.T) {
 	// 5x5 grid with obstacle at (2,2), default tile size 64x64
-	g := NewHexGrid([][]int{
+	g := NewHexGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 1, 0, 0},
@@ -339,7 +339,7 @@ func TestHexFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("all obstacles returns false", func(t *testing.T) {
-		g2 := NewHexGrid([][]int{{1, 1}, {1, 1}})
+		g2 := NewHexGrid([][]int32{{1, 1}, {1, 1}})
 		_, _, ok := g2.FindNearestWalkableWorld(32, 32, 5, 0)
 		if ok {
 			t.Error("expected false when all obstacles")
@@ -347,7 +347,7 @@ func TestHexFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("maxRadius=0 only checks self", func(t *testing.T) {
-		g2 := NewHexGrid([][]int{{1, 1}, {1, 1}})
+		g2 := NewHexGrid([][]int32{{1, 1}, {1, 1}})
 		_, _, ok := g2.FindNearestWalkableWorld(32, 32, 0, 0)
 		if ok {
 			t.Error("expected false when self obstacle and maxRadius=0")
@@ -369,7 +369,7 @@ func TestHexFindNearestWalkable(t *testing.T) {
 	})
 }
 func TestHexObstacleCount(t *testing.T) {
-	g := NewHexGrid([][]int{
+	g := NewHexGrid([][]int32{
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 0, 0},
@@ -395,7 +395,7 @@ func TestHexObstacleCount(t *testing.T) {
 // Even-row staggering flips which neighbor table applies: an even row now uses
 // the "odd" offsets and vice versa.
 func TestHexGetNeighborsPointyEvenStagger(t *testing.T) {
-	g := NewHexGrid([][]int{
+	g := NewHexGrid([][]int32{
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
@@ -409,12 +409,12 @@ func TestHexGetNeighborsPointyEvenStagger(t *testing.T) {
 		t.Fatalf("expected 6 neighbors, got %d", len(neighbors))
 	}
 
-	expected := map[[2]int]bool{
+	expected := map[[2]int32]bool{
 		{3, 2}: true, {2, 1}: true, {3, 1}: true,
 		{1, 2}: true, {2, 3}: true, {3, 3}: true,
 	}
 	for _, n := range neighbors {
-		key := [2]int{n.X, n.Y}
+		key := [2]int32{n.X, n.Y}
 		if !expected[key] {
 			t.Errorf("unexpected (%d,%d)", n.X, n.Y)
 		}
@@ -443,7 +443,7 @@ func TestHexNeighborsMatchGeometry(t *testing.T) {
 
 		for y := 1; y < 4; y++ {
 			for x := 1; x < 4; x++ {
-				cx, cy := g.TileToWorld(x, y)
+				cx, cy := g.TileToWorld(int32(x), int32(y))
 
 				type candidate struct {
 					x, y int
@@ -455,20 +455,20 @@ func TestHexNeighborsMatchGeometry(t *testing.T) {
 						if tx == x && ty == y {
 							continue
 						}
-						ax, ay := g.TileToWorld(tx, ty)
+						ax, ay := g.TileToWorld(int32(tx), int32(ty))
 						all = append(all, candidate{tx, ty, math.Hypot(float64(ax-cx), float64(ay-cy))})
 					}
 				}
 				sort.Slice(all, func(i, j int) bool { return all[i].dist < all[j].dist })
 				limit := all[5].dist + 1e-6
 
-				nbs := g.GetNeighbors(&finder.Node{X: x, Y: y}, finder.DiagonalNever, nil)
+				nbs := g.GetNeighbors(&finder.Node{X: int32(x), Y: int32(y)}, finder.DiagonalNever, nil)
 				if len(nbs) != 6 {
 					t.Fatalf("%s (%d,%d): got %d neighbors, want 6", c.name, x, y, len(nbs))
 				}
-				seen := make(map[[2]int]bool, 6)
+				seen := make(map[[2]int32]bool, 6)
 				for _, n := range nbs {
-					key := [2]int{n.X, n.Y}
+					key := [2]int32{n.X, n.Y}
 					if seen[key] {
 						t.Errorf("%s (%d,%d): duplicate neighbor %v", c.name, x, y, key)
 					}

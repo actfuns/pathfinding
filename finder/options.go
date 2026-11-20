@@ -6,7 +6,7 @@ type FinderOptions struct {
 	DontCrossCorners bool
 	DiagonalMovement DiagonalMovement
 	Heuristic        HeuristicFunc
-	Weight           float64
+	Weight           float32
 	TrackRecursion   bool
 	TimeLimit        float64 // in seconds, <= 0 for infinite
 	Adaptive         bool    // JPS+: switch to A* on dense maps
@@ -31,7 +31,7 @@ func WithAllowDiagonal(dontCrossCorners bool) Option {
 }
 
 // WithWeight sets the heuristic weight.
-func WithWeight(w float64) Option {
+func WithWeight(w float32) Option {
 	return func(o *FinderOptions) {
 		o.Weight = w
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestHPASingleChunk(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -22,17 +22,17 @@ func TestHPASingleChunk(t *testing.T) {
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
-	if path[0] != [2]int{0, 0} {
+	if path[0] != [2]int32{0, 0} {
 		t.Errorf("expected start (0,0), got %v", path[0])
 	}
-	if path[len(path)-1] != [2]int{4, 4} {
+	if path[len(path)-1] != [2]int32{4, 4} {
 		t.Errorf("expected end (4,4), got %v", path[len(path)-1])
 	}
 	verifyWalkable(t, g, path)
 }
 
 func TestHPATwoChunks(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -49,7 +49,7 @@ func TestHPATwoChunks(t *testing.T) {
 }
 
 func TestHPAWithObstacles(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0},
@@ -70,7 +70,7 @@ func TestHPAWithObstacles(t *testing.T) {
 }
 
 func TestHPAUnreachable(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
@@ -86,7 +86,7 @@ func TestHPAUnreachable(t *testing.T) {
 }
 
 func TestHPAStartIsWall(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -99,7 +99,7 @@ func TestHPAStartIsWall(t *testing.T) {
 }
 
 func TestHPASameChunkDiagonal(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -117,7 +117,7 @@ func TestHPASameChunkDiagonal(t *testing.T) {
 }
 
 func TestHPAMediumGrid(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -134,7 +134,7 @@ func TestHPAMediumGrid(t *testing.T) {
 }
 
 func TestNewHPAFinderWithOptions(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{{0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0}})
 
 	f := NewHPAFinder(WithAllowDiagonal(false))
 	f.Build(g)
@@ -148,7 +148,7 @@ func TestNewHPAFinderWithOptions(t *testing.T) {
 		t.Errorf("expected DiagonalOnlyWhenNoObstacles, got %v", f2.DiagonalMovement)
 	}
 
-	customHeuristic := func(dx, dy float64) float64 { return dx + dy + 1 }
+	customHeuristic := func(dx, dy float32) float32 { return dx + dy + 1 }
 	f3 := NewHPAFinder(
 		WithDiagonal(finder.DiagonalAlways),
 		WithHeuristic(customHeuristic),
@@ -164,7 +164,7 @@ func TestNewHPAFinderWithOptions(t *testing.T) {
 }
 
 func TestHPAReachablePortals(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -177,7 +177,7 @@ func TestHPAReachablePortals(t *testing.T) {
 }
 
 func TestHPAConcretePathValid(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -195,7 +195,7 @@ func TestHPAConcretePathValid(t *testing.T) {
 }
 
 func TestHPAManyChunks(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -211,7 +211,7 @@ func TestHPAManyChunks(t *testing.T) {
 // TestHPARepeatable verifies that repeated FindPath calls on the same
 // HPAFinder return identical results, detecting any buffer-reuse bugs.
 func TestHPARepeatable(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0},
@@ -224,7 +224,7 @@ func TestHPARepeatable(t *testing.T) {
 
 	cases := []struct {
 		name           string
-		sx, sy, ex, ey int
+		sx, sy, ex, ey int32
 	}{
 		{"singleChunk", 1, 1, 6, 6},
 		{"crossChunk", 0, 0, 15, 7},
@@ -265,7 +265,7 @@ func TestHPARepeatable(t *testing.T) {
 }
 
 func TestPortalCompressionReducesCount(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -289,7 +289,7 @@ func TestPortalCompressionReducesCount(t *testing.T) {
 }
 
 func TestStringPulling_smoothed(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -304,7 +304,7 @@ func TestStringPulling_smoothed(t *testing.T) {
 }
 
 func TestStringPulling_shortPath(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -318,7 +318,7 @@ func TestStringPulling_shortPath(t *testing.T) {
 }
 
 func TestPathCache(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -338,7 +338,7 @@ func TestPathCache(t *testing.T) {
 }
 
 func TestPathCacheInvalidation(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -371,17 +371,17 @@ func TestWithStringPullingOption(t *testing.T) {
 
 // --- helpers ---
 
-func assertStartEnd(t *testing.T, path [][2]int, sx, sy, ex, ey int) {
+func assertStartEnd(t *testing.T, path [][2]int32, sx, sy, ex, ey int32) {
 	t.Helper()
-	if path[0] != [2]int{sx, sy} {
+	if path[0] != [2]int32{sx, sy} {
 		t.Errorf("expected start (%d,%d), got %v", sx, sy, path[0])
 	}
-	if path[len(path)-1] != [2]int{ex, ey} {
+	if path[len(path)-1] != [2]int32{ex, ey} {
 		t.Errorf("expected end (%d,%d), got %v", ex, ey, path[len(path)-1])
 	}
 }
 
-func verifyWalkable(t *testing.T, grid finder.Grid, path [][2]int) {
+func verifyWalkable(t *testing.T, grid finder.Grid, path [][2]int32) {
 	t.Helper()
 	for i, wp := range path {
 		if !grid.IsWalkableAt(wp[0], wp[1]) {
@@ -390,7 +390,7 @@ func verifyWalkable(t *testing.T, grid finder.Grid, path [][2]int) {
 	}
 }
 
-func pathEqual(a, b [][2]int) bool {
+func pathEqual(a, b [][2]int32) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -416,7 +416,7 @@ func TestHPARefusesOutOfBounds(t *testing.T) {
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
 
-	for _, tc := range []struct{ sx, sy, ex, ey int }{
+	for _, tc := range []struct{ sx, sy, ex, ey int32 }{
 		{0, 0, 999, 999},
 		{999, 999, 0, 0},
 		{-1, 0, 5, 5},

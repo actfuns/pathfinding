@@ -13,7 +13,7 @@ import (
 // JPS/JPS+ assume uniform step costs and ignore tile weights. They return the
 // step-shortest path; A*/Dijkstra are the cost-aware options.
 func TestJPSIgnoresTileWeights(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -40,7 +40,7 @@ func TestJPSIgnoresTileWeights(t *testing.T) {
 		t.Fatalf("JPS+: %v", err)
 	}
 
-	for name, p := range map[string][][2]int{"JPS": jpsPath, "JPS+": plusPath} {
+	for name, p := range map[string][][2]int32{"JPS": jpsPath, "JPS+": plusPath} {
 		if len(p) != len(bfs) {
 			t.Errorf("%s steps=%d, want %d (tile weights must be ignored)\nBFS=%v\n%s=%v",
 				name, len(p), len(bfs), bfs, name, p)
@@ -50,7 +50,7 @@ func TestJPSIgnoresTileWeights(t *testing.T) {
 
 // JPS+ must not cut corners when the configured rule forbids it.
 func TestJPSPlusRespectsDiagonalRules(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 1},
 		{1, 0},
 	})
@@ -159,7 +159,7 @@ func TestJPSVariantConstructorsSetMovement(t *testing.T) {
 		}
 	}
 
-	g := grid.NewOrthogonalGrid([][]int{{0, 1}, {1, 0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0, 1}, {1, 0}})
 	if p, _ := always.FindPath(0, 0, 1, 1, g, nil); len(p) == 0 {
 		t.Error("always variant should allow the diagonal move")
 	}
@@ -171,7 +171,7 @@ func TestJPSVariantConstructorsSetMovement(t *testing.T) {
 // The jump table is relaxed with one-step turns at runtime, so every diagonal
 // mode must match A* on these previously-misbehaving maps.
 func TestJPSPlusDiagonalModesAreOptimal(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 1, 0, 0, 0},
 		{1, 0, 0, 0, 1, 1},
 		{1, 0, 0, 0, 0, 0},
@@ -209,9 +209,9 @@ func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 	for it := 0; it < 500; it++ {
 		w := 2 + rng.Intn(6)
 		h := 2 + rng.Intn(6)
-		m := make([][]int, h)
+		m := make([][]int32, h)
 		for y := range m {
-			m[y] = make([]int, w)
+			m[y] = make([]int32, w)
 			for x := range m[y] {
 				if rng.Float64() < 0.3 {
 					m[y][x] = 1
@@ -224,10 +224,10 @@ func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 		g := grid.NewOrthogonalGrid(m)
 
 		for _, mode := range modes {
-			want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(sx, sy, ex, ey, g, nil)
+			want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(int32(sx), int32(sy), int32(ex), int32(ey), g, nil)
 			plus := finder.NewJPSPlusFinder(finder.WithDiagonal(mode))
 			_ = plus.Precompute(g)
-			got, err := plus.FindPath(sx, sy, ex, ey, g, nil)
+			got, err := plus.FindPath(int32(sx), int32(sy), int32(ex), int32(ey), g, nil)
 			if err != nil {
 				t.Fatalf("it=%d mode=%v: %v", it, mode, err)
 			}
@@ -249,13 +249,13 @@ func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 func TestJPSPlusKnownRegressions(t *testing.T) {
 	cases := []struct {
 		name           string
-		m              [][]int
-		sx, sy, ex, ey int
+		m              [][]int32
+		sx, sy, ex, ey int32
 		mode           finder.DiagonalMovement
 	}{
 		{
 			name: "never-presence",
-			m: [][]int{
+			m: [][]int32{
 				{0, 0, 0, 0, 1},
 				{0, 0, 1, 0, 0},
 				{0, 0, 0, 0, 0},
@@ -269,7 +269,7 @@ func TestJPSPlusKnownRegressions(t *testing.T) {
 		},
 		{
 			name: "never-detour",
-			m: [][]int{
+			m: [][]int32{
 				{0, 0, 1, 1, 0, 0, 0},
 				{1, 0, 0, 0, 0, 0, 0},
 				{1, 0, 0, 0, 1, 1, 1},
@@ -282,7 +282,7 @@ func TestJPSPlusKnownRegressions(t *testing.T) {
 		},
 		{
 			name: "no-obstacles-turn",
-			m: [][]int{
+			m: [][]int32{
 				{0, 1, 1, 0},
 				{0, 0, 1, 1},
 				{0, 0, 0, 0},
@@ -317,7 +317,7 @@ func TestJPSPlusKnownRegressions(t *testing.T) {
 // JPS/JPS+ are axis-aligned algorithms. Using them on hex/staggered grids is a
 // caller error, not a silent A* fallback.
 func TestJPSRejectsNonOrthogonal(t *testing.T) {
-	hex := grid.NewHexGrid([][]int{
+	hex := grid.NewHexGrid([][]int32{
 		{0, 0, 0, 0, 0, 0},
 		{0, 1, 1, 0, 0, 0},
 		{0, 0, 0, 0, 1, 0},
@@ -326,7 +326,7 @@ func TestJPSRejectsNonOrthogonal(t *testing.T) {
 		{0, 0, 0, 0, 0, 0},
 	}, grid.WithTileSize(55, 64), grid.WithHexSide(32))
 
-	stag := grid.NewStaggeredGrid([][]int{
+	stag := grid.NewStaggeredGrid([][]int32{
 		{0, 0, 0, 0, 0, 0},
 		{0, 1, 1, 0, 0, 0},
 		{0, 0, 0, 0, 1, 0},
@@ -365,9 +365,9 @@ func TestHexFindersMatchBFS(t *testing.T) {
 	for it := 0; it < 60; it++ {
 		w := 3 + rng.Intn(3)
 		h := 3 + rng.Intn(3)
-		m := make([][]int, h)
+		m := make([][]int32, h)
 		for y := range m {
-			m[y] = make([]int, w)
+			m[y] = make([]int32, w)
 			for x := range m[y] {
 				if rng.Float64() < 0.25 {
 					m[y][x] = 1
@@ -379,7 +379,7 @@ func TestHexFindersMatchBFS(t *testing.T) {
 		m[sy][sx], m[ey][ex] = 0, 0
 		g := grid.NewHexGrid(m, grid.WithTileSize(55, 64), grid.WithHexSide(32))
 
-		bfs, _ := finder.NewBreadthFirstFinder().FindPath(sx, sy, ex, ey, g, nil)
+		bfs, _ := finder.NewBreadthFirstFinder().FindPath(int32(sx), int32(sy), int32(ex), int32(ey), g, nil)
 		finders := []struct {
 			name string
 			f    finder.Finder
@@ -389,7 +389,7 @@ func TestHexFindersMatchBFS(t *testing.T) {
 			{"IDAStar", finder.NewIDAStarFinder()},
 		}
 		for _, ft := range finders {
-			got, err := ft.f.FindPath(sx, sy, ex, ey, g, nil)
+			got, err := ft.f.FindPath(int32(sx), int32(sy), int32(ex), int32(ey), g, nil)
 			if err != nil {
 				t.Fatalf("it=%d %s: %v", it, ft.name, err)
 			}
@@ -431,10 +431,10 @@ func TestJPSPlusPrecomputedMismatch(t *testing.T) {
 func TestJPSPlusAdaptive(t *testing.T) {
 	rng := rand.New(rand.NewSource(13))
 	const n = 20
-	m := make([][]int, n)
+	m := make([][]int32, n)
 	walls := 0
 	for y := range m {
-		m[y] = make([]int, n)
+		m[y] = make([]int32, n)
 		for x := range m[y] {
 			if rng.Float64() < 0.3 {
 				m[y][x] = 1

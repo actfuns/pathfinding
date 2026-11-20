@@ -4,7 +4,7 @@ package gridutil
 // line-of-sight checking. Only points where the direction changes are kept.
 // This is guaranteed to never cut corners since it only removes truly
 // redundant waypoints. Writes the result in-place over the input buffer.
-func CompressPath(path [][2]int) [][2]int {
+func CompressPath(path [][2]int32) [][2]int32 {
 	if len(path) < 3 {
 		return path
 	}
@@ -28,7 +28,7 @@ func CompressPath(path [][2]int) [][2]int {
 
 // TileDistance returns the Chebyshev distance between two tiles:
 // max(|dx|, |dy|). This is the number of steps needed for 8-directional movement.
-func TileDistance(x1, y1, x2, y2 int) int {
+func TileDistance(x1, y1, x2, y2 int32) int32 {
 	dx := x1 - x2
 	if dx < 0 {
 		dx = -dx
@@ -45,11 +45,11 @@ func TileDistance(x1, y1, x2, y2 int) int {
 
 // BresenhamLine returns all tiles on the Bresenham line from (x0, y0) to (x1, y1),
 // including both endpoints.
-func BresenhamLine(x0, y0, x1, y1 int) [][2]int {
-	line := make([][2]int, 0, 16)
+func BresenhamLine(x0, y0, x1, y1 int32) [][2]int32 {
+	line := make([][2]int32, 0, 16)
 	dx := x1 - x0
 	dy := y1 - y0
-	var sx, sy int
+	var sx, sy int32
 	if dx < 0 {
 		dx = -dx
 		sx = -1
@@ -64,7 +64,7 @@ func BresenhamLine(x0, y0, x1, y1 int) [][2]int {
 	}
 	err := dx - dy
 	for {
-		line = append(line, [2]int{x0, y0})
+		line = append(line, [2]int32{x0, y0})
 		if x0 == x1 && y0 == y1 {
 			break
 		}
@@ -82,11 +82,11 @@ func BresenhamLine(x0, y0, x1, y1 int) [][2]int {
 }
 
 // TilesInRadius returns all tiles within Chebyshev distance r from (cx, cy).
-func TilesInRadius(cx, cy, r int) [][2]int {
-	var result [][2]int
+func TilesInRadius(cx, cy, r int32) [][2]int32 {
+	var result [][2]int32
 	for dy := -r; dy <= r; dy++ {
 		for dx := -r; dx <= r; dx++ {
-			result = append(result, [2]int{cx + dx, cy + dy})
+			result = append(result, [2]int32{cx + dx, cy + dy})
 		}
 	}
 	return result

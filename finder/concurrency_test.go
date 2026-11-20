@@ -9,9 +9,9 @@ import (
 )
 
 func TestConcurrentFinders(t *testing.T) {
-	m := make([][]int, 32)
+	m := make([][]int32, 32)
 	for y := range m {
-		m[y] = make([]int, 32)
+		m[y] = make([]int32, 32)
 		for x := range m[y] {
 			if (x*5+y*11)%23 == 0 {
 				m[y][x] = 1
@@ -50,7 +50,7 @@ func TestConcurrentFinders(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					dst := make([][2]int, 0, 256)
+					dst := make([][2]int32, 0, 256)
 					for j := 0; j < 20; j++ {
 						p, err := e.f.FindPath(0, 0, 31, 31, g, dst[:0])
 						if err != nil || p == nil {
@@ -67,9 +67,9 @@ func TestConcurrentFinders(t *testing.T) {
 }
 
 func TestConcurrentJPSPlusAdaptive(t *testing.T) {
-	m := make([][]int, 32)
+	m := make([][]int32, 32)
 	for y := range m {
-		m[y] = make([]int, 32)
+		m[y] = make([]int32, 32)
 		for x := range m[y] {
 			if (x*7+y*11)%5 == 0 {
 				m[y][x] = 1
@@ -88,7 +88,7 @@ func TestConcurrentJPSPlusAdaptive(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			dst := make([][2]int, 0, 256)
+			dst := make([][2]int32, 0, 256)
 			for j := 0; j < 20; j++ {
 				p, err := f.FindPath(0, 0, 31, 31, g, dst[:0])
 				if err != nil || p == nil {

@@ -10,7 +10,7 @@ type IDAStarFinder struct {
 	// Heuristic is the heuristic function used to estimate the cost from a node to the goal.
 	Heuristic HeuristicFunc
 	// Weight is the multiplier applied to the heuristic estimate (g + h*Weight).
-	Weight float64
+	Weight float32
 	// DiagonalMovement specifies whether diagonal moves are allowed and under what conditions.
 	DiagonalMovement DiagonalMovement
 	// TrackRecursion enables tracking of recursion depth for debugging or visualization purposes.
@@ -21,7 +21,7 @@ type IDAStarFinder struct {
 	customHeuristic bool
 
 	// Reusable search scratch, so repeated FindPath calls avoid allocations.
-	routeBuf     [][2]int
+	routeBuf     [][2]int32
 	neighborBufs [][]*Node
 	onPath       []bool
 }
@@ -61,7 +61,7 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 }
 
 // FindPath finds a path using IDA*.
-func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return finishPath(path, dst, true), err
 	}
@@ -84,17 +84,17 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst 
 	return finishPath(p, dst, true), err
 }
 
-func (f *IDAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+func (f *IDAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
 
-	h := func(a, b *Node) float64 {
-		return heuristic(float64(AbsInt(b.X-a.X)), float64(AbsInt(b.Y-a.Y)))
+	h := func(a, b *Node) float32 {
+		return heuristic(float32(AbsInt(b.X-a.X)), float32(AbsInt(b.Y-a.Y)))
 	}
 
-	cost := func(a, b *Node) float64 {
+	cost := func(a, b *Node) float32 {
 		dx, dy := b.X-a.X, b.Y-a.Y
 		if stepCost != nil {
 			return stepCost(dx, dy) * b.Weight
@@ -109,7 +109,7 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 	hasTimeLimit := f.TimeLimit > 0
 
 	width, height := grid.Width(), grid.Height()
-	maxDepth := width * height
+	maxDepth := int(width * height)
 	if maxDepth < 1 {
 		maxDepth = 1
 	}
@@ -124,7 +124,7 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 		clear(onPath)
 	}
 	f.onPath = onPath
-	startIdx := start.Y*width + start.X
+	startIdx := int(start.Y*width + start.X)
 	if startIdx >= 0 && startIdx < len(onPath) {
 		onPath[startIdx] = true
 	}
@@ -140,14 +140,14 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 	pathEnd := -1
 	var timedOut bool
 
-	var search func(node *Node, g, cutoff float64, depth int) (float64, bool)
-	search = func(node *Node, g, cutoff float64, depth int) (float64, bool) {
+	var search func(node *Node, g, cutoff float32, depth int) (float32, bool)
+	search = func(node *Node, g, cutoff float32, depth int) (float32, bool) {
 		if timedOut {
-			return math.Inf(1), false
+			return float32(math.Inf(1)), false
 		}
 		if hasTimeLimit && time.Since(startTime).Seconds() > f.TimeLimit {
 			timedOut = true
-			return math.Inf(1), false
+			return float32(math.Inf(1)), false
 		}
 
 		fScore := g + h(node, end)*f.Weight
@@ -156,9 +156,9 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 		}
 
 		if depth >= len(route) {
-			route = append(route, [2]int{})
+			route = append(route, [2]int32{})
 		}
-		route[depth] = [2]int{node.X, node.Y}
+		route[depth] = [2]int32{node.X, node.Y}
 		if node == end {
 			pathEnd = depth
 			return 0, true
@@ -170,9 +170,9 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBufs[depth][:0])
 		neighborBufs[depth] = neighbors[:0]
 
-		min := math.Inf(1)
+		min := float32(math.Inf(1))
 		for _, neighbor := range neighbors {
-			idx := neighbor.Y*width + neighbor.X
+			idx := int(neighbor.Y*width + neighbor.X)
 			if idx < 0 || idx >= len(onPath) || onPath[idx] {
 				continue
 			}
@@ -220,13 +220,13 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int, grid Grid, stat
 		}
 
 		if found {
-			path := make([][2]int, pathEnd+1)
+			path := make([][2]int32, pathEnd+1)
 			copy(path, route[:pathEnd+1])
 			return path, nil
 		}
 
 		// All simple paths were exhausted: no route exists.
-		if math.IsInf(t, 1) {
+		if math.IsInf(float64(t), 1) {
 			return nil, nil
 		}
 

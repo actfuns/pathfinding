@@ -14,7 +14,7 @@ func NewJPFNeverMoveDiagonally(opts ...Option) *JPFNeverMoveDiagonally {
 	return f
 }
 
-func neverJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int) (int, int, bool) {
+func neverJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int32) (int32, int32, bool) {
 	grid := b.grid
 	dx := x - px
 	dy := y - py
@@ -54,7 +54,7 @@ func neverJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int) (
 	return neverJump(b, states, x+dx, y+dy, x, y)
 }
 
-func neverFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int) [][2]int {
+func neverFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int32) [][2]int32 {
 	parent := states.get(node).Parent
 	x, y := node.X, node.Y
 	grid := b.grid
@@ -68,23 +68,23 @@ func neverFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node
 
 		if dx != 0 {
 			if grid.IsWalkableAt(x, y-1) {
-				neighbors = append(neighbors, [2]int{x, y - 1})
+				neighbors = append(neighbors, [2]int32{x, y - 1})
 			}
 			if grid.IsWalkableAt(x, y+1) {
-				neighbors = append(neighbors, [2]int{x, y + 1})
+				neighbors = append(neighbors, [2]int32{x, y + 1})
 			}
 			if grid.IsWalkableAt(x+dx, y) {
-				neighbors = append(neighbors, [2]int{x + dx, y})
+				neighbors = append(neighbors, [2]int32{x + dx, y})
 			}
 		} else if dy != 0 {
 			if grid.IsWalkableAt(x-1, y) {
-				neighbors = append(neighbors, [2]int{x - 1, y})
+				neighbors = append(neighbors, [2]int32{x - 1, y})
 			}
 			if grid.IsWalkableAt(x+1, y) {
-				neighbors = append(neighbors, [2]int{x + 1, y})
+				neighbors = append(neighbors, [2]int32{x + 1, y})
 			}
 			if grid.IsWalkableAt(x, y+dy) {
-				neighbors = append(neighbors, [2]int{x, y + dy})
+				neighbors = append(neighbors, [2]int32{x, y + dy})
 			}
 		}
 		return neighbors
@@ -93,7 +93,7 @@ func neverFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node
 	neighborNodes := grid.GetNeighbors(node, DiagonalNever, b.neighborBuf)
 	neighbors := buf[:0]
 	for _, n := range neighborNodes {
-		neighbors = append(neighbors, [2]int{n.X, n.Y})
+		neighbors = append(neighbors, [2]int32{n.X, n.Y})
 	}
 	return neighbors
 }

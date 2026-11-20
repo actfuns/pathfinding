@@ -63,7 +63,7 @@ type Finder interface {
 	// FindPath returns a path. A non-nil dst is treated as dst[:0]; if its
 	// capacity is sufficient the path is written directly into it. Nil dst
 	// behaves like the classic allocating call.
-	FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error)
+	FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error)
 }
 
 var (

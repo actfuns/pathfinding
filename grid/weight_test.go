@@ -14,7 +14,7 @@ func TestSetWeightAtRejectsInvalid(t *testing.T) {
 		{"hex", NewHexGrid(NewMatrix(2, 2))},
 		{"staggered", NewStaggeredGrid(NewMatrix(2, 2))},
 	}
-	invalid := []float64{0, -1, math.NaN(), math.Inf(1), math.Inf(-1)}
+	invalid := []float32{0, -1, float32(math.NaN()), float32(math.Inf(1)), float32(math.Inf(-1))}
 
 	for _, tc := range grids {
 		for _, w := range invalid {

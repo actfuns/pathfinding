@@ -30,7 +30,7 @@ func TestWaypointEdgeCost(t *testing.T) {
 	b := g.AddNode(3, 4)
 	a.Connect(b)
 
-	want := 5.0
+	want := float32(5.0)
 	if a.Edges[0].Cost != want {
 		t.Errorf("a->b cost = %.1f, want %.1f", a.Edges[0].Cost, want)
 	}
@@ -91,7 +91,7 @@ func TestConnectOneWayCost(t *testing.T) {
 	b := g.AddNode(3, 4)
 	a.ConnectOneWay(b)
 
-	if want := 5.0; a.Edges[0].Cost != want {
+	if want := float32(5.0); a.Edges[0].Cost != want {
 		t.Errorf("cost = %.1f, want %.1f (3-4-5)", a.Edges[0].Cost, want)
 	}
 
@@ -180,7 +180,7 @@ func hasEdge(a, b *WaypointNode) bool {
 }
 
 // connectNearbyLinear is the original O(n^2) reference implementation for comparison.
-func connectNearbyLinear(g *WaypointGraph, maxDistance int, grid GridLOS) {
+func connectNearbyLinear(g *WaypointGraph, maxDistance int32, grid GridLOS) {
 	maxDistSq := maxDistance * maxDistance
 	for i, a := range g.Nodes {
 		for _, b := range g.Nodes[i+1:] {
@@ -201,7 +201,7 @@ func connectNearbyLinear(g *WaypointGraph, maxDistance int, grid GridLOS) {
 			if !connected {
 				dx := a.X - b.X
 				dy := a.Y - b.Y
-				cost := sqrt(float64(dx*dx + dy*dy))
+				cost := sqrt(float32(dx*dx + dy*dy))
 				a.Edges = append(a.Edges, &WaypointEdge{To: b, Cost: cost, State: EdgeStateStatic})
 				b.Edges = append(b.Edges, &WaypointEdge{To: a, Cost: cost, State: EdgeStateStatic})
 			}
@@ -218,8 +218,8 @@ func TestFindClosestSpatial(t *testing.T) {
 	g.AddNode(128, 0)
 
 	tests := []struct {
-		px, py int
-		wx, wy int
+		px, py int32
+		wx, wy int32
 	}{
 		{0, 0, 0, 0},
 		{62, 62, 63, 63},
@@ -265,7 +265,7 @@ func TestConnectNearbySpatialConsistency(t *testing.T) {
 	// Verify spatial-index version produces same results as O(n^2) reference
 	g1 := NewWaypointGraph()
 	g2 := NewWaypointGraph()
-	for _, p := range []struct{ x, y int }{
+	for _, p := range []struct{ x, y int32 }{
 		{0, 0}, {10, 0}, {20, 5}, {5, 15}, {30, 30}, {100, 0}, {50, 50},
 	} {
 		g1.AddNode(p.x, p.y)
@@ -291,7 +291,7 @@ func BenchmarkConnectNearby(b *testing.B) {
 		g := NewWaypointGraph()
 		for x := 0; x < 500; x += 20 {
 			for y := 0; y < 500; y += 20 {
-				g.AddNode(x, y)
+				g.AddNode(int32(x), int32(y))
 			}
 		}
 		g.ConnectNearby(30, grid)

@@ -16,18 +16,22 @@ func newFlatGrid(w, h int) *flatGrid {
 	g := &flatGrid{w: w, h: h, nodes: make([]Node, w*h)}
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			g.nodes[y*w+x] = Node{X: x, Y: y, Walkable: true, Weight: 1}
+			g.nodes[y*w+x] = Node{X: int32(x), Y: int32(y), Walkable: true, Weight: 1}
 		}
 	}
 	return g
 }
 
-func (g *flatGrid) Width() int                        { return g.w }
-func (g *flatGrid) Height() int                       { return g.h }
-func (g *flatGrid) IsInside(x, y int) bool            { return x >= 0 && x < g.w && y >= 0 && y < g.h }
-func (g *flatGrid) IsWalkableAt(x, y int) bool        { return g.IsInside(x, y) && g.nodes[y*g.w+x].Walkable }
-func (g *flatGrid) SetWalkableAt(x, y int, v bool)    { g.nodes[y*g.w+x].Walkable = v }
-func (g *flatGrid) GetNodeAt(x, y int) *Node          { return &g.nodes[y*g.w+x] }
+func (g *flatGrid) Width() int32  { return int32(g.w) }
+func (g *flatGrid) Height() int32 { return int32(g.h) }
+func (g *flatGrid) IsInside(x, y int32) bool {
+	return x >= 0 && x < int32(g.w) && y >= 0 && y < int32(g.h)
+}
+func (g *flatGrid) IsWalkableAt(x, y int32) bool {
+	return g.IsInside(x, y) && g.nodes[int(y)*g.w+int(x)].Walkable
+}
+func (g *flatGrid) SetWalkableAt(x, y int32, v bool)  { g.nodes[int(y)*g.w+int(x)].Walkable = v }
+func (g *flatGrid) GetNodeAt(x, y int32) *Node        { return &g.nodes[int(y)*g.w+int(x)] }
 func (g *flatGrid) SupportsJPSCanonicalPruning() bool { return true }
 func (g *flatGrid) Clone() Grid {
 	ng := &flatGrid{w: g.w, h: g.h, nodes: make([]Node, len(g.nodes))}
@@ -36,7 +40,7 @@ func (g *flatGrid) Clone() Grid {
 }
 func (g *flatGrid) GetNeighbors(node *Node, _ DiagonalMovement, buf []*Node) []*Node {
 	out := buf[:0]
-	for _, d := range [][2]int{{0, -1}, {1, 0}, {0, 1}, {-1, 0}} {
+	for _, d := range [][2]int32{{0, -1}, {1, 0}, {0, 1}, {-1, 0}} {
 		x, y := node.X+d[0], node.Y+d[1]
 		if g.IsWalkableAt(x, y) {
 			out = append(out, g.GetNodeAt(x, y))
@@ -108,7 +112,7 @@ func TestJPSPlusInt8MatchesInt16(t *testing.T) {
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
 			if rng.Float64() < 0.25 {
-				g.SetWalkableAt(x, y, false)
+				g.SetWalkableAt(int32(x), int32(y), false)
 			}
 		}
 	}
@@ -152,7 +156,7 @@ func TestJPSPlusTableRoundTripBothWidths(t *testing.T) {
 		for y := 0; y < tc.h; y++ {
 			for x := 0; x < tc.w; x++ {
 				if rng.Float64() < 0.2 {
-					g.SetWalkableAt(x, y, false)
+					g.SetWalkableAt(int32(x), int32(y), false)
 				}
 			}
 		}
@@ -169,7 +173,7 @@ func TestJPSPlusTableRoundTripBothWidths(t *testing.T) {
 		if err := f2.LoadPrecomputed(data); err != nil {
 			t.Fatalf("%dx%d: LoadPrecomputed: %v", tc.w, tc.h, err)
 		}
-		if f2.wide != tc.wide || f2.width != tc.w || f2.height != tc.h {
+		if f2.wide != tc.wide || f2.width != int32(tc.w) || f2.height != int32(tc.h) {
 			t.Fatalf("%dx%d: loaded wide=%v size=%dx%d", tc.w, tc.h, f2.wide, f2.width, f2.height)
 		}
 		if tc.wide {

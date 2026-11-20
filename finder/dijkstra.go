@@ -10,7 +10,7 @@ func NewDijkstraFinder(opts ...Option) *DijkstraFinder {
 	f := &DijkstraFinder{}
 	inner := NewAStarFinder(opts...)
 	f.AStarFinder = *inner
-	f.Heuristic = func(dx, dy float64) float64 {
+	f.Heuristic = func(dx, dy float32) float32 {
 		return 0
 	}
 	f.customHeuristic = true

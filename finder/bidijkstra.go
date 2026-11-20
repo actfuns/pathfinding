@@ -10,7 +10,7 @@ func NewBiDijkstraFinder(opts ...Option) *BiDijkstraFinder {
 	f := &BiDijkstraFinder{}
 	inner := NewBiAStarFinder(opts...)
 	f.BiAStarFinder = *inner
-	f.Heuristic = func(dx, dy float64) float64 {
+	f.Heuristic = func(dx, dy float32) float32 {
 		return 0
 	}
 	f.customHeuristic = true

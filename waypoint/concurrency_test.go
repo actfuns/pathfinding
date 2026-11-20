@@ -11,7 +11,7 @@ func TestConcurrentWaypointFindPath(t *testing.T) {
 	start := g.AddNode(0, 0)
 	prev := start
 	for i := 10; i <= 500; i += 10 {
-		cur := g.AddNode(i, 0)
+		cur := g.AddNode(int32(i), 0)
 		prev.Connect(cur)
 		prev = cur
 	}
@@ -21,7 +21,7 @@ func TestConcurrentWaypointFindPath(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			dst := make([][2]int, 0, 256)
+			dst := make([][2]int32, 0, 256)
 			for j := 0; j < 20; j++ {
 				p, err := f.FindPath(0, 0, 500, 0, grid, dst[:0])
 				if err != nil || p == nil {

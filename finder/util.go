@@ -3,7 +3,7 @@ package finder
 import "math"
 
 // preflight validates endpoints and handles requests that need no search.
-func preflight(startX, startY, endX, endY int, grid Grid) (path [][2]int, err error) {
+func preflight(startX, startY, endX, endY int32, grid Grid) (path [][2]int32, err error) {
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
@@ -13,17 +13,17 @@ func preflight(startX, startY, endX, endY int, grid Grid) (path [][2]int, err er
 // checkEndpoints handles requests that need no search. It returns a non-nil
 // path for a zero-length request on a walkable tile, and ErrNotWalkable for an
 // unwalkable destination. A nil path with a nil error means "run the search".
-func checkEndpoints(startX, startY, endX, endY int, grid Grid) (path [][2]int, err error) {
+func checkEndpoints(startX, startY, endX, endY int32, grid Grid) (path [][2]int32, err error) {
 	if !grid.IsWalkableAt(endX, endY) {
 		return nil, ErrNotWalkable
 	}
 	if startX == endX && startY == endY {
-		return [][2]int{{startX, startY}}, nil
+		return [][2]int32{{startX, startY}}, nil
 	}
 	return nil, nil
 }
 
-func finishPath(path, dst [][2]int, owned bool) [][2]int {
+func finishPath(path, dst [][2]int32, owned bool) [][2]int32 {
 	if path == nil {
 		return nil
 	}
@@ -37,23 +37,23 @@ func finishPath(path, dst [][2]int, owned bool) [][2]int {
 }
 
 // PathLength computes the total length of a path.
-func PathLength(path [][2]int) float64 {
-	var sum float64
+func PathLength(path [][2]int32) float32 {
+	var sum float32
 	for i := 1; i < len(path); i++ {
-		dx := float64(path[i-1][0] - path[i][0])
-		dy := float64(path[i-1][1] - path[i][1])
-		sum += math.Sqrt(dx*dx + dy*dy)
+		dx := float32(path[i-1][0]) - float32(path[i][0])
+		dy := float32(path[i-1][1]) - float32(path[i][1])
+		sum += float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	}
 	return sum
 }
 
 // Interpolate returns all coordinates on the line from (x0, y0) to (x1, y1)
 // using Bresenham's algorithm.
-func Interpolate(x0, y0, x1, y1 int) [][2]int {
-	line := make([][2]int, 0, 16)
+func Interpolate(x0, y0, x1, y1 int32) [][2]int32 {
+	line := make([][2]int32, 0, 16)
 	dx := x1 - x0
 	dy := y1 - y0
-	var sx, sy int
+	var sx, sy int32
 	if dx < 0 {
 		dx = -dx
 		sx = -1
@@ -69,7 +69,7 @@ func Interpolate(x0, y0, x1, y1 int) [][2]int {
 	err := dx - dy
 
 	for {
-		line = append(line, [2]int{x0, y0})
+		line = append(line, [2]int32{x0, y0})
 		if x0 == x1 && y0 == y1 {
 			break
 		}
@@ -87,11 +87,11 @@ func Interpolate(x0, y0, x1, y1 int) [][2]int {
 }
 
 // ExpandPath interpolates all segments in a compressed path.
-func ExpandPath(path [][2]int) [][2]int {
+func ExpandPath(path [][2]int32) [][2]int32 {
 	if len(path) < 2 {
 		return nil
 	}
-	expanded := make([][2]int, 0, len(path)*2)
+	expanded := make([][2]int32, 0, len(path)*2)
 	for i := 0; i < len(path)-1; i++ {
 		interpolated := Interpolate(path[i][0], path[i][1], path[i+1][0], path[i+1][1])
 		expanded = append(expanded, interpolated[:len(interpolated)-1]...)
@@ -101,35 +101,35 @@ func ExpandPath(path [][2]int) [][2]int {
 }
 
 // CompressPath removes redundant collinear nodes from a path.
-func CompressPath(path [][2]int) [][2]int {
+func CompressPath(path [][2]int32) [][2]int32 {
 	if len(path) < 3 {
 		return path
 	}
-	compressed := make([][2]int, 0, len(path))
+	compressed := make([][2]int32, 0, len(path))
 	sx, sy := path[0][0], path[0][1]
 	px, py := path[1][0], path[1][1]
-	dx := float64(px - sx)
-	dy := float64(py - sy)
-	sq := math.Sqrt(dx*dx + dy*dy)
+	dx := float32(px) - float32(sx)
+	dy := float32(py) - float32(sy)
+	sq := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	dx /= sq
 	dy /= sq
 
-	compressed = append(compressed, [2]int{sx, sy})
+	compressed = append(compressed, [2]int32{sx, sy})
 
 	for i := 2; i < len(path); i++ {
 		lx, ly := px, py
 		ldx, ldy := dx, dy
 		px, py = path[i][0], path[i][1]
-		dx = float64(px - lx)
-		dy = float64(py - ly)
-		sq = math.Sqrt(dx*dx + dy*dy)
+		dx = float32(px) - float32(lx)
+		dy = float32(py) - float32(ly)
+		sq = float32(math.Sqrt(float64(dx*dx + dy*dy)))
 		dx /= sq
 		dy /= sq
 
 		if dx != ldx || dy != ldy {
-			compressed = append(compressed, [2]int{lx, ly})
+			compressed = append(compressed, [2]int32{lx, ly})
 		}
 	}
-	compressed = append(compressed, [2]int{px, py})
+	compressed = append(compressed, [2]int32{px, py})
 	return compressed
 }

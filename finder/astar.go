@@ -11,7 +11,7 @@ type AStarFinder struct {
 	// Weight is the multiplier applied to the heuristic estimate (H-cost)
 	// to bias the search. Values > 1 make the search faster but potentially
 	// suboptimal; values < 1 make it more accurate but slower. Defaults to 1.
-	Weight float64
+	Weight float32
 
 	// DiagonalMovement controls whether diagonal moves are allowed and under
 	// what obstacle conditions. See DiagonalMovement values for details.
@@ -21,7 +21,7 @@ type AStarFinder struct {
 	customHeuristic bool
 	neighborBuf     []*Node
 	heapSlice       []heapEntry
-	pathBuf         [][2]int
+	pathBuf         [][2]int32
 }
 
 // NewAStarFinder creates a new AStarFinder with default options.
@@ -56,7 +56,7 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 }
 
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.
-func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+func (f *AStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return finishPath(path, dst, true), err
 	}
@@ -79,7 +79,7 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int, grid Grid, dst []
 	return finishPath(p, dst, false), err
 }
 
-func (f *AStarFinder) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
 	openList := &minHeap{nodes: f.heapSlice[:0], tieBreak: true, state: states}
@@ -116,7 +116,7 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int, grid Grid, states
 			}
 
 			x, y := neighbor.X, neighbor.Y
-			var ng float64
+			var ng float32
 			if stepCost != nil {
 				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
 			} else if x-node.X == 0 || y-node.Y == 0 {
@@ -128,7 +128,7 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int, grid Grid, states
 			if ns.Opened == 0 || ng < ns.G {
 				ns.G = ng
 				if ns.Opened == 0 {
-					ns.H = f.Weight * heuristic(float64(AbsInt(x-endX)), float64(AbsInt(y-endY)))
+					ns.H = f.Weight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
 				}
 				ns.F = ns.G + ns.H
 				ns.Parent = states.index(node)

@@ -3,7 +3,7 @@ package finder
 import "math"
 
 // HeuristicFunc is a function that computes distance given dx and dy.
-type HeuristicFunc func(dx, dy float64) float64
+type HeuristicFunc func(dx, dy float32) float32
 
 var (
 	// Manhattan is the Manhattan distance heuristic: dx + dy.
@@ -24,20 +24,20 @@ var (
 )
 
 func init() {
-	Manhattan = func(dx, dy float64) float64 {
+	Manhattan = func(dx, dy float32) float32 {
 		return dx + dy
 	}
-	Euclidean = func(dx, dy float64) float64 {
-		return math.Sqrt(dx*dx + dy*dy)
+	Euclidean = func(dx, dy float32) float32 {
+		return float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	}
-	Octile = func(dx, dy float64) float64 {
-		f := math.Sqrt2 - 1
+	Octile = func(dx, dy float32) float32 {
+		f := float32(math.Sqrt2 - 1)
 		if dx < dy {
 			return f*dx + dy
 		}
 		return f*dy + dx
 	}
-	Chebyshev = func(dx, dy float64) float64 {
+	Chebyshev = func(dx, dy float32) float32 {
 		if dx > dy {
 			return dx
 		}

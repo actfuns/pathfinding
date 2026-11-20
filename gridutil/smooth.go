@@ -6,10 +6,10 @@ import "math"
 // every tile on the Bresenham line between them is walkable.
 // Only suitable for orthogonal grids. For hex and staggered grids, use
 // HasLineOfSightDense instead.
-func HasLineOfSightBresenham(g GridLOS, x1, y1, x2, y2 int) bool {
+func HasLineOfSightBresenham(g GridLOS, x1, y1, x2, y2 int32) bool {
 	dx := x2 - x1
 	dy := y2 - y1
-	var sx, sy int
+	var sx, sy int32
 	if dx < 0 {
 		dx = -dx
 		sx = -1
@@ -47,7 +47,7 @@ func HasLineOfSightBresenham(g GridLOS, x1, y1, x2, y2 int) bool {
 // HasLineOfSightDense reports whether two tiles can see each other using
 // world-space sub-tile sampling. Suitable for all grid types.
 // For orthogonal grids, HasLineOfSightBresenham is more efficient.
-func HasLineOfSightDense(g GridWorld, x1, y1, x2, y2 int) bool {
+func HasLineOfSightDense(g GridWorld, x1, y1, x2, y2 int32) bool {
 	ax, ay := g.TileToWorld(x1, y1)
 	bx, by := g.TileToWorld(x2, y2)
 	minDim := minInt(g.TileWidth(), g.TileHeight())
@@ -74,10 +74,10 @@ func HasLineOfSightDense(g GridWorld, x1, y1, x2, y2 int) bool {
 // HasLineOfSightSupercover checks whether two tiles can see each other
 // using the supercover line algorithm. Unlike Bresenham, supercover detects
 // ALL tiles that the line passes through (including edge-grazing cases).
-func HasLineOfSightSupercover(g GridLOS, x1, y1, x2, y2 int) bool {
+func HasLineOfSightSupercover(g GridLOS, x1, y1, x2, y2 int32) bool {
 	dx := x2 - x1
 	dy := y2 - y1
-	var sx, sy int
+	var sx, sy int32
 	if dx > 0 {
 		sx = 1
 	} else {
@@ -92,7 +92,7 @@ func HasLineOfSightSupercover(g GridLOS, x1, y1, x2, y2 int) bool {
 	}
 	x, y := x1, y1
 	if dx >= dy {
-		err := 0
+		err := int32(0)
 		for x != x2 {
 			if !g.IsWalkableAt(x, y) {
 				return false
@@ -105,7 +105,7 @@ func HasLineOfSightSupercover(g GridLOS, x1, y1, x2, y2 int) bool {
 			x += sx
 		}
 	} else {
-		err := 0
+		err := int32(0)
 		for y != y2 {
 			if !g.IsWalkableAt(x, y) {
 				return false
@@ -126,7 +126,7 @@ func HasLineOfSightSupercover(g GridLOS, x1, y1, x2, y2 int) bool {
 // Only suitable for orthogonal grids. For hex and staggered grids, use
 // SmoothenDense instead.
 // Writes the result in-place over the input buffer (the finder's cached pathBuf).
-func SmoothenBresenham(g GridLOS, path [][2]int) [][2]int {
+func SmoothenBresenham(g GridLOS, path [][2]int32) [][2]int32 {
 	return smoothenPathInternal(g, path, false)
 }
 
@@ -134,11 +134,11 @@ func SmoothenBresenham(g GridLOS, path [][2]int) [][2]int {
 // at each diagonal step, preventing the smoothed path from cutting
 // through the corner of a blocked tile.
 // Only suitable for orthogonal grids.
-func SmoothenBresenhamStrict(g GridLOS, path [][2]int) [][2]int {
+func SmoothenBresenhamStrict(g GridLOS, path [][2]int32) [][2]int32 {
 	return smoothenPathInternal(g, path, true)
 }
 
-func smoothenPathInternal(g GridLOS, path [][2]int, strict bool) [][2]int {
+func smoothenPathInternal(g GridLOS, path [][2]int32, strict bool) [][2]int32 {
 	if len(path) < 2 {
 		return path
 	}
@@ -159,12 +159,12 @@ func smoothenPathInternal(g GridLOS, path [][2]int, strict bool) [][2]int {
 // tileLineOfSight checks walkability along a Bresenham line between two tiles.
 // When strict=true, also checks the two axis-aligned cells at each diagonal step
 // to prevent corner-cutting.
-func tileLineOfSight(g GridLOS, a, b [2]int, strict bool) bool {
+func tileLineOfSight(g GridLOS, a, b [2]int32, strict bool) bool {
 	x0, y0 := a[0], a[1]
 	x1, y1 := b[0], b[1]
 	dx := x1 - x0
 	dy := y1 - y0
-	var sx, sy int
+	var sx, sy int32
 	if dx < 0 {
 		dx = -dx
 		sx = -1
@@ -213,7 +213,7 @@ func tileLineOfSight(g GridLOS, a, b [2]int, strict bool) bool {
 // SmoothenDense removes unnecessary waypoints from a tile path using
 // world-space line-of-sight sampling. Suitable for all grid types.
 // Writes the result in-place over the input buffer.
-func SmoothenDense(g GridWorld, path [][2]int) [][2]int {
+func SmoothenDense(g GridWorld, path [][2]int32) [][2]int32 {
 	if len(path) < 2 {
 		return path
 	}
@@ -234,7 +234,7 @@ func SmoothenDense(g GridWorld, path [][2]int) [][2]int {
 // denseLineOfSight checks walkability along a pixel-precise line between
 // two tile centers. It samples the line in world space at sub-tile intervals
 // and converts each sample back to tile coordinates.
-func denseLineOfSight(g GridWorld, a, b [2]int) bool {
+func denseLineOfSight(g GridWorld, a, b [2]int32) bool {
 	ax, ay := g.TileToWorld(a[0], a[1])
 	bx, by := g.TileToWorld(b[0], b[1])
 	minDim := minInt(g.TileWidth(), g.TileHeight())
@@ -261,7 +261,7 @@ func denseLineOfSight(g GridWorld, a, b [2]int) bool {
 // SmoothenSupercover removes unnecessary waypoints from a tile path using
 // supercover line-of-sight. It is stricter than Bresenham and catches
 // edge-grazing blocked tiles.
-func SmoothenSupercover(g GridLOS, path [][2]int) [][2]int {
+func SmoothenSupercover(g GridLOS, path [][2]int32) [][2]int32 {
 	if len(path) < 2 {
 		return path
 	}

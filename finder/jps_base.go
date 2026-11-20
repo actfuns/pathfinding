@@ -10,18 +10,18 @@ package finder
 type JumpPointFinderBase struct {
 	Heuristic        HeuristicFunc
 	DiagonalMovement DiagonalMovement
-	Weight           float64
+	Weight           float32
 	TrackRecursion   bool
 	grid             Grid
 	startNode        *Node
 	endNode          *Node
 	neighborBuf      []*Node
-	neighborPosBuf   [][2]int
+	neighborPosBuf   [][2]int32
 	heapSlice        []heapEntry
-	pathBuf          [][2]int
-	expandBuf        [][2]int
-	jumpFn           func(b *JumpPointFinderBase, states *searchStates, x, y, px, py int) (int, int, bool)
-	findNeighborsFn  func(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int) [][2]int
+	pathBuf          [][2]int32
+	expandBuf        [][2]int32
+	jumpFn           func(b *JumpPointFinderBase, states *searchStates, x, y, px, py int32) (int32, int32, bool)
+	findNeighborsFn  func(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int32) [][2]int32
 }
 
 // GridWithJPSSupport is optionally implemented by Grid types that support
@@ -39,7 +39,7 @@ func supportsJPS(grid Grid) bool {
 }
 
 // preflightJPS validates a JPS request before any search state is acquired.
-func preflightJPS(startX, startY, endX, endY int, grid Grid) (path [][2]int, err error) {
+func preflightJPS(startX, startY, endX, endY int32, grid Grid) (path [][2]int32, err error) {
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
 		return nil, ErrOutOfBounds
 	}
@@ -58,7 +58,7 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 		Weight:           1,
 		TrackRecursion:   false,
 		neighborBuf:      make([]*Node, 0, 8),
-		neighborPosBuf:   make([][2]int, 0, 8),
+		neighborPosBuf:   make([][2]int32, 0, 8),
 	}
 	if opt.Heuristic != nil {
 		f.Heuristic = opt.Heuristic
@@ -73,7 +73,7 @@ func NewJumpPointFinderBase(opts ...Option) *JumpPointFinderBase {
 }
 
 // FindPath finds a path using JPS.
-func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid, dst [][2]int) ([][2]int, error) {
+func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflightJPS(startX, startY, endX, endY, grid); path != nil || err != nil {
 		return finishPath(path, dst, true), err
 	}
@@ -103,7 +103,7 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int, grid Grid
 	return finishPath(p, dst, false), err
 }
 
-func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int, grid Grid, states *searchStates) ([][2]int, error) {
+func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	openList := &minHeap{nodes: b.heapSlice[:0], state: states}
 	defer func() {
 		clear(openList.nodes[:cap(openList.nodes)])
@@ -134,7 +134,7 @@ func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int, grid Grid
 				x1, y1 := b.pathBuf[i+1][0], b.pathBuf[i+1][1]
 				dx := x1 - x0
 				dy := y1 - y0
-				var sx, sy int
+				var sx, sy int32
 				if dx < 0 {
 					dx = -dx
 					sx = -1
@@ -152,7 +152,7 @@ func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int, grid Grid
 					if x0 == x1 && y0 == y1 {
 						break
 					}
-					b.expandBuf = append(b.expandBuf, [2]int{x0, y0})
+					b.expandBuf = append(b.expandBuf, [2]int32{x0, y0})
 					e2 := 2 * err
 					if e2 > -dy {
 						err -= dy
@@ -195,13 +195,13 @@ func (b *JumpPointFinderBase) identifySuccessors(node *Node, states *searchState
 			continue
 		}
 
-		d := Octile(float64(AbsInt(jx-x)), float64(AbsInt(jy-y)))
+		d := Octile(float32(AbsInt(jx-x)), float32(AbsInt(jy-y)))
 		ng := states.get(node).G + d
 
 		if ns.Opened == 0 || ng < ns.G {
 			ns.G = ng
 			if ns.Opened == 0 {
-				ns.H = heuristic(float64(AbsInt(jx-endX)), float64(AbsInt(jy-endY)))
+				ns.H = heuristic(float32(AbsInt(jx-endX)), float32(AbsInt(jy-endY)))
 			}
 			ns.F = ns.G + ns.H*b.Weight
 			ns.Parent = states.index(node)

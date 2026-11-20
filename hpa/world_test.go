@@ -8,8 +8,8 @@ import (
 
 func TestChunkOf(t *testing.T) {
 	tests := []struct {
-		x, y, cs int
-		cx, cy   int
+		x, y, cs int32
+		cx, cy   int32
 	}{
 		{0, 0, 8, 0, 0},
 		{7, 7, 8, 0, 0},
@@ -28,7 +28,7 @@ func TestChunkOf(t *testing.T) {
 }
 
 func TestHPAWorldChunkIDOf(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -37,8 +37,8 @@ func TestHPAWorldChunkIDOf(t *testing.T) {
 		t.Errorf("expected 2x1 chunks, got %dx%d", world.ChunkMapX, world.ChunkMapY)
 	}
 	tests := []struct {
-		x, y int
-		id   int
+		x, y int32
+		id   int32
 	}{
 		{0, 0, 0},
 		{7, 0, 0},
@@ -54,7 +54,7 @@ func TestHPAWorldChunkIDOf(t *testing.T) {
 }
 
 func TestHPAWorldIsSingleChunk(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -68,7 +68,7 @@ func TestHPAWorldIsSingleChunk(t *testing.T) {
 }
 
 func TestHPAWorldChunkMapSize(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -82,7 +82,7 @@ func TestHPAWorldChunkMapSize(t *testing.T) {
 }
 
 func TestHPAPortalKeyEncoding(t *testing.T) {
-	cs := 8
+	cs := int32(8)
 	key := PortalKey(0, 3, DirN, cs)
 	if key != 3 {
 		t.Errorf("expected 3, got %d", key)
@@ -110,7 +110,7 @@ func TestHPAPortalKeyEncoding(t *testing.T) {
 }
 
 func TestHPAPortalPerCell(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -128,7 +128,7 @@ func TestHPAPortalPerCell(t *testing.T) {
 }
 
 func TestHPAExternalConnections(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -147,7 +147,7 @@ func TestHPAExternalConnections(t *testing.T) {
 }
 
 func TestHPABFSQuadDir(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0},
@@ -180,7 +180,7 @@ func TestHPABFSQuadDir(t *testing.T) {
 }
 
 func TestHPAPortalCount(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -200,9 +200,9 @@ func TestHPAPortalCount(t *testing.T) {
 
 // --- helpers ---
 
-func countPortalsInDir(world *HPAWorld, chunkID, dir int) int {
+func countPortalsInDir(world *HPAWorld, chunkID, dir int32) int {
 	count := 0
-	for pos := 0; pos < world.ChunkSize; pos++ {
+	for pos := int32(0); pos < world.ChunkSize; pos++ {
 		key := PortalKey(chunkID, pos, dir, world.ChunkSize)
 		if world.Portals[key] != nil {
 			count++
@@ -220,16 +220,16 @@ func TestHPAPortalKeyLargeChunk(t *testing.T) {
 	w := BuildWorld(g, cs)
 
 	want := w.ChunkMapX * w.ChunkMapY * cs * 4
-	if len(w.Portals) != want {
+	if int32(len(w.Portals)) != want {
 		t.Fatalf("Portals length = %d, want %d", len(w.Portals), want)
 	}
 
 	chunks := w.ChunkMapX * w.ChunkMapY
-	for cid := 0; cid < chunks; cid++ {
-		for pos := 0; pos < cs; pos++ {
-			for dir := 0; dir < 4; dir++ {
+	for cid := int32(0); cid < chunks; cid++ {
+		for pos := int32(0); pos < cs; pos++ {
+			for dir := int32(0); dir < 4; dir++ {
 				key := PortalKey(cid, pos, dir, cs)
-				if key < 0 || key >= len(w.Portals) {
+				if key < 0 || key >= int32(len(w.Portals)) {
 					t.Fatalf("key %d out of range [0,%d) for cid=%d pos=%d dir=%d",
 						key, len(w.Portals), cid, pos, dir)
 				}
