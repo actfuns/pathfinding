@@ -13,7 +13,7 @@ import (
 // JPS/JPS+ assume uniform step costs and ignore tile weights. They return the
 // step-shortest path; A*/Dijkstra are the cost-aware options.
 func TestJPSIgnoresTileWeights(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -40,7 +40,7 @@ func TestJPSIgnoresTileWeights(t *testing.T) {
 		t.Fatalf("JPS+: %v", err)
 	}
 
-	for name, p := range map[string][][2]int{"JPS": jpsPath, "JPS+": plusPath} {
+	for name, p := range map[string][][2]int32{"JPS": jpsPath, "JPS+": plusPath} {
 		if len(p) != len(bfs) {
 			t.Errorf("%s steps=%d, want %d (tile weights must be ignored)\nBFS=%v\n%s=%v",
 				name, len(p), len(bfs), bfs, name, p)
@@ -50,7 +50,7 @@ func TestJPSIgnoresTileWeights(t *testing.T) {
 
 // JPS+ must not cut corners when the configured rule forbids it.
 func TestJPSPlusRespectsDiagonalRules(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 1},
 		{1, 0},
 	})
@@ -159,7 +159,7 @@ func TestJPSVariantConstructorsSetMovement(t *testing.T) {
 		}
 	}
 
-	g := grid.NewOrthogonalGrid([][]int{{0, 1}, {1, 0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0, 1}, {1, 0}})
 	if p, _ := always.FindPath(0, 0, 1, 1, g, nil); len(p) == 0 {
 		t.Error("always variant should allow the diagonal move")
 	}
@@ -171,7 +171,7 @@ func TestJPSVariantConstructorsSetMovement(t *testing.T) {
 // The jump table is relaxed with one-step turns at runtime, so every diagonal
 // mode must match A* on these previously-misbehaving maps.
 func TestJPSPlusDiagonalModesAreOptimal(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 1, 0, 0, 0},
 		{1, 0, 0, 0, 1, 1},
 		{1, 0, 0, 0, 0, 0},
@@ -255,7 +255,7 @@ func TestJPSPlusKnownRegressions(t *testing.T) {
 	}{
 		{
 			name: "never-presence",
-			m: [][]int{
+			m: [][]int32{
 				{0, 0, 0, 0, 1},
 				{0, 0, 1, 0, 0},
 				{0, 0, 0, 0, 0},
@@ -269,7 +269,7 @@ func TestJPSPlusKnownRegressions(t *testing.T) {
 		},
 		{
 			name: "never-detour",
-			m: [][]int{
+			m: [][]int32{
 				{0, 0, 1, 1, 0, 0, 0},
 				{1, 0, 0, 0, 0, 0, 0},
 				{1, 0, 0, 0, 1, 1, 1},
@@ -282,7 +282,7 @@ func TestJPSPlusKnownRegressions(t *testing.T) {
 		},
 		{
 			name: "no-obstacles-turn",
-			m: [][]int{
+			m: [][]int32{
 				{0, 1, 1, 0},
 				{0, 0, 1, 1},
 				{0, 0, 0, 0},
@@ -317,7 +317,7 @@ func TestJPSPlusKnownRegressions(t *testing.T) {
 // JPS/JPS+ are axis-aligned algorithms. Using them on hex/staggered grids is a
 // caller error, not a silent A* fallback.
 func TestJPSRejectsNonOrthogonal(t *testing.T) {
-	hex := grid.NewHexGrid([][]int{
+	hex := grid.NewHexGrid([][]int32{
 		{0, 0, 0, 0, 0, 0},
 		{0, 1, 1, 0, 0, 0},
 		{0, 0, 0, 0, 1, 0},
@@ -326,7 +326,7 @@ func TestJPSRejectsNonOrthogonal(t *testing.T) {
 		{0, 0, 0, 0, 0, 0},
 	}, grid.WithTileSize(55, 64), grid.WithHexSide(32))
 
-	stag := grid.NewStaggeredGrid([][]int{
+	stag := grid.NewStaggeredGrid([][]int32{
 		{0, 0, 0, 0, 0, 0},
 		{0, 1, 1, 0, 0, 0},
 		{0, 0, 0, 0, 1, 0},

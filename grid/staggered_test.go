@@ -14,7 +14,7 @@ import (
 //                       (64,32)→(0,1), (32,-16)→(0,-2)
 
 func TestStaggeredTileToWorld(t *testing.T) {
-	g := NewStaggeredGrid([][]int{
+	g := NewStaggeredGrid([][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 		{0, 0, 0},
@@ -38,7 +38,7 @@ func TestStaggeredTileToWorld(t *testing.T) {
 }
 
 func TestStaggeredWorldToTile(t *testing.T) {
-	g := NewStaggeredGrid([][]int{
+	g := NewStaggeredGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -64,7 +64,7 @@ func TestStaggeredWorldToTile(t *testing.T) {
 }
 
 func TestStaggeredWorldToTileTiledSuite(t *testing.T) {
-	g := NewStaggeredGrid([][]int{
+	g := NewStaggeredGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -138,7 +138,7 @@ func TestStaggeredSVG(t *testing.T) {
 	scenarios := []svgScenario{
 		{
 			name: "simple 3x3", startX: 0, startY: 0, endX: 2, endY: 2,
-			matrix: [][]int{
+			matrix: [][]int32{
 				{0, 0, 0},
 				{0, 1, 0},
 				{0, 0, 0},
@@ -146,7 +146,7 @@ func TestStaggeredSVG(t *testing.T) {
 		},
 		{
 			name: "4x3 with obstacles", startX: 0, startY: 0, endX: 3, endY: 2,
-			matrix: [][]int{
+			matrix: [][]int32{
 				{0, 0, 0, 0},
 				{0, 1, 1, 0},
 				{0, 0, 0, 0},
@@ -165,7 +165,7 @@ func TestStaggeredSVG(t *testing.T) {
 		{
 			name: "weighted terrain 5x5", startX: 0, startY: 0, endX: 4, endY: 4,
 			matrix: NewMatrix(5, 5),
-			weights: [][]float64{
+			weights: [][]float32{
 				{1.0, 1.0, 1.0, 1.0, 1.0},
 				{1.0, 0.3, 0.3, 0.3, 1.0},
 				{1.0, 0.3, 5.0, 0.3, 1.0},
@@ -182,7 +182,7 @@ func TestStaggeredSVG(t *testing.T) {
 
 func TestStaggeredFindNearestWalkable(t *testing.T) {
 	// 5x5 grid with obstacle at (2,2), default tile size 64x64
-	g := NewStaggeredGrid([][]int{
+	g := NewStaggeredGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 1, 0, 0},
@@ -205,7 +205,7 @@ func TestStaggeredFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("all obstacles returns false", func(t *testing.T) {
-		g2 := NewStaggeredGrid([][]int{{1, 1}, {1, 1}})
+		g2 := NewStaggeredGrid([][]int32{{1, 1}, {1, 1}})
 		_, _, ok := g2.FindNearestWalkableWorld(32, 16, 5, 0)
 		if ok {
 			t.Error("expected false when all obstacles")
@@ -213,7 +213,7 @@ func TestStaggeredFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("maxRadius=0 only checks self", func(t *testing.T) {
-		g2 := NewStaggeredGrid([][]int{{1, 1}, {1, 1}})
+		g2 := NewStaggeredGrid([][]int32{{1, 1}, {1, 1}})
 		_, _, ok := g2.FindNearestWalkableWorld(32, 16, 0, 0)
 		if ok {
 			t.Error("expected false when self obstacle and maxRadius=0")
@@ -235,7 +235,7 @@ func TestStaggeredFindNearestWalkable(t *testing.T) {
 	})
 }
 func TestStaggeredObstacleCount(t *testing.T) {
-	g := NewStaggeredGrid([][]int{
+	g := NewStaggeredGrid([][]int32{
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 0, 0},
@@ -262,7 +262,7 @@ func TestStaggeredObstacleCount(t *testing.T) {
 // neighbours: 4 cardinals plus the 2 edge-sharing corners for its row parity.
 // The corner offsets must not duplicate the cardinals.
 func TestStaggeredGetNeighborsNoDuplicates(t *testing.T) {
-	g := NewStaggeredGrid([][]int{
+	g := NewStaggeredGrid([][]int32{
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
 		{0, 0, 0, 0},
@@ -297,7 +297,7 @@ func TestStaggeredGetNeighborsNoDuplicates(t *testing.T) {
 		}
 		seen := map[[2]int]bool{}
 		for _, n := range neighbors {
-			key := [2]int{n.X, n.Y}
+			key := [2]int32{n.X, n.Y}
 			if seen[key] {
 				t.Errorf("(%d,%d): duplicate neighbor %v", tc.x, tc.y, key)
 			}
@@ -314,10 +314,10 @@ func TestStaggeredGetNeighborsNoDuplicates(t *testing.T) {
 	}
 }
 
-func coords(nodes []*finder.Node) [][2]int {
-	out := make([][2]int, len(nodes))
+func coords(nodes []*finder.Node) [][2]int32 {
+	out := make([][2]int32, len(nodes))
 	for i, n := range nodes {
-		out[i] = [2]int{n.X, n.Y}
+		out[i] = [2]int32{n.X, n.Y}
 	}
 	return out
 }

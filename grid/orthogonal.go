@@ -46,7 +46,7 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) *OrthogonalGrid {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	g := &OrthogonalGrid{width: w, height: h, tileW: cfg.tileW, tileH: cfg.tileH, obstacleCount: obs, nodes: nodes, finder: cfg.finder}
+	g := &OrthogonalGrid{width: w, height: h, tileW: int(cfg.tileW), tileH: int(cfg.tileH), obstacleCount: obs, nodes: nodes, finder: cfg.finder}
 	if cfg.finder == nil {
 		g.finder = finder.NewAStarFinder()
 	} else {
@@ -54,19 +54,19 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) *OrthogonalGrid {
 	}
 	switch cfg.smoothMode {
 	case SmoothBresenham:
-		g.smoother = func(path [][2]int) [][2]int {
+		g.smoother = func(path [][2]int32) [][2]int32 {
 			return gridutil.SmoothenBresenham(g, path)
 		}
 	case SmoothBresenhamStrict:
-		g.smoother = func(path [][2]int) [][2]int {
+		g.smoother = func(path [][2]int32) [][2]int32 {
 			return gridutil.SmoothenBresenhamStrict(g, path)
 		}
 	case SmoothDense:
-		g.smoother = func(path [][2]int) [][2]int {
+		g.smoother = func(path [][2]int32) [][2]int32 {
 			return gridutil.SmoothenDense(g, path)
 		}
 	case SmoothSupercover:
-		g.smoother = func(path [][2]int) [][2]int {
+		g.smoother = func(path [][2]int32) [][2]int32 {
 			return gridutil.SmoothenSupercover(g, path)
 		}
 	}
@@ -121,7 +121,7 @@ func (g *OrthogonalGrid) IsWalkableAt(x, y int32) bool {
 // SetWalkableAt sets the walkability of the tile at (x, y). The caller must
 // ensure the coordinate is inside the grid; otherwise the method panics.
 func (g *OrthogonalGrid) SetWalkableAt(x, y int32, walkable bool) {
-	node := &g.nodes[g.index(x, y)]
+	node := &g.nodes[g.index(int(x), int(y))]
 	if node.Walkable == walkable {
 		return
 	}
@@ -141,7 +141,7 @@ func (g *OrthogonalGrid) SetWeightAt(x, y int32, weight float32) {
 	if !validWeight(weight) {
 		panic("grid: weight must be a finite positive number")
 	}
-	g.nodes[g.index(x, y)].Weight = weight
+	g.nodes[g.index(int(x), int(y))].Weight = weight
 }
 
 // GetWeightAt returns the movement cost multiplier for the tile at (x, y).
@@ -150,7 +150,7 @@ func (g *OrthogonalGrid) GetWeightAt(x, y int32) float32 {
 	if !g.IsInside(x, y) {
 		return 1.0
 	}
-	return g.nodes[g.index(x, y)].Weight
+	return g.nodes[g.index(int(x), int(y))].Weight
 }
 
 // HasLineOfSight reports whether two tiles can see each other using Bresenham.
@@ -174,11 +174,11 @@ func (g *OrthogonalGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
 
 // tileEdgePoint returns the closest point on the edge of tile (tx, ty) to (wx, wy),
 // inset by one world-space unit inward from the tile boundary.
-func (g *OrthogonalGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float32, float32) {
-	left := float32(tx*g.tileW) + inset
-	right := float32((tx+1)*g.tileW) - inset
-	top := float32(ty*g.tileH) + inset
-	bottom := float32((ty+1)*g.tileH) - inset
+func (g *OrthogonalGrid) tileEdgePoint(tx, ty int32, wx, wy, inset float32) (float32, float32) {
+	left := float32(int(tx)*g.tileW) + inset
+	right := float32((int(tx)+1)*g.tileW) - inset
+	top := float32(int(ty)*g.tileH) + inset
+	bottom := float32((int(ty)+1)*g.tileH) - inset
 	px := wx
 	if px < left {
 		px = left
@@ -206,7 +206,7 @@ func (g *OrthogonalGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int3
 		return ww, wh, true
 	}
 	// Sub-tile offset: determines which edge tile is closest to (wx, wy)
-	cx, cy := float32(tx*g.tileW+g.tileW/2), float32(ty*g.tileH+g.tileH/2)
+	cx, cy := float32(int(tx)*g.tileW+g.tileW/2), float32(int(ty)*g.tileH+g.tileH/2)
 	ox, oy := wx-cx, wy-cy
 	var aox float32 = ox
 	if aox < 0 {
@@ -217,13 +217,13 @@ func (g *OrthogonalGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int3
 		aoy = -aoy
 	}
 
-	for r := 1; r <= maxRadius; r++ {
+	for r := int32(1); r <= maxRadius; r++ {
 		top, bottom := ty-r, ty+r
 		left, right := tx-r, tx+r
 
 		// Edge cells (same row/col as tile center) are always closer than corners.
 		// Order by sub-tile offset direction.
-		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int
+		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int32
 		if aox >= aoy {
 			if ox < 0 {
 				e1x, e1y = left, ty
@@ -309,28 +309,28 @@ func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int32) (i
 	if g.IsWalkableAt(tx, ty) {
 		return int32(tx), int32(ty), true
 	}
-	var aox float32 = wx - float32(tx*g.tileW+g.tileW/2)
+	var aox float32 = wx - float32(int(tx)*g.tileW+g.tileW/2)
 	if aox < 0 {
 		aox = -aox
 	}
-	var aoy float32 = wy - float32(ty*g.tileH+g.tileH/2)
+	var aoy float32 = wy - float32(int(ty)*g.tileH+g.tileH/2)
 	if aoy < 0 {
 		aoy = -aoy
 	}
-	for r := 1; r <= maxRadius; r++ {
+	for r := int32(1); r <= maxRadius; r++ {
 		top, bottom := ty-r, ty+r
 		left, right := tx-r, tx+r
 
-		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int
+		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int32
 		if aox >= aoy {
-			if wx-float32(tx*g.tileW+g.tileW/2) < 0 {
+			if wx-float32(int(tx)*g.tileW+g.tileW/2) < 0 {
 				e1x, e1y = left, ty
 				e2x, e2y = right, ty
 			} else {
 				e1x, e1y = right, ty
 				e2x, e2y = left, ty
 			}
-			if wy-float32(ty*g.tileH+g.tileH/2) < 0 {
+			if wy-float32(int(ty)*g.tileH+g.tileH/2) < 0 {
 				e3x, e3y = tx, top
 				e4x, e4y = tx, bottom
 			} else {
@@ -338,14 +338,14 @@ func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int32) (i
 				e4x, e4y = tx, top
 			}
 		} else {
-			if wy-float32(ty*g.tileH+g.tileH/2) < 0 {
+			if wy-float32(int(ty)*g.tileH+g.tileH/2) < 0 {
 				e1x, e1y = tx, top
 				e2x, e2y = tx, bottom
 			} else {
 				e1x, e1y = tx, bottom
 				e2x, e2y = tx, top
 			}
-			if wx-float32(tx*g.tileW+g.tileW/2) < 0 {
+			if wx-float32(int(tx)*g.tileW+g.tileW/2) < 0 {
 				e3x, e3y = left, ty
 				e4x, e4y = right, ty
 			} else {
@@ -463,7 +463,7 @@ func (g *OrthogonalGrid) FindPath(x1, y1, x2, y2 int32, dst [][2]int32) ([][2]in
 
 func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
 	var dst [][2]float32
-	var tileDst [][2]int
+	var tileDst [][2]int32
 	if buff != nil {
 		dst = buff.World[:0]
 		tileDst = buff.Tile[:0]
@@ -530,29 +530,30 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuf
 // into the provided buffer slice (which is resliced to zero and reused), so the
 // caller must not hold references past the next call.
 func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
-	x, y := node.X, node.Y
+	x, y := int(node.X), int(node.Y)
 	w := g.width
 	nodes := g.nodes
 	neighbors := buffer[:0]
+	walk := func(x, y int) bool { return g.IsWalkableAt(int32(x), int32(y)) }
 
 	s0, d0 := false, false
 	s1, d1 := false, false
 	s2, d2 := false, false
 	s3, d3 := false, false
 
-	if g.IsWalkableAt(x, y-1) {
+	if walk(x, y-1) {
 		neighbors = append(neighbors, &nodes[(y-1)*w+x])
 		s0 = true
 	}
-	if g.IsWalkableAt(x+1, y) {
+	if walk(x+1, y) {
 		neighbors = append(neighbors, &nodes[y*w+x+1])
 		s1 = true
 	}
-	if g.IsWalkableAt(x, y+1) {
+	if walk(x, y+1) {
 		neighbors = append(neighbors, &nodes[(y+1)*w+x])
 		s2 = true
 	}
-	if g.IsWalkableAt(x-1, y) {
+	if walk(x-1, y) {
 		neighbors = append(neighbors, &nodes[y*w+x-1])
 		s3 = true
 	}
@@ -576,16 +577,16 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 		d0, d1, d2, d3 = true, true, true, true
 	}
 
-	if d0 && g.IsWalkableAt(x-1, y-1) {
+	if d0 && walk(x-1, y-1) {
 		neighbors = append(neighbors, &nodes[(y-1)*w+x-1])
 	}
-	if d1 && g.IsWalkableAt(x+1, y-1) {
+	if d1 && walk(x+1, y-1) {
 		neighbors = append(neighbors, &nodes[(y-1)*w+x+1])
 	}
-	if d2 && g.IsWalkableAt(x+1, y+1) {
+	if d2 && walk(x+1, y+1) {
 		neighbors = append(neighbors, &nodes[(y+1)*w+x+1])
 	}
-	if d3 && g.IsWalkableAt(x-1, y+1) {
+	if d3 && walk(x-1, y+1) {
 		neighbors = append(neighbors, &nodes[(y+1)*w+x-1])
 	}
 
@@ -608,8 +609,8 @@ func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 		cfg = DefaultSVGOpts
 	}
 	// Derive start/end marker positions from the first path
-	startX, startY := 0, 0
-	endX, endY := 0, 0
+	startX, startY := int32(0), int32(0)
+	endX, endY := int32(0), int32(0)
 	if len(paths) > 0 && len(paths[0]) > 0 {
 		startX, startY = paths[0][0][0], paths[0][0][1]
 		endX, endY = paths[0][len(paths[0])-1][0], paths[0][len(paths[0])-1][1]
@@ -626,7 +627,7 @@ func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 	b.WriteString(xmlHeader(width, height))
 
 	// Weight-to-color helper (from cfg or defaults)
-	weightColor := func(w float64) string {
+	weightColor := func(w float32) string {
 		return weightToColor(w, cfg)
 	}
 
@@ -635,7 +636,7 @@ func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 			rx := leftPad + x*cellW
 			ry := padding + (g.height-1-y)*cellH
 			var fill, stroke string
-			if !g.IsWalkableAt(x, y) {
+			if !g.IsWalkableAt(int32(x), int32(y)) {
 				fill = "#555555"
 				stroke = "#444444"
 			} else {
@@ -649,9 +650,9 @@ func (g *OrthogonalGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 
 	// Draw each path with a distinct color and start/end markers
 	drawPathAndMarkers(&b, startX, startY, endX, endY,
-		func(tx, ty int) (float64, float64) {
-			return float64(leftPad + tx*cellW + cellW/2),
-				float64(padding + (g.height-1-ty)*cellH + cellH/2)
+		func(tx, ty int32) (float64, float64) {
+			return float64(leftPad + int(tx)*cellW + cellW/2),
+				float64(padding + (g.height-1-int(ty))*cellH + cellH/2)
 		}, paths...)
 	renderLegend(&b, float64(padding), float64(padding), cfg)
 	b.WriteString("</svg>\n")

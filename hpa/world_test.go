@@ -28,7 +28,7 @@ func TestChunkOf(t *testing.T) {
 }
 
 func TestHPAWorldChunkIDOf(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -54,7 +54,7 @@ func TestHPAWorldChunkIDOf(t *testing.T) {
 }
 
 func TestHPAWorldIsSingleChunk(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -68,7 +68,7 @@ func TestHPAWorldIsSingleChunk(t *testing.T) {
 }
 
 func TestHPAWorldChunkMapSize(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -110,7 +110,7 @@ func TestHPAPortalKeyEncoding(t *testing.T) {
 }
 
 func TestHPAPortalPerCell(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -128,7 +128,7 @@ func TestHPAPortalPerCell(t *testing.T) {
 }
 
 func TestHPAExternalConnections(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	})
@@ -147,7 +147,7 @@ func TestHPAExternalConnections(t *testing.T) {
 }
 
 func TestHPABFSQuadDir(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0},
@@ -180,7 +180,7 @@ func TestHPABFSQuadDir(t *testing.T) {
 }
 
 func TestHPAPortalCount(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},

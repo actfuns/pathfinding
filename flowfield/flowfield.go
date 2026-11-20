@@ -28,18 +28,18 @@ type Field struct {
 	grid          finder.Grid
 	diagonal      finder.DiagonalMovement
 
-	cost []float64 // integration cost to nearest goal
+	cost []float32 // integration cost to nearest goal
 	dirs []dir2    // direction to cheapest neighbour
 
 	neighborBuf []*finder.Node
 	queue       itemHeap
 }
 
-type dir2 struct{ dx, dy int }
+type dir2 struct{ dx, dy int32 }
 
 type item struct {
-	x, y int
-	g    float64
+	x, y int32
+	g    float32
 }
 
 // itemHeap is a typed min-heap ordered by cost. A typed heap avoids the
@@ -103,14 +103,14 @@ func WithDiagonal(d finder.DiagonalMovement) Option {
 func initField(grid finder.Grid, opts []Option) *Field {
 	w, h := grid.Width(), grid.Height()
 	ff := &Field{
-		width:       w,
-		height:      h,
+		width:       int(w),
+		height:      int(h),
 		grid:        grid,
 		diagonal:    finder.DiagonalNever,
-		cost:        make([]float64, w*h),
-		dirs:        make([]dir2, w*h),
+		cost:        make([]float32, int(w*h)),
+		dirs:        make([]dir2, int(w*h)),
 		neighborBuf: make([]*finder.Node, 0, 8),
-		queue:       make(itemHeap, 0, w*h),
+		queue:       make(itemHeap, 0, int(w*h)),
 	}
 	for _, opt := range opts {
 		opt(ff)
@@ -126,7 +126,7 @@ func (ff *Field) resetCosts() {
 }
 
 // New builds a flow field toward a single goal tile.
-func New(grid finder.Grid, goalX, goalY int, opts ...Option) *Field {
+func New(grid finder.Grid, goalX, goalY int32, opts ...Option) *Field {
 	ff := initField(grid, opts)
 	ff.Reset(goalX, goalY)
 	return ff
@@ -134,23 +134,31 @@ func New(grid finder.Grid, goalX, goalY int, opts ...Option) *Field {
 
 // NewMulti builds a flow field toward multiple goals.
 // Each tile routes to the nearest goal automatically.
-func NewMulti(grid finder.Grid, goals [][2]int, opts ...Option) *Field {
+func NewMulti(grid finder.Grid, goals [][2]int32, opts ...Option) *Field {
 	ff := initField(grid, opts)
 	ff.ResetMulti(goals)
 	return ff
 }
 
+func toIntPairs(goals [][2]int32) [][2]int {
+	out := make([][2]int, len(goals))
+	for i, g := range goals {
+		out[i] = [2]int{int(g[0]), int(g[1])}
+	}
+	return out
+}
+
 // Reset recalculates the field for a new single goal. Reuses memory.
-func (ff *Field) Reset(goalX, goalY int) {
+func (ff *Field) Reset(goalX, goalY int32) {
 	ff.resetCosts()
-	ff.integrateMulti([][2]int{{goalX, goalY}})
+	ff.integrateMulti([][2]int{{int(goalX), int(goalY)}})
 	ff.vectorize()
 }
 
 // ResetMulti recalculates the field for multiple goals. Reuses memory.
-func (ff *Field) ResetMulti(goals [][2]int) {
+func (ff *Field) ResetMulti(goals [][2]int32) {
 	ff.resetCosts()
-	ff.integrateMulti(goals)
+	ff.integrateMulti(toIntPairs(goals))
 	ff.vectorize()
 }
 
@@ -165,7 +173,7 @@ func (ff *Field) integrateMulti(goals [][2]int) {
 
 	nb := ff.neighborBuf[:0]
 	queue := ff.queue[:0]
-	idx := func(x, y int) int { return y*w + x }
+	idx := func(x, y int32) int { return int(y)*w + int(x) }
 
 	// Cardinal-only unit-cost fields reduce to plain BFS. Keep Dijkstra for
 	// weighted grids or when diagonal steps have a different cost.
@@ -173,13 +181,13 @@ func (ff *Field) integrateMulti(goals [][2]int) {
 
 	// Push all walkable goals as initial sources
 	for _, g := range goals {
-		if !grid.IsInside(g[0], g[1]) || !grid.IsWalkableAt(g[0], g[1]) {
+		if !grid.IsInside(int32(g[0]), int32(g[1])) || !grid.IsWalkableAt(int32(g[0]), int32(g[1])) {
 			continue
 		}
-		gi := idx(g[0], g[1])
+		gi := idx(int32(g[0]), int32(g[1]))
 		if cost[gi] < 0 {
 			cost[gi] = 0
-			queue = append(queue, item{x: g[0], y: g[1], g: 0})
+			queue = append(queue, item{x: int32(g[0]), y: int32(g[1]), g: 0})
 		}
 	}
 
@@ -246,11 +254,11 @@ func (ff *Field) vectorize() {
 	stepCost := stepCostFunc(grid)
 
 	nb := ff.neighborBuf[:0]
-	idx := func(x, y int) int { return y*w + x }
+	idx := func(x, y int32) int { return int(y)*w + int(x) }
 
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			ci := idx(x, y)
+			ci := idx(int32(x), int32(y))
 			if cost[ci] < 0 {
 				ff.dirs[ci] = dir2{0, 0}
 				continue
@@ -261,10 +269,10 @@ func (ff *Field) vectorize() {
 				continue
 			}
 
-			best := 0.0
+			best := float32(0)
 			bestDir := dir2{0, 0}
 
-			node := grid.GetNodeAt(x, y)
+			node := grid.GetNodeAt(int32(x), int32(y))
 			neighbors := grid.GetNeighbors(node, diag, nb)
 			nb = nb[:0]
 
@@ -274,10 +282,10 @@ func (ff *Field) vectorize() {
 				if nc < 0 {
 					continue
 				}
-				total := nc + stepCost(nbNode.X-x, nbNode.Y-y)*nbNode.Weight
+				total := nc + stepCost(nbNode.X-int32(x), nbNode.Y-int32(y))*nbNode.Weight
 				if bestDir == (dir2{0, 0}) || total < best {
 					best = total
-					bestDir = dir2{nbNode.X - x, nbNode.Y - y}
+					bestDir = dir2{nbNode.X - int32(x), nbNode.Y - int32(y)}
 				}
 			}
 			ff.dirs[ci] = bestDir
@@ -288,18 +296,18 @@ func (ff *Field) vectorize() {
 
 // GetDirection returns the movement direction for tile (x, y).
 // Returns (0,0) if the tile is blocked or unreachable.
-func (ff *Field) GetDirection(x, y int) (int, int) {
-	if x < 0 || x >= ff.width || y < 0 || y >= ff.height {
+func (ff *Field) GetDirection(x, y int32) (int32, int32) {
+	if x < 0 || x >= int32(ff.width) || y < 0 || y >= int32(ff.height) {
 		return 0, 0
 	}
-	d := ff.dirs[y*ff.width+x]
+	d := ff.dirs[int(y)*ff.width+int(x)]
 	return d.dx, d.dy
 }
 
 // allUnitWeights reports whether every tile uses the default movement weight.
 func allUnitWeights(grid finder.Grid) bool {
-	for y := 0; y < grid.Height(); y++ {
-		for x := 0; x < grid.Width(); x++ {
+	for y := int32(0); y < grid.Height(); y++ {
+		for x := int32(0); x < grid.Width(); x++ {
 			if grid.GetNodeAt(x, y).Weight != 1 {
 				return false
 			}
@@ -317,11 +325,11 @@ func unitStepCost(grid finder.Grid) bool {
 }
 
 // stepCostFunc resolves the grid's step-cost function once per build.
-func stepCostFunc(grid finder.Grid) func(dx, dy int) float64 {
+func stepCostFunc(grid finder.Grid) func(dx, dy int32) float32 {
 	if sc, ok := grid.(finder.StepCostGrid); ok {
 		return sc.StepCost
 	}
-	return func(dx, dy int) float64 {
+	return func(dx, dy int32) float32 {
 		if dx != 0 && dy != 0 {
 			return finder.SQRT2
 		}
@@ -331,11 +339,11 @@ func stepCostFunc(grid finder.Grid) func(dx, dy int) float64 {
 
 // GetCost returns the integration cost (distance to nearest goal).
 // Returns -1 for unreachable tiles.
-func (ff *Field) GetCost(x, y int) float64 {
-	if x < 0 || x >= ff.width || y < 0 || y >= ff.height {
+func (ff *Field) GetCost(x, y int32) float32 {
+	if x < 0 || x >= int32(ff.width) || y < 0 || y >= int32(ff.height) {
 		return -1
 	}
-	return ff.cost[y*ff.width+x]
+	return ff.cost[int(y)*ff.width+int(x)]
 }
 
 // FindPath backtracks from (x, y) by following the direction chain
@@ -344,24 +352,24 @@ func (ff *Field) GetCost(x, y int) float64 {
 // Like the finders, it separates "you asked about a tile that is not on the
 // map" from "that tile cannot reach any goal": the first is finder.ErrOutOfBounds,
 // the second is a nil path with a nil error.
-func (ff *Field) FindPath(startX, startY int, dst [][2]int) ([][2]int, error) {
+func (ff *Field) FindPath(startX, startY int32, dst [][2]int32) ([][2]int32, error) {
 	w := ff.width
 	if !ff.grid.IsInside(startX, startY) {
 		return nil, finder.ErrOutOfBounds
 	}
-	if ff.cost[startY*w+startX] < 0 {
+	if ff.cost[int(startY)*w+int(startX)] < 0 {
 		return nil, nil
 	}
 	path := dst[:0]
-	cx, cy := startX, startY
+	cx, cy := int(startX), int(startY)
 	for {
-		path = append(path, [2]int{cx, cy})
+		path = append(path, [2]int32{int32(cx), int32(cy)})
 		d := ff.dirs[cy*w+cx]
 		if d.dx == 0 && d.dy == 0 {
 			break
 		}
-		cx += d.dx
-		cy += d.dy
+		cx += int(d.dx)
+		cy += int(d.dy)
 	}
 	return path, nil
 }

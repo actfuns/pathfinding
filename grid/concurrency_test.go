@@ -25,9 +25,9 @@ func TestConcurrentReadOnlyFindPath(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			dst := make([][2]int, 0, 256)
+			dst := make([][2]int32, 0, 256)
 			wdst := make([][2]float32, 0, 256)
-			tdst := make([][2]int, 0, 256)
+			tdst := make([][2]int32, 0, 256)
 			for j := 0; j < 100; j++ {
 				p, err := g.FindPath(0, 0, 47, 47, nil)
 				if err != nil || p == nil {
@@ -73,7 +73,7 @@ func TestConcurrentJPSPlusReadOnlyFindPath(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			dst := make([][2]int, 0, 256)
+			dst := make([][2]int32, 0, 256)
 			for j := 0; j < 50; j++ {
 				p, err := g.FindPath(0, 0, 47, 47, dst[:0])
 				if err != nil || p == nil {

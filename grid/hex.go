@@ -433,11 +433,11 @@ func (g *HexGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 
 // tileEdgePoint returns the closest point on the edge of tile (tx, ty) to (wx, wy),
 // inset by one world-space unit inward from the tile boundary.
-func (g *HexGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float32, float32) {
-	left := float32(tx*g.tileW) + inset
-	right := float32((tx+1)*g.tileW) - inset
-	top := float32(ty*g.tileH) + inset
-	bottom := float32((ty+1)*g.tileH) - inset
+func (g *HexGrid) tileEdgePoint(tx, ty int32, wx, wy, inset float32) (float32, float32) {
+	left := float32(int(tx)*g.tileW) + inset
+	right := float32((int(tx)+1)*g.tileW) - inset
+	top := float32(int(ty)*g.tileH) + inset
+	bottom := float32((int(ty)+1)*g.tileH) - inset
 	px := wx
 	if px < left {
 		px = left
@@ -461,7 +461,7 @@ func (g *HexGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edge
 	}
 	tx, ty := g.WorldToTile(wx, wy)
 	if g.IsWalkableAt(tx, ty) {
-		ww, wh := g.tileEdgePoint(int(tx), int(ty), wx, wy, edgeInset)
+		ww, wh := g.tileEdgePoint(tx, ty, wx, wy, edgeInset)
 		return ww, wh, true
 	}
 	// Sub-tile offset — determines which edge tile is closest to (wx, wy)
@@ -476,13 +476,13 @@ func (g *HexGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edge
 		aoy = -aoy
 	}
 
-	for r := 1; r <= maxRadius; r++ {
+	for r := int32(1); r <= maxRadius; r++ {
 		top, bottom := ty-r, ty+r
 		left, right := tx-r, tx+r
 
 		// Edge cells (same row/col as tile center) are always closer than corners.
 		// Order by sub-tile offset direction.
-		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int
+		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int32
 		if aox >= aoy {
 			if ox < 0 {
 				e1x, e1y = left, ty
@@ -568,28 +568,28 @@ func (g *HexGrid) FindNearestWalkable(wx, wy float32, maxRadius int32) (int32, i
 	if g.IsWalkableAt(tx, ty) {
 		return int32(tx), int32(ty), true
 	}
-	var aox float32 = wx - float32(tx*g.tileW+g.tileW/2)
+	var aox float32 = wx - float32(int(tx)*g.tileW+g.tileW/2)
 	if aox < 0 {
 		aox = -aox
 	}
-	var aoy float32 = wy - float32(ty*g.tileH+g.tileH/2)
+	var aoy float32 = wy - float32(int(ty)*g.tileH+g.tileH/2)
 	if aoy < 0 {
 		aoy = -aoy
 	}
-	for r := 1; r <= maxRadius; r++ {
+	for r := int32(1); r <= maxRadius; r++ {
 		top, bottom := ty-r, ty+r
 		left, right := tx-r, tx+r
 
-		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int
+		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int32
 		if aox >= aoy {
-			if wx-float32(tx*g.tileW+g.tileW/2) < 0 {
+			if wx-float32(int(tx)*g.tileW+g.tileW/2) < 0 {
 				e1x, e1y = left, ty
 				e2x, e2y = right, ty
 			} else {
 				e1x, e1y = right, ty
 				e2x, e2y = left, ty
 			}
-			if wy-float32(ty*g.tileH+g.tileH/2) < 0 {
+			if wy-float32(int(ty)*g.tileH+g.tileH/2) < 0 {
 				e3x, e3y = tx, top
 				e4x, e4y = tx, bottom
 			} else {
@@ -597,14 +597,14 @@ func (g *HexGrid) FindNearestWalkable(wx, wy float32, maxRadius int32) (int32, i
 				e4x, e4y = tx, top
 			}
 		} else {
-			if wy-float32(ty*g.tileH+g.tileH/2) < 0 {
+			if wy-float32(int(ty)*g.tileH+g.tileH/2) < 0 {
 				e1x, e1y = tx, top
 				e2x, e2y = tx, bottom
 			} else {
 				e1x, e1y = tx, bottom
 				e2x, e2y = tx, top
 			}
-			if wx-float32(tx*g.tileW+g.tileW/2) < 0 {
+			if wx-float32(int(tx)*g.tileW+g.tileW/2) < 0 {
 				e3x, e3y = left, ty
 				e4x, e4y = right, ty
 			} else {
@@ -671,7 +671,7 @@ func (g *HexGrid) FindPath(x1, y1, x2, y2 int32, dst [][2]int32) ([][2]int32, er
 
 func (g *HexGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
 	var dst [][2]float32
-	var tileDst [][2]int
+	var tileDst [][2]int32
 	if buff != nil {
 		dst = buff.World[:0]
 		tileDst = buff.Tile[:0]
@@ -770,7 +770,7 @@ func (g *HexGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 		cfg = DefaultSVGOpts
 	}
 	// Derive start/end from first path
-	startX, startY, endX, endY := 0, 0, 0, 0
+	startX, startY, endX, endY := int32(0), int32(0), int32(0), int32(0)
 	if len(paths) > 0 && len(paths[0]) > 0 {
 		startX, startY = paths[0][0][0], paths[0][0][1]
 		endX, endY = paths[0][len(paths[0])-1][0], paths[0][len(paths[0])-1][1]
@@ -860,7 +860,7 @@ func (g *HexGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 		for x := 0; x < g.width; x++ {
 			cx, cy := g.tileToScreenCoords(x, g.height-1-y)
 			fill, stroke := "#c8e6c9", "#cccccc"
-			if !g.IsWalkableAt(x, y) {
+			if !g.IsWalkableAt(int32(x), int32(y)) {
 				fill, stroke = "#555555", "#444444"
 			} else {
 				fill = weightToColor(g.nodes[g.index(x, y)].Weight, cfg)
@@ -875,8 +875,8 @@ func (g *HexGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 	}
 
 	drawPathAndMarkers(&b, startX, startY, endX, endY,
-		func(tx, ty int) (float64, float64) {
-			cx, cy := g.tileToScreenCoords(tx, g.height-1-ty)
+		func(tx, ty int32) (float64, float64) {
+			cx, cy := g.tileToScreenCoords(int(tx), g.height-1-int(ty))
 			var cxOff, cyOff float64
 			if g.staggerX {
 				cxOff = float64(g.tileW) / 2

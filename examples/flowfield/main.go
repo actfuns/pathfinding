@@ -10,9 +10,9 @@ import (
 
 type soldier struct {
 	name   string
-	x, y   float32 // world position (continuous, not snapped to tiles)
-	speed  float32 // pixels per frame
-	target [2]int  // current target tile
+	x, y   float32  // world position (continuous, not snapped to tiles)
+	speed  float32  // pixels per frame
+	target [2]int32 // current target tile
 }
 
 func main() {
@@ -34,18 +34,18 @@ func main() {
 
 	// 5 soldiers with different speeds
 	army := []*soldier{
-		{"SoldierA", 32, 32, 12, [2]int{}},
-		{"CavalryB", 64, 160, 24, [2]int{}},
-		{"SoldierC", 224, 32, 10, [2]int{}},
-		{"CavalryD", 160, 224, 20, [2]int{}},
-		{"SoldierE", 32, 224, 14, [2]int{}},
+		{"SoldierA", 32, 32, 12, [2]int32{}},
+		{"CavalryB", 64, 160, 24, [2]int32{}},
+		{"SoldierC", 224, 32, 10, [2]int32{}},
+		{"CavalryD", 160, 224, 20, [2]int32{}},
+		{"SoldierE", 32, 224, 14, [2]int32{}},
 	}
 
 	// Initialise first target tile for each soldier
 	for _, s := range army {
 		tx, ty := g.WorldToTile(s.x, s.y)
 		dx, dy := ff.GetDirection(tx, ty)
-		s.target = [2]int{tx + dx, ty + dy}
+		s.target = [2]int32{tx + dx, ty + dy}
 	}
 
 	fmt.Println("=== Movement (different speeds, smooth interpolation) ===")
@@ -72,7 +72,7 @@ func main() {
 					s.speed = 0
 					continue
 				}
-				s.target = [2]int{s.target[0] + ndx, s.target[1] + ndy}
+				s.target = [2]int32{s.target[0] + ndx, s.target[1] + ndy}
 				goalX, goalY = g.TileToWorld(s.target[0], s.target[1])
 				dx = goalX - s.x
 				dy = goalY - s.y

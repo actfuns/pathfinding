@@ -22,7 +22,7 @@ func (g *timeoutGrid) SetWalkableAt(x, y int, v bool) {}
 func (g *timeoutGrid) GetNodeAt(x, y int) *Node       { return &g.nodes[y*g.w+x] }
 func (g *timeoutGrid) GetNeighbors(n *Node, _ DiagonalMovement, buf []*Node) []*Node {
 	out := buf[:0]
-	for _, d := range [][2]int{{0, -1}, {1, 0}, {0, 1}, {-1, 0}} {
+	for _, d := range [][2]int32{{0, -1}, {1, 0}, {0, 1}, {-1, 0}} {
 		x, y := n.X+d[0], n.Y+d[1]
 		if g.IsInside(x, y) {
 			out = append(out, g.GetNodeAt(x, y))

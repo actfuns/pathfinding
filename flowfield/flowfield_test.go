@@ -9,7 +9,7 @@ import (
 )
 
 func TestFlowFieldBasic(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 		{0, 0, 0},
@@ -38,7 +38,7 @@ func TestFlowFieldBasic(t *testing.T) {
 }
 
 func TestFlowFieldFindPath(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 		{0, 0, 0},
@@ -51,13 +51,13 @@ func TestFlowFieldFindPath(t *testing.T) {
 	if path == nil {
 		t.Fatal("FindPath returned nil")
 	}
-	if path[0] != [2]int{0, 0} || path[len(path)-1] != [2]int{2, 2} {
+	if path[0] != [2]int32{0, 0} || path[len(path)-1] != [2]int32{2, 2} {
 		t.Errorf("path should go from (0,0) to (2,2), got %v", path)
 	}
 }
 
 func TestFlowFieldWithObstacles(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 0, 0},
@@ -69,7 +69,7 @@ func TestFlowFieldWithObstacles(t *testing.T) {
 		t.Errorf("obstacle should be unreachable, got cost=%v", c)
 	}
 
-	for _, pos := range [][2]int{{2, 0}, {2, 1}} {
+	for _, pos := range [][2]int32{{2, 0}, {2, 1}} {
 		if c := ff.GetCost(pos[0], pos[1]); c < 0 {
 			t.Errorf("tile (%d,%d) should be reachable around obstacle", pos[0], pos[1])
 		}
@@ -81,7 +81,7 @@ func TestFlowFieldWithObstacles(t *testing.T) {
 }
 
 func TestFlowFieldDirection(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 		{0, 0, 0},
@@ -102,7 +102,7 @@ func TestFlowFieldDirection(t *testing.T) {
 }
 
 func TestFlowFieldWithWeights(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 	})
@@ -122,7 +122,7 @@ func TestFlowFieldWithWeights(t *testing.T) {
 }
 
 func TestFlowFieldUnreachable(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 1},
 		{1, 0},
 	})
@@ -138,7 +138,7 @@ func TestFlowFieldUnreachable(t *testing.T) {
 }
 
 func TestFlowFieldOutOfBounds(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{{0, 0}, {0, 0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0, 0}, {0, 0}})
 
 	ff := New(g, 1, 1)
 
@@ -153,12 +153,12 @@ func TestFlowFieldOutOfBounds(t *testing.T) {
 }
 
 func TestFlowFieldMultiGoal(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 	})
 
-	ff := NewMulti(g, [][2]int{{0, 0}, {4, 1}})
+	ff := NewMulti(g, [][2]int32{{0, 0}, {4, 1}})
 
 	if c := ff.GetCost(0, 0); c != 0 {
 		t.Errorf("goal (0,0) cost should be 0, got %.1f", c)
@@ -179,13 +179,13 @@ func TestFlowFieldMultiGoal(t *testing.T) {
 }
 
 func TestFlowFieldMultiGoalWithObstacles(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 1, 1, 1, 0},
 		{0, 0, 0, 0, 0},
 	})
 
-	ff := NewMulti(g, [][2]int{{0, 0}, {4, 0}})
+	ff := NewMulti(g, [][2]int32{{0, 0}, {4, 0}})
 
 	if c := ff.GetCost(1, 1); c >= 0 {
 		t.Errorf("wall should be unreachable, got cost=%.1f", c)
@@ -197,7 +197,7 @@ func TestFlowFieldMultiGoalWithObstacles(t *testing.T) {
 }
 
 func TestFlowFieldReset(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 	})
@@ -216,12 +216,12 @@ func TestFlowFieldReset(t *testing.T) {
 }
 
 func TestFlowFieldResetMulti(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 	})
 
-	ff := NewMulti(g, [][2]int{{0, 0}, {4, 1}})
+	ff := NewMulti(g, [][2]int32{{0, 0}, {4, 1}})
 
 	dx, dy := ff.GetDirection(0, 1)
 	t.Logf("multi-goal: from (0,1) = (%d,%d)", dx, dy)
@@ -231,7 +231,7 @@ func TestFlowFieldResetMulti(t *testing.T) {
 		t.Fatal("(4,1) should be reachable after reset")
 	}
 
-	ff.ResetMulti([][2]int{{1, 1}, {3, 1}})
+	ff.ResetMulti([][2]int32{{1, 1}, {3, 1}})
 	if c := ff.GetCost(1, 1); c != 0 {
 		t.Errorf("goal (1,1) cost should be 0, got %.1f", c)
 	}
@@ -241,7 +241,7 @@ func TestFlowFieldResetMulti(t *testing.T) {
 }
 
 func TestFlowFieldDiagonalMovement(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 		{0, 0, 0},
@@ -281,7 +281,7 @@ func TestFlowFieldDiagonalMovement(t *testing.T) {
 }
 
 func TestFlowFieldDiagonalWithObstacles(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 1, 1, 1, 0},
 		{0, 0, 0, 0, 0},
@@ -316,14 +316,14 @@ func BenchmarkFlowFieldDirection(b *testing.B) {
 // A tile that is not on the map must be reported as such, not folded into the
 // "cannot reach a goal" answer — the two mean different things to a caller.
 func TestFindPathOutOfBounds(t *testing.T) {
-	m := [][]int{
+	m := [][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 		{0, 0, 0},
 	}
 	ff := New(grid.NewOrthogonalGrid(m), 2, 2)
 
-	for _, tc := range [][2]int{{-1, 0}, {0, -1}, {99, 99}} {
+	for _, tc := range [][2]int32{{-1, 0}, {0, -1}, {99, 99}} {
 		path, err := ff.FindPath(tc[0], tc[1], nil)
 		if !errors.Is(err, finder.ErrOutOfBounds) {
 			t.Errorf("FindPath(%d,%d) err = %v, want ErrOutOfBounds", tc[0], tc[1], err)
@@ -335,7 +335,7 @@ func TestFindPathOutOfBounds(t *testing.T) {
 
 	// A tile that is on the map but walled off is a completed search with no
 	// route: nil path, nil error.
-	walled := [][]int{
+	walled := [][]int32{
 		{0, 1, 0},
 		{0, 1, 0},
 		{0, 1, 0},
@@ -352,7 +352,7 @@ func TestFindPathOutOfBounds(t *testing.T) {
 
 // Weights are charged when entering a tile (matching A*), including the goal.
 func TestFlowFieldDestinationWeight(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{{0, 0, 0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0, 0, 0}})
 	g.SetWeightAt(2, 0, 5)
 
 	ff := New(g, 2, 0)

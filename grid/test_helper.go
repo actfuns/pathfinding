@@ -18,7 +18,7 @@ func smallFactory() Grid {
 
 // gridForSVG is any grid type that can render SVG.
 type gridForSVG interface {
-	RenderSVG(cfg *SVGOpts, paths ...[][2]int) string
+	RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string
 }
 
 // svgFinders lists all finder variants used in SVG rendering tests.
@@ -48,14 +48,14 @@ var svgFinders = []struct {
 // svgScenario defines one scenario for SVG rendering tests.
 type svgScenario struct {
 	name                       string
-	startX, startY, endX, endY int
-	matrix                     [][]int
-	weights                    [][]float64 // optional per-tile weights
+	startX, startY, endX, endY int32
+	matrix                     [][]int32
+	weights                    [][]float32 // optional per-tile weights
 }
 
 // runSVGTest runs all svgScenario x svgFinder combinations and validates SVG output.
 // Set NAVPATH_DUMP_SVG=1 to write SVG files to disk instead of validating.
-func runSVGTest(t *testing.T, gridType string, scenarios []svgScenario, newGrid func(matrix [][]int) gridForSVG) {
+func runSVGTest(t *testing.T, gridType string, scenarios []svgScenario, newGrid func(matrix [][]int32) gridForSVG) {
 	for _, s := range scenarios {
 		for _, ft := range svgFinders {
 			name := gridType + "/" + s.name + "_" + ft.name + ".svg"
@@ -66,8 +66,8 @@ func runSVGTest(t *testing.T, gridType string, scenarios []svgScenario, newGrid 
 				if s.weights != nil {
 					for y := range s.weights {
 						for x := range s.weights[y] {
-							if gw, ok := g.(interface{ SetWeightAt(int, int, float64) }); ok {
-								gw.SetWeightAt(x, y, s.weights[y][x])
+							if gw, ok := g.(interface{ SetWeightAt(int32, int32, float32) }); ok {
+								gw.SetWeightAt(int32(x), int32(y), s.weights[y][x])
 							}
 						}
 					}

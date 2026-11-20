@@ -42,8 +42,8 @@ var DefaultSVGOpts = &SVGOpts{
 
 // drawPathAndMarkers draws path polylines and start/end markers.
 // centerOf returns the SVG pixel coordinates for a tile.
-func drawPathAndMarkers(b *strings.Builder, startX, startY, endX, endY int,
-	centerOf func(tx, ty int) (float64, float64), paths ...[][2]int) {
+func drawPathAndMarkers(b *strings.Builder, startX, startY, endX, endY int32,
+	centerOf func(tx, ty int32) (float64, float64), paths ...[][2]int32) {
 
 	pathColors := []string{"#0066cc", "#e53935", "#2e7d32", "#7b1fa2"}
 	for pi, path := range paths {
@@ -73,7 +73,7 @@ func drawPathAndMarkers(b *strings.Builder, startX, startY, endX, endY int,
 }
 
 // weightToColor maps a tile weight to a fill color using cfg.WeightColors.
-func weightToColor(w float64, cfg *SVGOpts) string {
+func weightToColor(w float32, cfg *SVGOpts) string {
 	for _, entry := range cfg.WeightColors {
 		threshold := float64(1 << 62)
 		if entry[0] != "+Inf" {
@@ -81,7 +81,7 @@ func weightToColor(w float64, cfg *SVGOpts) string {
 				continue
 			}
 		}
-		if w <= threshold {
+		if float64(w) <= threshold {
 			return entry[1]
 		}
 	}

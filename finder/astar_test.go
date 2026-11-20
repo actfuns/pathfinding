@@ -8,7 +8,7 @@ import (
 )
 
 func TestAStarAgainstJS(t *testing.T) {
-	testFinderAgainstJS(t, "AStar", func() finder.Finder { return finder.NewAStarFinder() }, [][][2]int{
+	testFinderAgainstJS(t, "AStar", func() finder.Finder { return finder.NewAStarFinder() }, [][][2]int3232{
 		{{0, 0}, {1, 0}, {1, 1}},
 		{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
 		{{0, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 5}, {3, 5}, {4, 5}, {4, 4}, {4, 3}, {3, 3}},
@@ -43,7 +43,7 @@ func TestAStarWithOptions(t *testing.T) {
 }
 
 func TestAStarWeight(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{
+	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 	})
@@ -52,7 +52,7 @@ func TestAStarWeight(t *testing.T) {
 	if path == nil {
 		t.Error("expected path even with high weight")
 	}
-	if path[0] != [2]int{0, 0} || path[len(path)-1] != [2]int{4, 1} {
+	if path[0] != [2]int32{0, 0} || path[len(path)-1] != [2]int32{4, 1} {
 		t.Error("wrong start/end")
 	}
 }

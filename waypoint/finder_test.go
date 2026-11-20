@@ -73,7 +73,7 @@ func TestFindPathBasic(t *testing.T) {
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
-	if path[0] != [2]int{0, 0} || path[len(path)-1] != [2]int{10, 10} {
+	if path[0] != [2]int32{0, 0} || path[len(path)-1] != [2]int32{10, 10} {
 		t.Errorf("unexpected path: %v", path)
 	}
 }
@@ -130,7 +130,7 @@ func TestFindPathBidirectional(t *testing.T) {
 	if forward == nil {
 		t.Fatal("expected forward path")
 	}
-	if forward[0] != [2]int{0, 0} || forward[len(forward)-1] != [2]int{10, 0} {
+	if forward[0] != [2]int32{0, 0} || forward[len(forward)-1] != [2]int32{10, 0} {
 		t.Errorf("forward path wrong: %v", forward)
 	}
 
@@ -138,7 +138,7 @@ func TestFindPathBidirectional(t *testing.T) {
 	if reverse == nil {
 		t.Fatal("expected reverse path")
 	}
-	if reverse[0] != [2]int{10, 0} || reverse[len(reverse)-1] != [2]int{0, 0} {
+	if reverse[0] != [2]int32{10, 0} || reverse[len(reverse)-1] != [2]int32{0, 0} {
 		t.Errorf("reverse path wrong: %v", reverse)
 	}
 }
@@ -183,10 +183,10 @@ func TestFindPathStartEndPositions(t *testing.T) {
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
-	if path[0] != [2]int{0, 0} {
+	if path[0] != [2]int32{0, 0} {
 		t.Errorf("start = %v, want (0,0)", path[0])
 	}
-	if path[len(path)-1] != [2]int{15, 5} {
+	if path[len(path)-1] != [2]int32{15, 5} {
 		t.Errorf("end = %v, want (15,5)", path[len(path)-1])
 	}
 }
@@ -231,7 +231,7 @@ func TestFindPathSkipsNullEdge(t *testing.T) {
 
 // --- helpers ---
 
-func pathCost(path [][2]int) float64 {
+func pathCost(path [][2]int32) float64 {
 	cost := 0.0
 	for i := 1; i < len(path); i++ {
 		dx := path[i][0] - path[i-1][0]
@@ -270,7 +270,7 @@ func TestSmoothPathRemovesRedundantNodes(t *testing.T) {
 func TestSmoothPathShort(t *testing.T) {
 	f := NewWaypointFinder()
 	grid := walkableGrid(10, 10)
-	short := [][2]int{{0, 0}, {5, 5}}
+	short := [][2]int32{{0, 0}, {5, 5}}
 	result := f.SmoothPath(short, grid)
 	if len(result) != 2 {
 		t.Error("short path should not change")
@@ -322,7 +322,7 @@ func TestFindPathSameNodeDoesNotCrossWalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindPath error: %v", err)
 	}
-	want := [][2]int{{0, 0}, {1, 2}, {2, 0}}
+	want := [][2]int32{{0, 0}, {1, 2}, {2, 0}}
 	if len(path) != len(want) {
 		t.Fatalf("path = %v, want %v", path, want)
 	}

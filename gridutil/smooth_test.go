@@ -11,7 +11,7 @@ type denseTestGrid struct {
 func (g *denseTestGrid) Width() int  { return 2 }
 func (g *denseTestGrid) Height() int { return 1 }
 func (g *denseTestGrid) IsWalkableAt(x, y int) bool {
-	return !g.blocked[[2]int{x, y}]
+	return !g.blocked[[2]int32{x, y}]
 }
 func (g *denseTestGrid) TileToWorld(tx, ty int) (float32, float32) {
 	return float32(tx * 100), float32(ty * 100)
@@ -28,7 +28,7 @@ func TestDenseLOSChecksDestination(t *testing.T) {
 	if HasLineOfSightDense(g, 0, 0, 1, 0) {
 		t.Error("HasLineOfSightDense reported LOS into a blocked destination")
 	}
-	if denseLineOfSight(g, [2]int{0, 0}, [2]int{1, 0}) {
+	if denseLineOfSight(g, [2]int32{0, 0}, [2]int32{1, 0}) {
 		t.Error("denseLineOfSight reported LOS into a blocked destination")
 	}
 

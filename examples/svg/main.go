@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	matrix := [][]int{
+	matrix := [][]int32{
 		{0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0, 0, 0},
@@ -26,12 +26,12 @@ func main() {
 	g.SetWeightAt(3, 1, 5.0)
 
 	for x := 0; x < 7; x++ {
-		g.SetWeightAt(x, 5, 0.3)
-		g.SetWeightAt(x, 0, 0.3)
+		g.SetWeightAt(int32(x), 5, 0.3)
+		g.SetWeightAt(int32(x), 0, 0.3)
 	}
 	for y := 0; y < 6; y++ {
-		g.SetWeightAt(0, y, 0.3)
-		g.SetWeightAt(6, y, 0.3)
+		g.SetWeightAt(0, int32(y), 0.3)
+		g.SetWeightAt(6, int32(y), 0.3)
 	}
 
 	f := finder.NewAStarFinder()

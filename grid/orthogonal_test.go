@@ -5,7 +5,7 @@ import (
 )
 
 func TestOrthogonalWorldToTile(t *testing.T) {
-	g := NewOrthogonalGrid([][]int{
+	g := NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 	}, WithTileSize(32, 32))
@@ -33,7 +33,7 @@ func TestOrthogonalWorldToTile(t *testing.T) {
 }
 
 func TestOrthogonalTileToWorld(t *testing.T) {
-	g := NewOrthogonalGrid([][]int{
+	g := NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 	}, WithTileSize(32, 32))
@@ -55,7 +55,7 @@ func TestOrthogonalTileToWorld(t *testing.T) {
 }
 
 func TestOrthogonalRoundTrip(t *testing.T) {
-	g := NewOrthogonalGrid([][]int{
+	g := NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
@@ -93,11 +93,11 @@ func TestOrthogonalSVG(t *testing.T) {
 	scenarios := []svgScenario{
 		{
 			name: "simple 2x2", startX: 0, startY: 0, endX: 1, endY: 1,
-			matrix: [][]int{{0, 0}, {1, 0}},
+			matrix: [][]int32{{0, 0}, {1, 0}},
 		},
 		{
 			name: "5x6 maze", startX: 1, startY: 1, endX: 4, endY: 4,
-			matrix: [][]int{
+			matrix: [][]int32{
 				{0, 0, 0, 0, 0},
 				{1, 0, 1, 1, 0},
 				{1, 0, 1, 0, 0},
@@ -119,7 +119,7 @@ func TestOrthogonalSVG(t *testing.T) {
 		{
 			name: "weighted terrain 10x8", startX: 1, startY: 0, endX: 7, endY: 7,
 			matrix: NewMatrix(10, 8),
-			weights: [][]float64{
+			weights: [][]float32{
 				{0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3},
 				{0.3, 1.0, 1.0, 1.0, 5.0, 5.0, 1.0, 1.0, 5.0, 0.3},
 				{0.3, 1.0, 1.0, 5.0, 5.0, 5.0, 5.0, 1.0, 5.0, 0.3},
@@ -138,7 +138,7 @@ func TestOrthogonalSVG(t *testing.T) {
 
 func TestOrthogonalFindNearestWalkable(t *testing.T) {
 	// 5x5 grid with obstacles in cross pattern, tileW=tileH=1
-	g := NewOrthogonalGrid([][]int{
+	g := NewOrthogonalGrid([][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 0, 1, 0, 0},
 		{0, 1, 1, 1, 0},
@@ -164,7 +164,7 @@ func TestOrthogonalFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("all obstacles returns false", func(t *testing.T) {
-		g2 := NewOrthogonalGrid([][]int{{1, 1}, {1, 1}})
+		g2 := NewOrthogonalGrid([][]int32{{1, 1}, {1, 1}})
 		_, _, ok := g2.FindNearestWalkableWorld(0, 0, 5, 0)
 		if ok {
 			t.Error("expected false when all obstacles")
@@ -203,7 +203,7 @@ func TestOrthogonalFindNearestWalkable(t *testing.T) {
 	})
 
 	t.Run("finds single walkable cell across rings", func(t *testing.T) {
-		g3 := NewOrthogonalGrid([][]int{
+		g3 := NewOrthogonalGrid([][]int32{
 			{0, 1, 1, 1, 1},
 			{1, 1, 1, 1, 1},
 			{1, 1, 1, 1, 1},
@@ -222,7 +222,7 @@ func TestOrthogonalFindNearestWalkable(t *testing.T) {
 
 func TestOrthogonalFindNearestWalkableWorld(t *testing.T) {
 	// Grid with custom tile size to test world coordinate conversion
-	g := NewOrthogonalGrid([][]int{
+	g := NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 0, 0},
@@ -249,7 +249,7 @@ func TestOrthogonalFindNearestWalkableWorld(t *testing.T) {
 }
 
 func TestOrthogonalObstacleCount(t *testing.T) {
-	g := NewOrthogonalGrid([][]int{
+	g := NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 0, 0},

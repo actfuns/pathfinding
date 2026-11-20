@@ -9,7 +9,7 @@ import (
 )
 
 func TestJPSPlusNeverPrecompute(t *testing.T) {
-	matrix := [][]int{
+	matrix := [][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 1, 1, 1, 0},
 		{0, 0, 0, 0, 0},
@@ -26,10 +26,10 @@ func TestJPSPlusNeverPrecompute(t *testing.T) {
 	if len(path) < 2 {
 		t.Fatal("path too short")
 	}
-	if path[0] != [2]int{0, 0} {
+	if path[0] != [2]int32{0, 0} {
 		t.Errorf("expected start (0,0), got %v", path[0])
 	}
-	if path[len(path)-1] != [2]int{4, 4} {
+	if path[len(path)-1] != [2]int32{4, 4} {
 		t.Errorf("expected end (4,4), got %v", path[len(path)-1])
 	}
 }
@@ -38,7 +38,7 @@ func TestJPSPlusAgainstJS(t *testing.T) {
 	// JPS+ produces optimal paths — may differ from standard JPS on open grids
 	// (where standard JPS leverages a perpendicular recursive cascade that JPS+ cannot
 	// precompute), but all paths are equally valid and optimal.
-	want := [][][2]int{
+	want := [][][2]int3232{
 		{{0, 0}, {1, 0}, {1, 1}},
 		{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
 		{{0, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 5}, {3, 5}, {4, 5}, {4, 4}, {4, 3}, {3, 3}},
@@ -62,7 +62,7 @@ func TestJPSPlusAgainstJS(t *testing.T) {
 
 func TestJPSPlusNoPanicPrecompute(t *testing.T) {
 	// Test that Precompute handles edge cases without panicking
-	matrix := [][]int{
+	matrix := [][]int32{
 		{0, 0, 0},
 		{0, 1, 0},
 		{0, 0, 0},
@@ -77,7 +77,7 @@ func TestJPSPlusNoPanicPrecompute(t *testing.T) {
 }
 
 func TestJPSPlusUnreachable(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{{0, 1, 0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0, 1, 0}})
 	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
 	_ = f.Precompute(g)
 	path, _ := f.FindPath(0, 0, 2, 0, g, nil)
@@ -87,7 +87,7 @@ func TestJPSPlusUnreachable(t *testing.T) {
 }
 
 func TestJPSPlusSingleCell(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{{0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0}})
 	f := finder.NewJPSPlusFinder()
 	_ = f.Precompute(g)
 	path, _ := f.FindPath(0, 0, 0, 0, g, nil)
@@ -97,7 +97,7 @@ func TestJPSPlusSingleCell(t *testing.T) {
 }
 
 func TestJPSPlusUnwalkableEnd(t *testing.T) {
-	g := grid.NewOrthogonalGrid([][]int{{0, 1}})
+	g := grid.NewOrthogonalGrid([][]int32{{0, 1}})
 	f := finder.NewJPSPlusFinder()
 	_ = f.Precompute(g)
 	path, err := f.FindPath(0, 0, 1, 0, g, nil)
@@ -116,7 +116,7 @@ func TestJPSPlusPrecomputePanic(t *testing.T) {
 			t.Error("expected panic when FindPath called before Precompute")
 		}
 	}()
-	g := grid.NewOrthogonalGrid([][]int{{0, 0}, {0, 0}})
+	g := grid.NewOrthogonalGrid([][]int32{{0, 0}, {0, 0}})
 	f.FindPath(0, 0, 1, 1, g, nil)
 }
 
@@ -133,13 +133,13 @@ func TestJPSPlusOpenGrid(t *testing.T) {
 	if path == nil {
 		t.Fatal("expected path, got nil")
 	}
-	if path[len(path)-1] != [2]int{99, 99} {
+	if path[len(path)-1] != [2]int32{99, 99} {
 		t.Errorf("expected end (99,99), got %v", path[len(path)-1])
 	}
 }
 
 func TestJPSPlusExportImport(t *testing.T) {
-	matrix := [][]int{
+	matrix := [][]int32{
 		{0, 0, 0, 0, 0},
 		{0, 1, 1, 1, 0},
 		{0, 0, 0, 0, 0},

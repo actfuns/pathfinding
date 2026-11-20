@@ -36,7 +36,7 @@ func (g *flatGrid) Clone() Grid {
 }
 func (g *flatGrid) GetNeighbors(node *Node, _ DiagonalMovement, buf []*Node) []*Node {
 	out := buf[:0]
-	for _, d := range [][2]int{{0, -1}, {1, 0}, {0, 1}, {-1, 0}} {
+	for _, d := range [][2]int32{{0, -1}, {1, 0}, {0, 1}, {-1, 0}} {
 		x, y := node.X+d[0], node.Y+d[1]
 		if g.IsWalkableAt(x, y) {
 			out = append(out, g.GetNodeAt(x, y))

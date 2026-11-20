@@ -34,7 +34,7 @@ type StaggeredGrid struct {
 // Finder returns the pathfinder associated with this grid.
 func (g *StaggeredGrid) Finder() finder.Finder { return g.finder }
 
-func NewStaggeredGrid(matrix [][]int, opts ...GridOption) *StaggeredGrid {
+func NewStaggeredGrid(matrix [][]int32, opts ...GridOption) *StaggeredGrid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]finder.Node, w*h)
@@ -45,7 +45,7 @@ func NewStaggeredGrid(matrix [][]int, opts ...GridOption) *StaggeredGrid {
 			if !walkable {
 				obs++
 			}
-			nodes[y*w+x] = finder.Node{X: x, Y: y, Walkable: walkable, Weight: 1.0}
+			nodes[y*w+x] = finder.Node{X: int32(x), Y: int32(y), Walkable: walkable, Weight: 1.0}
 		}
 	}
 	var cfg gridOptions
@@ -59,8 +59,8 @@ func NewStaggeredGrid(matrix [][]int, opts ...GridOption) *StaggeredGrid {
 	g := &StaggeredGrid{
 		staggerAxis:   cfg.staggerAxis,
 		staggerIndex:  cfg.staggerIndex,
-		tileW:         cfg.tileW,
-		tileH:         cfg.tileH,
+		tileW:         int(cfg.tileW),
+		tileH:         int(cfg.tileH),
 		width:         w,
 		height:        h,
 		obstacleCount: obs,
@@ -74,7 +74,7 @@ func NewStaggeredGrid(matrix [][]int, opts ...GridOption) *StaggeredGrid {
 	}
 	switch cfg.smoothMode {
 	case SmoothDense:
-		g.smoother = func(path [][2]int) [][2]int {
+		g.smoother = func(path [][2]int32) [][2]int32 {
 			return gridutil.SmoothenDense(g, path)
 		}
 	}
@@ -133,44 +133,44 @@ func (g *StaggeredGrid) isShifted(index int) bool {
 func (g *StaggeredGrid) index(x, y int) int { return y*g.width + x }
 
 // TileIndex returns the flat array index for tile (x, y).
-func (g *StaggeredGrid) TileIndex(x, y int) int { return g.index(x, y) }
+func (g *StaggeredGrid) TileIndex(x, y int32) int32 { return int32(g.index(int(x), int(y))) }
 
 // TileXY returns the tile coordinates for a flat array index.
-func (g *StaggeredGrid) TileXY(index int) (int, int) {
-	return index % g.width, index / g.width
+func (g *StaggeredGrid) TileXY(index int32) (int32, int32) {
+	return int32(index) % int32(g.width), int32(index) / int32(g.width)
 }
 
 // Width returns the number of tiles horizontally in the staggered grid.
-func (g *StaggeredGrid) Width() int { return g.width }
+func (g *StaggeredGrid) Width() int32 { return int32(g.width) }
 
 // Height returns the number of tiles vertically in the staggered grid.
-func (g *StaggeredGrid) Height() int { return g.height }
+func (g *StaggeredGrid) Height() int32 { return int32(g.height) }
 
 // TileWidth returns the tile width in world units.
-func (g *StaggeredGrid) TileWidth() int { return g.tileW }
+func (g *StaggeredGrid) TileWidth() int32 { return int32(g.tileW) }
 
 // TileHeight returns the tile height in world units.
-func (g *StaggeredGrid) TileHeight() int { return g.tileH }
+func (g *StaggeredGrid) TileHeight() int32 { return int32(g.tileH) }
 
 // IsInside checks whether the tile coordinates (x, y) are within the grid bounds.
-func (g *StaggeredGrid) IsInside(x, y int) bool {
-	return x >= 0 && x < g.width && y >= 0 && y < g.height
+func (g *StaggeredGrid) IsInside(x, y int32) bool {
+	return x >= 0 && x < int32(g.width) && y >= 0 && y < int32(g.height)
 }
 
 // GetNodeAt returns the node at the given tile coordinates.
-func (g *StaggeredGrid) GetNodeAt(x, y int) *finder.Node { return &g.nodes[g.index(x, y)] }
+func (g *StaggeredGrid) GetNodeAt(x, y int32) *finder.Node { return &g.nodes[g.index(int(x), int(y))] }
 
 // IsWalkableAt returns whether the tile at (x, y) is walkable (no obstacle).
-func (g *StaggeredGrid) IsWalkableAt(x, y int) bool {
+func (g *StaggeredGrid) IsWalkableAt(x, y int32) bool {
 	if !g.IsInside(x, y) {
 		return false
 	}
-	return g.nodes[g.index(x, y)].Walkable
+	return g.nodes[g.index(int(x), int(y))].Walkable
 }
 
 // SetWalkableAt sets the walkability of the tile at (x, y).
-func (g *StaggeredGrid) SetWalkableAt(x, y int, walkable bool) {
-	node := &g.nodes[g.index(x, y)]
+func (g *StaggeredGrid) SetWalkableAt(x, y int32, walkable bool) {
+	node := &g.nodes[g.index(int(x), int(y))]
 	if node.Walkable == walkable {
 		return
 	}
@@ -184,22 +184,22 @@ func (g *StaggeredGrid) SetWalkableAt(x, y int, walkable bool) {
 
 // SetWeightAt sets the movement cost multiplier for the tile at (x, y).
 // Panics if weight is not a finite positive number.
-func (g *StaggeredGrid) SetWeightAt(x, y int, weight float64) {
+func (g *StaggeredGrid) SetWeightAt(x, y int32, weight float32) {
 	if !validWeight(weight) {
 		panic("grid: weight must be a finite positive number")
 	}
-	g.nodes[g.index(x, y)].Weight = weight
+	g.nodes[g.index(int(x), int(y))].Weight = weight
 }
 
-func (g *StaggeredGrid) GetWeightAt(x, y int) float64 {
+func (g *StaggeredGrid) GetWeightAt(x, y int32) float32 {
 	if !g.IsInside(x, y) {
 		return 1.0
 	}
-	return g.nodes[g.index(x, y)].Weight
+	return g.nodes[g.index(int(x), int(y))].Weight
 }
 
 // HasLineOfSight reports whether two tiles can see each other using dense world-space sampling.
-func (g *StaggeredGrid) HasLineOfSight(x1, y1, x2, y2 int) bool {
+func (g *StaggeredGrid) HasLineOfSight(x1, y1, x2, y2 int32) bool {
 	return gridutil.HasLineOfSightDense(g, x1, y1, x2, y2)
 }
 
@@ -211,7 +211,7 @@ func (g *StaggeredGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
 }
 
 // ObstacleCount returns the number of non-walkable tiles in the grid.
-func (g *StaggeredGrid) ObstacleCount() int { return g.obstacleCount }
+func (g *StaggeredGrid) ObstacleCount() int32 { return int32(g.obstacleCount) }
 
 // Clone returns a deep copy of the staggered grid with independent node data.
 // The clone shares the Finder and layout parameters with the original; standard
@@ -414,13 +414,14 @@ func staggeredBottomRight(x, y int, staggerX, staggerEven bool) (int, int) {
 
 // WorldToTile converts world coordinates to staggered tile coordinates.
 // Mirrors Tiled's StaggeredRenderer::screenToTileCoords.
-func (g *StaggeredGrid) WorldToTile(wx, wy float32) (int, int) {
-	return g.screenToTileCoords(float64(wx), float64(wy))
+func (g *StaggeredGrid) WorldToTile(wx, wy float32) (int32, int32) {
+	tx, ty := g.screenToTileCoords(float64(wx), float64(wy))
+	return int32(tx), int32(ty)
 }
 
 // TileToWorld converts tile coordinates to world position (tile centre).
-func (g *StaggeredGrid) TileToWorld(tx, ty int) (float32, float32) {
-	px, py := g.tileToScreenCoords(tx, ty)
+func (g *StaggeredGrid) TileToWorld(tx, ty int32) (float32, float32) {
+	px, py := g.tileToScreenCoords(int(tx), int(ty))
 	return float32(px + float64(g.tileW)/2), float32(py + float64(g.tileH)/2)
 }
 
@@ -438,11 +439,11 @@ func (g *StaggeredGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 
 // tileEdgePoint returns the closest point on the edge of tile (tx, ty) to (wx, wy),
 // inset by one world-space unit inward from the tile boundary.
-func (g *StaggeredGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float32, float32) {
-	left := float32(tx*g.tileW) + inset
-	right := float32((tx+1)*g.tileW) - inset
-	top := float32(ty*g.tileH) + inset
-	bottom := float32((ty+1)*g.tileH) - inset
+func (g *StaggeredGrid) tileEdgePoint(tx, ty int32, wx, wy, inset float32) (float32, float32) {
+	left := float32(int(tx)*g.tileW) + inset
+	right := float32((int(tx)+1)*g.tileW) - inset
+	top := float32(int(ty)*g.tileH) + inset
+	bottom := float32((int(ty)+1)*g.tileH) - inset
 	px := wx
 	if px < left {
 		px = left
@@ -460,7 +461,7 @@ func (g *StaggeredGrid) tileEdgePoint(tx, ty int, wx, wy, inset float32) (float3
 
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). See Grid.FindNearestWalkable for details.
-func (g *StaggeredGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int, edgeInset float32) (float32, float32, bool) {
+func (g *StaggeredGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edgeInset float32) (float32, float32, bool) {
 	if maxRadius < 0 {
 		return 0, 0, false
 	}
@@ -470,7 +471,7 @@ func (g *StaggeredGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int, 
 		return ww, wh, true
 	}
 	// Sub-tile offset — determines which edge tile is closest to (wx, wy)
-	cx, cy := float32(tx*g.tileW+g.tileW/2), float32(ty*g.tileH+g.tileH/2)
+	cx, cy := float32(int(tx)*g.tileW+g.tileW/2), float32(int(ty)*g.tileH+g.tileH/2)
 	ox, oy := wx-cx, wy-cy
 	var aox float32 = ox
 	if aox < 0 {
@@ -481,13 +482,13 @@ func (g *StaggeredGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int, 
 		aoy = -aoy
 	}
 
-	for r := 1; r <= maxRadius; r++ {
+	for r := int32(1); r <= maxRadius; r++ {
 		top, bottom := ty-r, ty+r
 		left, right := tx-r, tx+r
 
 		// Edge cells (same row/col as tile center) are always closer than corners.
 		// Order by sub-tile offset direction.
-		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int
+		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int32
 		if aox >= aoy {
 			if ox < 0 {
 				e1x, e1y = left, ty
@@ -568,33 +569,33 @@ func (g *StaggeredGrid) FindNearestWalkableWorld(wx, wy float32, maxRadius int, 
 // FindNearestWalkable finds the nearest walkable tile within maxRadius (tile rings)
 // from the given world position (wx, wy). Returns the tile coordinates and true if found;
 // returns (0, 0, false) if no walkable tile exists within the search radius.
-func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int, int, bool) {
+func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int32) (int32, int32, bool) {
 	tx, ty := g.WorldToTile(wx, wy)
 	if g.IsWalkableAt(tx, ty) {
-		return tx, ty, true
+		return int32(tx), int32(ty), true
 	}
-	var aox float32 = wx - float32(tx*g.tileW+g.tileW/2)
+	var aox float32 = wx - float32(int(tx)*g.tileW+g.tileW/2)
 	if aox < 0 {
 		aox = -aox
 	}
-	var aoy float32 = wy - float32(ty*g.tileH+g.tileH/2)
+	var aoy float32 = wy - float32(int(ty)*g.tileH+g.tileH/2)
 	if aoy < 0 {
 		aoy = -aoy
 	}
-	for r := 1; r <= maxRadius; r++ {
+	for r := int32(1); r <= maxRadius; r++ {
 		top, bottom := ty-r, ty+r
 		left, right := tx-r, tx+r
 
-		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int
+		var e1x, e1y, e2x, e2y, e3x, e3y, e4x, e4y int32
 		if aox >= aoy {
-			if wx-float32(tx*g.tileW+g.tileW/2) < 0 {
+			if wx-float32(int(tx)*g.tileW+g.tileW/2) < 0 {
 				e1x, e1y = left, ty
 				e2x, e2y = right, ty
 			} else {
 				e1x, e1y = right, ty
 				e2x, e2y = left, ty
 			}
-			if wy-float32(ty*g.tileH+g.tileH/2) < 0 {
+			if wy-float32(int(ty)*g.tileH+g.tileH/2) < 0 {
 				e3x, e3y = tx, top
 				e4x, e4y = tx, bottom
 			} else {
@@ -602,14 +603,14 @@ func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int,
 				e4x, e4y = tx, top
 			}
 		} else {
-			if wy-float32(ty*g.tileH+g.tileH/2) < 0 {
+			if wy-float32(int(ty)*g.tileH+g.tileH/2) < 0 {
 				e1x, e1y = tx, top
 				e2x, e2y = tx, bottom
 			} else {
 				e1x, e1y = tx, bottom
 				e2x, e2y = tx, top
 			}
-			if wx-float32(tx*g.tileW+g.tileW/2) < 0 {
+			if wx-float32(int(tx)*g.tileW+g.tileW/2) < 0 {
 				e3x, e3y = left, ty
 				e4x, e4y = right, ty
 			} else {
@@ -655,7 +656,7 @@ func (g *StaggeredGrid) FindNearestWalkable(wx, wy float32, maxRadius int) (int,
 }
 
 // FindPath finds a path between two tile positions.
-func (g *StaggeredGrid) FindPath(x1, y1, x2, y2 int, dst [][2]int) ([][2]int, error) {
+func (g *StaggeredGrid) FindPath(x1, y1, x2, y2 int32, dst [][2]int32) ([][2]int32, error) {
 	if g.finder == nil {
 		return nil, nil
 	}
@@ -679,7 +680,7 @@ func (g *StaggeredGrid) FindPath(x1, y1, x2, y2 int, dst [][2]int) ([][2]int, er
 // The returned slice is independent and owned by the caller.
 func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
 	var dst [][2]float32
-	var tileDst [][2]int
+	var tileDst [][2]int32
 	if buff != nil {
 		dst = buff.World[:0]
 		tileDst = buff.Tile[:0]
@@ -742,7 +743,7 @@ func (g *StaggeredGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff
 // GetNeighbors returns neighbors for a node on a staggered isometric grid, respecting the
 // diagonal movement rule. The result is written into the provided buffer.
 func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
-	x, y := node.X, node.Y
+	x, y := int(node.X), int(node.Y)
 	neighbors := buffer[:0]
 	w := g.width
 	h := g.height
@@ -823,7 +824,7 @@ func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagonal
 		// neighbor; the same tile must not be appended twice.
 		dup := false
 		for _, n := range neighbors {
-			if n.X == d.nx && n.Y == d.ny {
+			if n.X == int32(d.nx) && n.Y == int32(d.ny) {
 				dup = true
 				break
 			}
@@ -837,13 +838,13 @@ func (g *StaggeredGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagonal
 }
 
 // RenderSVG renders the staggered grid with weight-colored tiles and paths.
-func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
+func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 	// Use defaults when nil
 	if cfg == nil {
 		cfg = DefaultSVGOpts
 	}
 	// Derive start/end from first path
-	startX, startY, endX, endY := 0, 0, 0, 0
+	startX, startY, endX, endY := int32(0), int32(0), int32(0), int32(0)
 	if len(paths) > 0 && len(paths[0]) > 0 {
 		startX, startY = paths[0][0][0], paths[0][0][1]
 		endX, endY = paths[0][len(paths[0])-1][0], paths[0][len(paths[0])-1][1]
@@ -898,7 +899,7 @@ func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 		for x := 0; x < g.width; x++ {
 			cx, cy := g.tileToScreenCoords(x, g.height-1-y)
 			fill, stroke := "#c8e6c9", "#cccccc"
-			if !g.IsWalkableAt(x, y) {
+			if !g.IsWalkableAt(int32(x), int32(y)) {
 				fill, stroke = "#555555", "#444444"
 			} else {
 				fill = weightToColor(g.nodes[g.index(x, y)].Weight, cfg)
@@ -913,8 +914,8 @@ func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int) string {
 	}
 
 	drawPathAndMarkers(&b, startX, startY, endX, endY,
-		func(tx, ty int) (float64, float64) {
-			cx, cy := g.tileToScreenCoords(tx, g.height-1-ty)
+		func(tx, ty int32) (float64, float64) {
+			cx, cy := g.tileToScreenCoords(int(tx), g.height-1-int(ty))
 			return cx + tileW/2 + dx, cy + tileH/2 + dy
 		}, paths...)
 

@@ -69,7 +69,7 @@ func TestHPAUsesDiagonalConnectivity(t *testing.T) {
 	if len(p) == 0 {
 		t.Fatal("Always should cross the diagonal-only boundary")
 	}
-	if p[0] != [2]int{0, 4} || p[len(p)-1] != [2]int{2*cs - 1, 3} {
+	if p[0] != [2]int32{0, 4} || p[len(p)-1] != [2]int32{2*cs - 1, 3} {
 		t.Fatalf("bad endpoints: %v .. %v", p[0], p[len(p)-1])
 	}
 	for _, q := range p {

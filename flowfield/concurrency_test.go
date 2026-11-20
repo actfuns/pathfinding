@@ -26,7 +26,7 @@ func TestConcurrentFlowFieldReads(t *testing.T) {
 		wg.Add(1)
 		go func(startX, startY int) {
 			defer wg.Done()
-			dst := make([][2]int, 0, 256)
+			dst := make([][2]int32, 0, 256)
 			for j := 0; j < 100; j++ {
 				_, _ = ff.GetDirection(startX, startY)
 				if ff.GetCost(startX, startY) < 0 {
