@@ -17,6 +17,7 @@ func main() {
 	matrix := grid.NewMatrix(10, 8)
 
 	g := grid.NewOrthogonalGrid(matrix)
+	m := g.(grid.MutableGrid)
 
 	// Terrain weights
 	weights := [][]float32{
@@ -32,7 +33,7 @@ func main() {
 
 	for y := range weights {
 		for x := range weights[y] {
-			g.SetWeightAt(int32(x), int32(y), weights[y][x])
+			m.SetWeightAt(int32(x), int32(y), weights[y][x])
 		}
 	}
 

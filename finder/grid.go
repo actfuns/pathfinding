@@ -13,17 +13,11 @@ type Grid interface {
 	// IsWalkableAt reports whether the tile (x, y) is walkable.
 	// Tiles outside the grid are reported as not walkable.
 	IsWalkableAt(x, y int32) bool
-	// SetWalkableAt sets the walkability of the tile (x, y).
-	SetWalkableAt(x, y int32, walkable bool)
 	// GetNodeAt returns the node at tile (x, y). Panics if outside the grid.
+	// The returned Node is owned by the grid; callers must not mutate it.
 	GetNodeAt(x, y int32) *Node
 	// GetNeighbors returns the walkable, adjacent neighbors of the given node.
 	GetNeighbors(node *Node, diagonal DiagonalMovement, buffer []*Node) []*Node
-	// Clone returns a copy of the grid with its own node storage, but sharing
-	// the Finder with the original. Standard finders keep per-call scratch and
-	// are safe for concurrent read-only searches; custom finders must provide
-	// the same guarantee.
-	Clone() Grid
 }
 
 // StepCostGrid is optionally implemented by grids whose step costs differ from

@@ -107,11 +107,11 @@ func TestFlowFieldWithWeights(t *testing.T) {
 		{0, 0, 0, 0, 0},
 	})
 
-	g.SetWeightAt(0, 1, 5.0)
-	g.SetWeightAt(1, 1, 5.0)
-	g.SetWeightAt(2, 1, 5.0)
-	g.SetWeightAt(3, 1, 5.0)
-	g.SetWeightAt(4, 1, 5.0)
+	g.(grid.MutableGrid).SetWeightAt(0, 1, 5.0)
+	g.(grid.MutableGrid).SetWeightAt(1, 1, 5.0)
+	g.(grid.MutableGrid).SetWeightAt(2, 1, 5.0)
+	g.(grid.MutableGrid).SetWeightAt(3, 1, 5.0)
+	g.(grid.MutableGrid).SetWeightAt(4, 1, 5.0)
 
 	ff := New(g, 4, 0)
 
@@ -353,7 +353,7 @@ func TestFindPathOutOfBounds(t *testing.T) {
 // Weights are charged when entering a tile (matching A*), including the goal.
 func TestFlowFieldDestinationWeight(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int32{{0, 0, 0}})
-	g.SetWeightAt(2, 0, 5)
+	g.(grid.MutableGrid).SetWeightAt(2, 0, 5)
 
 	ff := New(g, 2, 0)
 	if c := ff.GetCost(0, 0); c != 6 {

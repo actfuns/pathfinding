@@ -19,19 +19,20 @@ func main() {
 	}
 
 	g := grid.NewOrthogonalGrid(matrix)
+	m := g.(grid.MutableGrid)
 
-	g.SetWeightAt(2, 0, 5.0)
-	g.SetWeightAt(3, 0, 5.0)
-	g.SetWeightAt(2, 1, 5.0)
-	g.SetWeightAt(3, 1, 5.0)
+	m.SetWeightAt(2, 0, 5.0)
+	m.SetWeightAt(3, 0, 5.0)
+	m.SetWeightAt(2, 1, 5.0)
+	m.SetWeightAt(3, 1, 5.0)
 
 	for x := 0; x < 7; x++ {
-		g.SetWeightAt(int32(x), 5, 0.3)
-		g.SetWeightAt(int32(x), 0, 0.3)
+		m.SetWeightAt(int32(x), 5, 0.3)
+		m.SetWeightAt(int32(x), 0, 0.3)
 	}
 	for y := 0; y < 6; y++ {
-		g.SetWeightAt(0, int32(y), 0.3)
-		g.SetWeightAt(6, int32(y), 0.3)
+		m.SetWeightAt(0, int32(y), 0.3)
+		m.SetWeightAt(6, int32(y), 0.3)
 	}
 
 	f := finder.NewAStarFinder()

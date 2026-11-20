@@ -310,8 +310,8 @@ func TestFindPathSameNodeDoesNotCrossWalls(t *testing.T) {
 	mid := g.AddNode(1, 2)
 
 	grid := walkableGrid(3, 3)
-	grid.SetWalkableAt(1, 0, false)
-	grid.SetWalkableAt(1, 1, false)
+	grid.(*testGrid).SetWalkableAt(1, 0, false)
+	grid.(*testGrid).SetWalkableAt(1, 1, false)
 
 	if got := g.FindClosestWithLOS(0, 0, grid); got != mid {
 		t.Fatalf("start snapped to %v, want node at (1,2)", got)

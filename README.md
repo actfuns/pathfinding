@@ -42,8 +42,8 @@ func main() {
     }
     fmt.Println("路径:", path)
 
-    // 在运行时修改地形
-    g.SetWalkableAt(2, 2, false)
+    // 单线程时可显式转为可写视图；并发搜索期间不能写。
+    g.(grid.MutableGrid).SetWalkableAt(2, 2, false)
 }
 ```
 
@@ -62,11 +62,12 @@ v0.5.0+ 支持每个瓦片的移动成本权重。A*、Dijkstra、IDA* 会逐格
 
 ```go
 g := grid.NewOrthogonalGrid(matrix)
+m := g.(grid.MutableGrid) // 单线程零拷贝可写视图
 
 // 设置地形权重：道路(0.3)，草地(1.0)，沼泽(5.0)，岩浆(10.0)
-g.SetWeightAt(2, 3, 5.0)
-g.SetWeightAt(3, 3, 5.0)
-g.SetWeightAt(5, 0, 0.3)  // 低成本道路
+m.SetWeightAt(2, 3, 5.0)
+m.SetWeightAt(3, 3, 5.0)
+m.SetWeightAt(5, 0, 0.3)  // 低成本道路
 
 f := finder.NewAStarFinder()
 path, _ := f.FindPath(0, 0, 7, 7, g, nil)
@@ -133,13 +134,35 @@ g := grid.NewOrthogonalGrid(terrain,
 
 所有网格类型实现统一的 `grid.Grid` 接口：
 
-- **瓦片坐标查询** — Width, Height, IsInside, IsWalkableAt, SetWalkableAt, GetNodeAt, ObstacleCount
-- **瓦片权重** — SetWeightAt, GetWeightAt（v0.5.0+）
+- **瓦片坐标查询** — Width, Height, IsInside, IsWalkableAt, GetNodeAt, ObstacleCount
+- **瓦片权重** — GetWeightAt（写权重使用 `MutableGrid.SetWeightAt`）
 - **流场群体寻路** — flowfield.New / GetDirection（O(1) 多人查表，v0.5.0+）
-- **世界坐标转换** — WorldToTile, TileToWorld, IsWalkableAtWorld, SetWalkableAtWorld
+- **世界坐标转换** — WorldToTile, TileToWorld, IsWalkableAtWorld
 - **最近可通行点** — FindNearestWalkable, FindNearestWalkableWorld
 - **寻路** — `FindPath` / `FindPathWorld`，返回 `([][2]int32, error)`（可用 `WithSmoothBresenham()` 等选项做路径平滑）
 - **渲染** — RenderSVG(cfg, paths...)（权重着色 + 多路径 + 图例，v0.5.0+）
+
+### 可写网格与并发
+
+`NewOrthogonalGrid` / `NewHexGrid` / `NewStaggeredGrid` 返回只读的 `grid.Grid` 接口，不暴露 Setter。
+
+- **单线程修改同一份存储**：显式断言为 `grid.MutableGrid`：
+
+```go
+g := grid.NewOrthogonalGrid(matrix)
+g.(grid.MutableGrid).SetWalkableAt(1, 2, false)
+```
+
+- **并发搜索期间修改**：用 `CloneWith` 复制一次，批量修改后得到新快照：
+
+```go
+g2 := g.CloneWith(func(m grid.MutableGrid) {
+    m.SetWalkableAt(1, 2, false)
+    m.SetWeightAt(3, 4, 5)
+})
+```
+
+`MutableGrid` 的断言是零拷贝的，调用方必须保证没有并发读/搜索；`CloneWith` 返回的新网格与旧网格完全隔离。可写接口包含 `SetWalkableAt`、`SetWeightAt`、`SetWalkableAtWorld`、`SetWeightAtWorld`。修改 walkability 后，JPS+ 的预计算表、HPA world 等缓存需要重建。
 
 ## 寻路结果与错误
 
@@ -184,7 +207,7 @@ if len(path) == 0 {
 
 - **同一个 Finder、同一个只读 Grid** 可以并发调用 `FindPath` / `FindPathWorld`。
 - 返回的 `[][2]int32` / `[][2]float32` 是独立结果，归调用方所有，不需要在下一次调用前拷贝。
-- **不能**在搜索期间调用 `SetWalkableAt` / `SetWeightAt`，也不能并发修改 Finder 配置。
+- **不能**在搜索期间通过 `MutableGrid` 调用 `SetWalkableAt` / `SetWeightAt`，也不能并发修改 Finder 配置；需要并发更新时使用 `CloneWith` 生成新快照。
 - JPS+ 的 `Precompute`、HPA 的 `Build`、waypoint 图的增删边都必须在并发搜索开始前完成；它们与搜索并发不安全。
 - 每个 `FindPath` 占用一个状态槽；池会先复用空闲槽，没有空闲且未到上限时新建，达到上限后阻塞等待别人释放。内存随实际并发量增长。
 - 默认上限是 `runtime.GOMAXPROCS(0)`，可在启动时调用 `finder.SetMaxConcurrentSearches(n)` 调整；调低不会取消正在运行的搜索。
@@ -524,6 +547,11 @@ BREAKING: 移除 `Node` 搜索字段/`ResetSearch`、`Backtrace`/`BiBacktrace`/`
 - 权重、代价、启发式与 `G/H/F` 统一为 `float32`；`TimeLimit` 仍为 `float64`
 - `StepCost`、`HeuristicFunc` 签名同步迁移；内部 slice 索引仅在边界转换为 `int`
 
+### Unreleased — 只读 Grid 与显式可变视图
+- `NewOrthogonalGrid` / `NewHexGrid` / `NewStaggeredGrid` 返回只读 `grid.Grid`
+- Setter 移入 `grid.MutableGrid`；单线程可通过类型断言零拷贝访问
+- 新增 `Grid.CloneWith(func(MutableGrid)) Grid`，一次复制后批量修改并返回新快照
+
 ### v0.9.0 — 并发寻路 + 寻路返回 error
 - **破坏性变更**：`finder.Finder.FindPath`、`grid.Grid.FindPath` / `FindPathWorld`、`hpa` / `waypoint` / `flowfield.Field.FindPath` 改为返回 `([][2]int, error)`
 - `grid.Pool` 只保留 `Acquire` 一个取实例入口,自带超时上限（默认 `DefaultAcquireTimeout`）；`WithCapacity` 默认取 CPU 核数
@@ -571,7 +599,7 @@ BREAKING: 移除 `Node` 搜索字段/`ResetSearch`、`Backtrace`/`BiBacktrace`/`
 
 ### v0.5.x — Tile Weight Cost 权重系统 + SVG 着色渲染
 - `finder.Node.Weight` 字段，A*/BiA*/IDA*/JPS/JPS+ 步进成本 × tile.Weight
-- `grid.Grid.SetWeightAt` / `GetWeightAt`，三层网格实现
+- `grid.MutableGrid.SetWeightAt` / `grid.Grid.GetWeightAt`，三层网格实现
 - `RenderSVG(cfg, paths...)` 权重着色 + 多路径 + 右侧图例
 - `SVGOpts` 自定义颜色映射和图例标签
 - `DefaultSVGOpts` 全局默认配置

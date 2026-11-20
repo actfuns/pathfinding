@@ -16,7 +16,7 @@ func TestHPAExternalPortalCapacity(t *testing.T) {
 	// West edge of the right chunk: alternating walkable rows, creating 8
 	// separate portals there. The left chunk's east edge is one long portal.
 	for y := 1; y < cs; y += 2 {
-		g.SetWalkableAt(cs, int32(y), false)
+		g.(grid.MutableGrid).SetWalkableAt(cs, int32(y), false)
 	}
 
 	w := BuildWorld(g, cs)
