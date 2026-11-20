@@ -22,8 +22,10 @@ type jpsSearch struct {
 	*JumpPointFinderBase
 	states      *searchStates
 	grid        Grid
+	walk        walkableView
 	startNode   *Node
 	endNode     *Node
+	endX, endY  int32
 	neighborBuf []*Node
 }
 
@@ -96,8 +98,11 @@ func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int32, grid Gr
 		JumpPointFinderBase: b,
 		states:              states,
 		grid:                grid,
+		walk:                newWalkableView(grid),
 		startNode:           grid.GetNodeAt(startX, startY),
 		endNode:             grid.GetNodeAt(endX, endY),
+		endX:                endX,
+		endY:                endY,
 		neighborBuf:         states.neighborBuf[:0],
 	}
 	defer func() { states.neighborBuf = s.neighborBuf }()
@@ -179,6 +184,7 @@ func (s *jpsSearch) identifySuccessors(node *Node, openList *minHeap) {
 	endX := s.endNode.X
 	endY := s.endNode.Y
 	x, y := node.X, node.Y
+	nodeIdx := s.states.index(node)
 
 	// FindPath guarantees supportsJPS(grid), so canonical pruning is safe.
 	neighbors := s.findNeighborsFn(s, node, s.states.neighborPosBuf[:0])
@@ -203,7 +209,7 @@ func (s *jpsSearch) identifySuccessors(node *Node, openList *minHeap) {
 				ns.H = heuristic(float32(AbsInt(jx-endX)), float32(AbsInt(jy-endY)))
 			}
 			ns.F = ns.G + ns.H*s.Weight
-			ns.Parent = s.states.index(node)
+			ns.Parent = nodeIdx
 
 			if ns.Opened == 0 {
 				openList.Push(jumpNode)

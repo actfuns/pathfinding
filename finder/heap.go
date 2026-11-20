@@ -3,8 +3,7 @@ package finder
 // heapEntry caches the node's external state for the duration of one search so
 // heap operations do not have to look it up by coordinate.
 type heapEntry struct {
-	node *Node
-	st   *nodeState
+	st *nodeState
 }
 
 // minHeap is a binary heap for A* open list, ordered by F value. When
@@ -36,7 +35,7 @@ func (h *minHeap) Empty() bool { return len(h.nodes) == 0 }
 func (h *minHeap) Push(n *Node) {
 	st := h.state.get(n)
 	st.HeapIndex = int32(len(h.nodes))
-	h.nodes = append(h.nodes, heapEntry{node: n, st: st})
+	h.nodes = append(h.nodes, heapEntry{st: st})
 	h.siftDownFrom(len(h.nodes)-1, 0)
 }
 
@@ -49,22 +48,23 @@ func (h *minHeap) Pop() *Node {
 	h.nodes = h.nodes[:n-1]
 	if len(h.nodes) == 0 {
 		last.st.HeapIndex = -1
-		return last.node
+		return last.st.node
 	}
 	root := h.nodes[0]
 	h.nodes[0] = last
 	last.st.HeapIndex = 0
 	root.st.HeapIndex = -1
 	h.siftUpFrom(0)
-	return root.node
+	return root.st.node
 }
 
 // UpdateItem restores the heap invariant after a node's F value has decreased.
 // In the A* algorithm this is only called when G (and thus F) strictly decreases,
 // so the node can only move upward toward the root — the sift-down pass is unnecessary.
 func (h *minHeap) UpdateItem(node *Node) {
-	pos := int(h.state.get(node).HeapIndex)
-	if pos < 0 || pos >= len(h.nodes) || h.nodes[pos].node != node {
+	st := h.state.get(node)
+	pos := int(st.HeapIndex)
+	if pos < 0 || pos >= len(h.nodes) || h.nodes[pos].st != st {
 		return
 	}
 	h.siftDownFrom(pos, 0)

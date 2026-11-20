@@ -12,6 +12,7 @@ type nodeState struct {
 	Opened      int8
 	Closed      bool
 	Tested      bool
+	node        *Node
 }
 
 // searchStates is a reusable, generation-tagged state array indexed by the flat
@@ -20,6 +21,7 @@ type searchStates struct {
 	width, height int32
 	seq           int64
 	states        []nodeState
+	touched       []int32
 
 	// Per-search scratch. It lives here so one pool slot owns both the tile
 	// state and the finder buffers for one FindPath.
@@ -50,7 +52,13 @@ func (s *searchStates) begin(width, height int32, seq int64) {
 }
 
 func (s *searchStates) get(n *Node) *nodeState {
-	return s.at(s.index(n))
+	idx := s.index(n)
+	st := s.at(idx)
+	if st.node == nil {
+		st.node = n
+		s.touched = append(s.touched, idx)
+	}
+	return st
 }
 
 func (s *searchStates) at(i int32) *nodeState {

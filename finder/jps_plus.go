@@ -511,6 +511,7 @@ func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 
 	startState := states.get(startNode)
 	states.get(endNode)
+	walk := newWalkableView(grid)
 	startState.G = 0
 	startState.F = 0
 	openList.Push(startNode)
@@ -561,16 +562,18 @@ func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 			return expandBuf, nil
 		}
 
-		j.identifySuccessors(node, grid, endNode, states, openList)
+		j.identifySuccessors(node, endNode, states, openList, &walk)
 	}
 	return nil, nil
 }
 
-func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node, states *searchStates, openList *minHeap) {
+func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *searchStates, openList *minHeap, walk *walkableView) {
 	x, y := node.X, node.Y
 	endX, endY := endNode.X, endNode.Y
 	heuristic := j.Heuristic
 	nodeState := states.get(node)
+	nodeIdx := states.index(node)
+	endState := states.get(endNode)
 
 	// Use diagonal movement setting to determine which directions to check
 	dirs := j.dirs
@@ -579,14 +582,14 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node,
 	// complete and optimal when the static jump table cannot encode every
 	// goal-dependent jump point.
 	relaxAdjacent := func(dx, dy int32) {
-		if dx != 0 && dy != 0 && !j.diagonalStepAllowed(grid, x, y, dx, dy) {
+		if dx != 0 && dy != 0 && !j.diagonalStepAllowed(walk, x, y, dx, dy) {
 			return
 		}
 		nx, ny := x+dx, y+dy
-		if !grid.IsInside(nx, ny) || !grid.IsWalkableAt(nx, ny) {
+		if !walk.at(nx, ny) {
 			return
 		}
-		adjNode := grid.GetNodeAt(nx, ny)
+		adjNode := walk.nodeAt(nx, ny)
 		ns := states.get(adjNode)
 		if ns.Closed {
 			return
@@ -602,7 +605,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node,
 				ns.H = heuristic(float32(AbsInt(nx-endX)), float32(AbsInt(ny-endY)))
 			}
 			ns.F = ns.G + ns.H*j.Weight
-			ns.Parent = states.index(node)
+			ns.Parent = nodeIdx
 			if ns.Opened == 0 {
 				openList.Push(adjNode)
 				ns.Opened = 1
@@ -623,7 +626,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node,
 			if (dist <= 0 && endDist <= obstacleDist) || (dist > 0 && endDist <= int32(dist)) {
 				// End is reachable in this direction, add it as successor
 				gd := octileDist(AbsInt(endX-x), AbsInt(endY-y))
-				ens := states.get(endNode)
+				ens := endState
 				ng := nodeState.G + gd
 				if !ens.Closed && (ens.Opened == 0 || ng < ens.G) {
 					ens.G = ng
@@ -631,7 +634,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node,
 						ens.H = 0
 					}
 					ens.F = ng
-					ens.Parent = states.index(node)
+					ens.Parent = nodeIdx
 					if ens.Opened == 0 {
 						openList.Push(endNode)
 						ens.Opened = 1
@@ -650,11 +653,11 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node,
 		// Positive dist: jump point exists at this distance
 		jx, jy := x+dx*int32(dist), y+dy*int32(dist)
 
-		if !grid.IsInside(jx, jy) || !grid.IsWalkableAt(jx, jy) {
+		if !walk.at(jx, jy) {
 			continue
 		}
 
-		jumpNode := grid.GetNodeAt(jx, jy)
+		jumpNode := walk.nodeAt(jx, jy)
 		ns := states.get(jumpNode)
 		if ns.Closed {
 			continue
@@ -669,7 +672,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node,
 				ns.H = heuristic(float32(AbsInt(jx-endX)), float32(AbsInt(jy-endY)))
 			}
 			ns.F = ns.G + ns.H*j.Weight
-			ns.Parent = states.index(node)
+			ns.Parent = nodeIdx
 
 			if ns.Opened == 0 {
 				openList.Push(jumpNode)
@@ -689,14 +692,14 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node,
 
 // diagonalStepAllowed applies the configured diagonal movement rule to a
 // one-step diagonal move from (x, y).
-func (j *JPSPlusFinder) diagonalStepAllowed(grid Grid, x, y, dx, dy int32) bool {
+func (j *JPSPlusFinder) diagonalStepAllowed(walk *walkableView, x, y, dx, dy int32) bool {
 	switch j.DiagonalMovement {
 	case DiagonalNever:
 		return false
 	case DiagonalOnlyWhenNoObstacles:
-		return grid.IsWalkableAt(x+dx, y) && grid.IsWalkableAt(x, y+dy)
+		return walk.at(x+dx, y) && walk.at(x, y+dy)
 	case DiagonalIfAtMostOneObstacle:
-		return grid.IsWalkableAt(x+dx, y) || grid.IsWalkableAt(x, y+dy)
+		return walk.at(x+dx, y) || walk.at(x, y+dy)
 	default: // DiagonalAlways
 		return true
 	}

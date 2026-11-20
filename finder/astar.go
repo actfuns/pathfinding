@@ -93,6 +93,7 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 		node := openList.Pop()
 		nodeState := states.get(node)
 		nodeState.Closed = true
+		nodeIdx := states.index(node)
 
 		if node == endNode {
 			states.pathBuf = states.backtrace(endNode, states.pathBuf)
@@ -123,7 +124,7 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 					ns.H = f.Weight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
 				}
 				ns.F = ns.G + ns.H
-				ns.Parent = states.index(node)
+				ns.Parent = nodeIdx
 
 				if ns.Opened == 0 {
 					openList.Push(neighbor)

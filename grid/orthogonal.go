@@ -97,13 +97,21 @@ func (g *OrthogonalGrid) IsInside(x, y int32) bool {
 // the coordinate is inside the grid (see IsInside); otherwise the method panics.
 func (g *OrthogonalGrid) GetNodeAt(x, y int32) *finder.Node { return &g.nodes[g.index(x, y)] }
 
+// NodesView exposes the contiguous node slice for read-only fast paths.
+// Callers must not mutate the returned nodes.
+func (g *OrthogonalGrid) NodesView() []finder.Node { return g.nodes }
+
 // IsWalkableAt reports whether the tile at (x, y) is walkable. Coordinates
 // outside the grid are reported as not walkable.
-func (g *OrthogonalGrid) IsWalkableAt(x, y int32) bool {
-	if !g.IsInside(x, y) {
+func (g *OrthogonalGrid) walkableAt(x, y int32) bool {
+	if uint32(x) >= uint32(g.width) || uint32(y) >= uint32(g.height) {
 		return false
 	}
-	return g.nodes[g.index(x, y)].Walkable
+	return g.nodes[int(y)*int(g.width)+int(x)].Walkable
+}
+
+func (g *OrthogonalGrid) IsWalkableAt(x, y int32) bool {
+	return g.walkableAt(x, y)
 }
 
 // SetWalkableAt sets the walkability of the tile at (x, y). The caller must
@@ -573,31 +581,30 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuf
 // into the provided buffer slice (which is resliced to zero and reused), so the
 // caller must not hold references past the next call.
 func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
-	x, y := int(node.X), int(node.Y)
-	w := int(g.width)
+	x, y := node.X, node.Y
+	w := g.width
 	nodes := g.nodes
 	neighbors := buffer[:0]
-	walk := func(x, y int) bool { return g.IsWalkableAt(int32(x), int32(y)) }
 
 	s0, d0 := false, false
 	s1, d1 := false, false
 	s2, d2 := false, false
 	s3, d3 := false, false
 
-	if walk(x, y-1) {
-		neighbors = append(neighbors, &nodes[(y-1)*w+x])
+	if g.walkableAt(x, y-1) {
+		neighbors = append(neighbors, &nodes[int((y-1)*w+x)])
 		s0 = true
 	}
-	if walk(x+1, y) {
-		neighbors = append(neighbors, &nodes[y*w+x+1])
+	if g.walkableAt(x+1, y) {
+		neighbors = append(neighbors, &nodes[int(y*w+x+1)])
 		s1 = true
 	}
-	if walk(x, y+1) {
-		neighbors = append(neighbors, &nodes[(y+1)*w+x])
+	if g.walkableAt(x, y+1) {
+		neighbors = append(neighbors, &nodes[int((y+1)*w+x)])
 		s2 = true
 	}
-	if walk(x-1, y) {
-		neighbors = append(neighbors, &nodes[y*w+x-1])
+	if g.walkableAt(x-1, y) {
+		neighbors = append(neighbors, &nodes[int(y*w+x-1)])
 		s3 = true
 	}
 
@@ -620,17 +627,17 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 		d0, d1, d2, d3 = true, true, true, true
 	}
 
-	if d0 && walk(x-1, y-1) {
-		neighbors = append(neighbors, &nodes[(y-1)*w+x-1])
+	if d0 && g.walkableAt(x-1, y-1) {
+		neighbors = append(neighbors, &nodes[int((y-1)*w+x-1)])
 	}
-	if d1 && walk(x+1, y-1) {
-		neighbors = append(neighbors, &nodes[(y-1)*w+x+1])
+	if d1 && g.walkableAt(x+1, y-1) {
+		neighbors = append(neighbors, &nodes[int((y-1)*w+x+1)])
 	}
-	if d2 && walk(x+1, y+1) {
-		neighbors = append(neighbors, &nodes[(y+1)*w+x+1])
+	if d2 && g.walkableAt(x+1, y+1) {
+		neighbors = append(neighbors, &nodes[int((y+1)*w+x+1)])
 	}
-	if d3 && walk(x-1, y+1) {
-		neighbors = append(neighbors, &nodes[(y+1)*w+x-1])
+	if d3 && g.walkableAt(x-1, y+1) {
+		neighbors = append(neighbors, &nodes[int((y+1)*w+x-1)])
 	}
 
 	return neighbors
