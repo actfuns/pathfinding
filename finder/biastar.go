@@ -14,10 +14,6 @@ type BiAStarFinder struct {
 	DiagonalMovement DiagonalMovement
 
 	customHeuristic bool
-	neighborBuf     []*Node
-	startHeapSlice  []heapEntry
-	endHeapSlice    []heapEntry
-	pathBuf         [][2]int32
 }
 
 // NewBiAStarFinder creates a new BiAStarFinder.
@@ -28,7 +24,6 @@ func NewBiAStarFinder(opts ...Option) *BiAStarFinder {
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
 		customHeuristic:  opt.Heuristic != nil,
-		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -61,19 +56,8 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 	if err != nil {
 		return nil, err
 	}
-	local := *f
-	local.neighborBuf = states.neighborBuf[:0]
-	local.startHeapSlice = states.heap[:0]
-	local.endHeapSlice = states.heapB[:0]
-	local.pathBuf = states.pathBuf[:0]
-	defer func() {
-		states.neighborBuf = local.neighborBuf
-		states.heap = local.startHeapSlice
-		states.heapB = local.endHeapSlice
-		states.pathBuf = local.pathBuf
-		releaseStates(states)
-	}()
-	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	defer releaseStates(states)
+	p, err := f.findPath(startX, startY, endX, endY, grid, states)
 	return finishPath(p, dst, false), err
 }
 
@@ -88,13 +72,13 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 		BY_END   = 2
 	)
 
-	startOpenList := &minHeap{nodes: f.startHeapSlice[:0], tieBreak: true, state: states}
-	endOpenList := &minHeap{nodes: f.endHeapSlice[:0], tieBreak: true, state: states}
+	startOpenList := &minHeap{nodes: states.heap[:0], tieBreak: true, state: states}
+	endOpenList := &minHeap{nodes: states.heapB[:0], tieBreak: true, state: states}
 	defer func() {
 		clear(startOpenList.nodes[:cap(startOpenList.nodes)])
 		clear(endOpenList.nodes[:cap(endOpenList.nodes)])
-		f.startHeapSlice = startOpenList.nodes[:0]
-		f.endHeapSlice = endOpenList.nodes[:0]
+		states.heap = startOpenList.nodes[:0]
+		states.heapB = endOpenList.nodes[:0]
 	}()
 
 	startState := states.get(startNode)
@@ -109,7 +93,8 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 	endOpenList.Push(endNode)
 	endState.Opened = BY_END
 
-	neighborBuf := f.neighborBuf[:0]
+	neighborBuf := states.neighborBuf[:0]
+	defer func() { states.neighborBuf = neighborBuf }()
 
 	for !startOpenList.Empty() && !endOpenList.Empty() {
 		node := startOpenList.Pop()
@@ -117,14 +102,15 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 		nodeState.Closed = true
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
+		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
 			ns := states.get(neighbor)
 			if ns.Closed {
 				continue
 			}
 			if ns.Opened == BY_END {
-				f.pathBuf = states.biBacktrace(node, neighbor, f.pathBuf)
-				return f.pathBuf, nil
+				states.pathBuf = states.biBacktrace(node, neighbor, states.pathBuf)
+				return states.pathBuf, nil
 			}
 
 			x, y := neighbor.X, neighbor.Y
@@ -159,14 +145,15 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 		nodeState.Closed = true
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
+		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
 			ns := states.get(neighbor)
 			if ns.Closed {
 				continue
 			}
 			if ns.Opened == BY_START {
-				f.pathBuf = states.biBacktrace(neighbor, node, f.pathBuf)
-				return f.pathBuf, nil
+				states.pathBuf = states.biBacktrace(neighbor, node, states.pathBuf)
+				return states.pathBuf, nil
 			}
 
 			x, y := neighbor.X, neighbor.Y

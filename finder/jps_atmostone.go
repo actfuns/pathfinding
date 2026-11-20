@@ -14,8 +14,8 @@ func NewJPFMoveDiagonallyIfAtMostOneObstacle(opts ...Option) *JPFMoveDiagonallyI
 	return f
 }
 
-func atMostOneJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int32) (int32, int32, bool) {
-	grid := b.grid
+func atMostOneJump(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
+	grid := s.grid
 	dx := x - px
 	dy := y - py
 
@@ -23,11 +23,11 @@ func atMostOneJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py in
 		return 0, 0, false
 	}
 
-	if b.TrackRecursion {
-		states.get(grid.GetNodeAt(x, y)).Tested = true
+	if s.TrackRecursion {
+		s.states.get(s.grid.GetNodeAt(x, y)).Tested = true
 	}
 
-	if grid.GetNodeAt(x, y) == b.endNode {
+	if grid.GetNodeAt(x, y) == s.endNode {
 		return x, y, true
 	}
 
@@ -36,10 +36,10 @@ func atMostOneJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py in
 			(grid.IsWalkableAt(x+dx, y-dy) && !grid.IsWalkableAt(x, y-dy)) {
 			return x, y, true
 		}
-		if _, _, ok := atMostOneJump(b, states, x+dx, y, x, y); ok {
+		if _, _, ok := atMostOneJump(s, x+dx, y, x, y); ok {
 			return x, y, true
 		}
-		if _, _, ok := atMostOneJump(b, states, x, y+dy, x, y); ok {
+		if _, _, ok := atMostOneJump(s, x, y+dy, x, y); ok {
 			return x, y, true
 		}
 	} else {
@@ -57,18 +57,18 @@ func atMostOneJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py in
 	}
 
 	if grid.IsWalkableAt(x+dx, y) || grid.IsWalkableAt(x, y+dy) {
-		return atMostOneJump(b, states, x+dx, y+dy, x, y)
+		return atMostOneJump(s, x+dx, y+dy, x, y)
 	}
 	return 0, 0, false
 }
 
-func atMostOneFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int32) [][2]int32 {
-	parent := states.get(node).Parent
+func atMostOneFindNeighbors(s *jpsSearch, node *Node, buf [][2]int32) [][2]int32 {
+	parent := s.states.get(node).Parent
 	x, y := node.X, node.Y
-	grid := b.grid
+	grid := s.grid
 
 	if parent >= 0 {
-		px, py := states.xy(parent)
+		px, py := s.states.xy(parent)
 		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
 		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 
@@ -116,7 +116,8 @@ func atMostOneFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *
 		return neighbors
 	}
 
-	neighborNodes := grid.GetNeighbors(node, DiagonalIfAtMostOneObstacle, b.neighborBuf)
+	neighborNodes := s.grid.GetNeighbors(node, DiagonalIfAtMostOneObstacle, s.neighborBuf)
+	s.neighborBuf = neighborNodes
 	neighbors := buf[:0]
 	for _, n := range neighborNodes {
 		neighbors = append(neighbors, [2]int32{n.X, n.Y})

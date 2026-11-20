@@ -14,8 +14,8 @@ func NewJPFMoveDiagonallyIfNoObstacles(opts ...Option) *JPFMoveDiagonallyIfNoObs
 	return f
 }
 
-func noObstaclesJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py int32) (int32, int32, bool) {
-	grid := b.grid
+func noObstaclesJump(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
+	grid := s.grid
 	dx := x - px
 	dy := y - py
 
@@ -23,19 +23,19 @@ func noObstaclesJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py 
 		return 0, 0, false
 	}
 
-	if b.TrackRecursion {
-		states.get(grid.GetNodeAt(x, y)).Tested = true
+	if s.TrackRecursion {
+		s.states.get(s.grid.GetNodeAt(x, y)).Tested = true
 	}
 
-	if grid.GetNodeAt(x, y) == b.endNode {
+	if grid.GetNodeAt(x, y) == s.endNode {
 		return x, y, true
 	}
 
 	if dx != 0 && dy != 0 {
-		if _, _, ok := noObstaclesJump(b, states, x+dx, y, x, y); ok {
+		if _, _, ok := noObstaclesJump(s, x+dx, y, x, y); ok {
 			return x, y, true
 		}
-		if _, _, ok := noObstaclesJump(b, states, x, y+dy, x, y); ok {
+		if _, _, ok := noObstaclesJump(s, x, y+dy, x, y); ok {
 			return x, y, true
 		}
 	} else {
@@ -53,18 +53,18 @@ func noObstaclesJump(b *JumpPointFinderBase, states *searchStates, x, y, px, py 
 	}
 
 	if grid.IsWalkableAt(x+dx, y) && grid.IsWalkableAt(x, y+dy) {
-		return noObstaclesJump(b, states, x+dx, y+dy, x, y)
+		return noObstaclesJump(s, x+dx, y+dy, x, y)
 	}
 	return 0, 0, false
 }
 
-func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node *Node, buf [][2]int32) [][2]int32 {
-	parent := states.get(node).Parent
+func noObstaclesFindNeighbors(s *jpsSearch, node *Node, buf [][2]int32) [][2]int32 {
+	parent := s.states.get(node).Parent
 	x, y := node.X, node.Y
-	grid := b.grid
+	grid := s.grid
 
 	if parent >= 0 {
-		px, py := states.xy(parent)
+		px, py := s.states.xy(parent)
 		dx := (x - px) / MaxInt(AbsInt(x-px), 1)
 		dy := (y - py) / MaxInt(AbsInt(y-py), 1)
 
@@ -126,7 +126,8 @@ func noObstaclesFindNeighbors(b *JumpPointFinderBase, states *searchStates, node
 		return neighbors
 	}
 
-	neighborNodes := grid.GetNeighbors(node, DiagonalOnlyWhenNoObstacles, b.neighborBuf)
+	neighborNodes := s.grid.GetNeighbors(node, DiagonalOnlyWhenNoObstacles, s.neighborBuf)
+	s.neighborBuf = neighborNodes
 	neighbors := buf[:0]
 	for _, n := range neighborNodes {
 		neighbors = append(neighbors, [2]int32{n.X, n.Y})

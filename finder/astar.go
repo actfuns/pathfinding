@@ -19,9 +19,6 @@ type AStarFinder struct {
 	DiagonalMovement DiagonalMovement
 
 	customHeuristic bool
-	neighborBuf     []*Node
-	heapSlice       []heapEntry
-	pathBuf         [][2]int32
 }
 
 // NewAStarFinder creates a new AStarFinder with default options.
@@ -32,7 +29,6 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 		Weight:           1,
 		DiagonalMovement: DiagonalNever,
 		customHeuristic:  opt.Heuristic != nil,
-		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -65,27 +61,18 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst 
 	if err != nil {
 		return nil, err
 	}
-	local := *f
-	local.neighborBuf = states.neighborBuf[:0]
-	local.heapSlice = states.heap[:0]
-	local.pathBuf = states.pathBuf[:0]
-	defer func() {
-		states.neighborBuf = local.neighborBuf
-		states.heap = local.heapSlice
-		states.pathBuf = local.pathBuf
-		releaseStates(states)
-	}()
-	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	defer releaseStates(states)
+	p, err := f.findPath(startX, startY, endX, endY, grid, states)
 	return finishPath(p, dst, false), err
 }
 
 func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
 	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
 	stepCost := gridStepCost(grid)
-	openList := &minHeap{nodes: f.heapSlice[:0], tieBreak: true, state: states}
+	openList := &minHeap{nodes: states.heap[:0], tieBreak: true, state: states}
 	defer func() {
 		clear(openList.nodes[:cap(openList.nodes)])
-		f.heapSlice = openList.nodes[:0]
+		states.heap = openList.nodes[:0]
 	}()
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
@@ -96,7 +83,8 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 	openList.Push(startNode)
 	startState.Opened = 1
 
-	neighborBuf := f.neighborBuf[:0]
+	neighborBuf := states.neighborBuf[:0]
+	defer func() { states.neighborBuf = neighborBuf }()
 
 	for !openList.Empty() {
 		node := openList.Pop()
@@ -104,11 +92,12 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 		nodeState.Closed = true
 
 		if node == endNode {
-			f.pathBuf = states.backtrace(endNode, f.pathBuf)
-			return f.pathBuf, nil
+			states.pathBuf = states.backtrace(endNode, states.pathBuf)
+			return states.pathBuf, nil
 		}
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
+		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
 			ns := states.get(neighbor)
 			if ns.Closed {

@@ -13,8 +13,10 @@ import (
 // It finds the closest waypoint nodes with line-of-sight to the start/end
 // positions (via the grid parameter) and runs A* on the graph.
 type waypointScratch struct {
-	allMap map[*WaypointNode]*aNode
-	heap   []*aNode
+	seq     int64
+	allMap  map[*WaypointNode]*aNode
+	heap    []*aNode
+	pathBuf [][2]int32
 }
 
 var (
@@ -24,11 +26,6 @@ var (
 
 type WaypointFinder struct {
 	graph *WaypointGraph
-
-	// Reusable buffers for FindPath (zero-alloc after warm-up)
-	searchSeq int64
-	heapSlice []*aNode
-	pathBuf   [][2]int32
 }
 
 // WaypointOption configures a WaypointFinder.
@@ -68,26 +65,22 @@ var _ finder.Finder = (*WaypointFinder)(nil)
 // Path is automatically smoothed via string pulling to remove redundant waypoints.
 func (f *WaypointFinder) FindPath(startX, startY, endX, endY int32, grid finder.Grid, dst [][2]int32) ([][2]int32, error) {
 	sc := waypointScratchPool.Get().(*waypointScratch)
-	local := *f
-	local.searchSeq = waypointSeq.Add(1)
-	local.heapSlice = sc.heap[:0]
+	sc.seq = waypointSeq.Add(1)
+	sc.heap = sc.heap[:0]
 	if dst != nil {
-		local.pathBuf = dst[:0]
+		sc.pathBuf = dst[:0]
 	} else {
-		local.pathBuf = nil
+		sc.pathBuf = nil
 	}
-	defer func() {
-		sc.heap = local.heapSlice
-		waypointScratchPool.Put(sc)
-	}()
-	p, err := local.findPath(startX, startY, endX, endY, grid, sc.allMap)
+	defer waypointScratchPool.Put(sc)
+	p, err := f.findPath(startX, startY, endX, endY, grid, sc)
 	if dst == nil || p == nil {
 		return p, err
 	}
 	return append(dst[:0], p...), err
 }
 
-func (f *WaypointFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid, all map[*WaypointNode]*aNode) ([][2]int32, error) {
+func (f *WaypointFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid, sc *waypointScratch) ([][2]int32, error) {
 	// FindClosestWithLOS would fall back to "no node found" for a request that
 	// never pointed at the graph at all.
 	if !grid.IsInside(startX, startY) || !grid.IsInside(endX, endY) {
@@ -96,7 +89,7 @@ func (f *WaypointFinder) findPath(startX, startY, endX, endY int32, grid finder.
 	if !grid.IsWalkableAt(endX, endY) {
 		return nil, finder.ErrNotWalkable
 	}
-	f.searchSeq++
+	sc.seq++
 
 	startNode := f.graph.FindClosestWithLOS(startX, startY, grid)
 	endNode := f.graph.FindClosestWithLOS(endX, endY, grid)
@@ -122,7 +115,7 @@ func (f *WaypointFinder) findPath(startX, startY, endX, endY int32, grid finder.
 		return f.SmoothPath(raw, grid), nil
 	}
 
-	path := f.findPathInternal(startNode, endNode, startX, startY, endX, endY, all)
+	path := f.findPathInternal(startNode, endNode, startX, startY, endX, endY, sc)
 	return f.SmoothPath(path, grid), nil
 }
 
@@ -150,13 +143,13 @@ func (f *WaypointFinder) SmoothPath(path [][2]int32, grid finder.Grid) [][2]int3
 }
 
 // findPathInternal runs A* between two graph nodes.
-func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, startX, startY, endX, endY int32, all map[*WaypointNode]*aNode) [][2]int32 {
-	open := &nodeHeap{nodes: f.heapSlice[:0]}
-	defer func() { f.heapSlice = open.nodes[:0] }()
+func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, startX, startY, endX, endY int32, sc *waypointScratch) [][2]int32 {
+	open := &nodeHeap{nodes: sc.heap[:0]}
+	defer func() { sc.heap = open.nodes[:0] }()
 
-	seq := f.searchSeq
+	seq := sc.seq
 
-	an := getANode(all, startNode)
+	an := getANode(sc.allMap, startNode)
 	an.seq = seq
 	an.g = 0
 	an.h = heuristic(startNode, endNode)
@@ -174,26 +167,26 @@ func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, star
 
 		if cur.node == endNode {
 			// Build node path into pathBuf (reverse, then reverse-back)
-			f.pathBuf = f.pathBuf[:0]
+			sc.pathBuf = sc.pathBuf[:0]
 			for c := cur; c != nil; c = c.parent {
-				f.pathBuf = append(f.pathBuf, [2]int32{c.node.X, c.node.Y})
+				sc.pathBuf = append(sc.pathBuf, [2]int32{c.node.X, c.node.Y})
 			}
-			for i, j := 0, len(f.pathBuf)-1; i < j; i, j = i+1, j-1 {
-				f.pathBuf[i], f.pathBuf[j] = f.pathBuf[j], f.pathBuf[i]
+			for i, j := 0, len(sc.pathBuf)-1; i < j; i, j = i+1, j-1 {
+				sc.pathBuf[i], sc.pathBuf[j] = sc.pathBuf[j], sc.pathBuf[i]
 			}
 
 			// Prepend start (skip if same as first waypoint)
-			if f.pathBuf[0][0] != startX || f.pathBuf[0][1] != startY {
-				f.pathBuf = append(f.pathBuf, [2]int32{})
-				copy(f.pathBuf[1:], f.pathBuf[:len(f.pathBuf)-1])
-				f.pathBuf[0] = [2]int32{startX, startY}
+			if sc.pathBuf[0][0] != startX || sc.pathBuf[0][1] != startY {
+				sc.pathBuf = append(sc.pathBuf, [2]int32{})
+				copy(sc.pathBuf[1:], sc.pathBuf[:len(sc.pathBuf)-1])
+				sc.pathBuf[0] = [2]int32{startX, startY}
 			}
 			// Append end (skip if same as last waypoint)
-			last := f.pathBuf[len(f.pathBuf)-1]
+			last := sc.pathBuf[len(sc.pathBuf)-1]
 			if last[0] != endX || last[1] != endY {
-				f.pathBuf = append(f.pathBuf, [2]int32{endX, endY})
+				sc.pathBuf = append(sc.pathBuf, [2]int32{endX, endY})
 			}
-			return f.pathBuf
+			return sc.pathBuf
 		}
 
 		for _, edge := range cur.node.Edges {
@@ -201,7 +194,7 @@ func (f *WaypointFinder) findPathInternal(startNode, endNode *WaypointNode, star
 				continue
 			}
 			ng := cur.g + edge.Cost
-			an := getANode(all, edge.To)
+			an := getANode(sc.allMap, edge.To)
 			if an.seq != seq {
 				// First visit this search — initialize fresh
 				an.seq = seq

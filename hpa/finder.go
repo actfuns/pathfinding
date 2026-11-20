@@ -26,22 +26,27 @@ type HPAFinder struct {
 	concreteFinder finder.Finder
 	stringPulling  bool // apply LOS smoothing to final path
 
-	// Reusable buffers for FindPath (zero-alloc after warm-up)
+	pathCache map[[2]int32][]int32 // portal path cache (P3): key=[startChunk,endChunk]
+	cacheMu   *sync.RWMutex
+}
+
+// hpaSearch holds the per-call scratch and caches for one HPA search. Shared
+// state such as the portal path cache stays on HPAFinder.
+type hpaSearch struct {
+	*HPAFinder
 	neighborBuf     []*finder.Node
 	bfsCostsBuf     []int32
 	bfsQueueBuf     [][2]int32
 	tmpNode         *finder.Node
 	allNodes        map[int32]*hpaNode
 	openSlice       []*hpaNode
-	hpaNodePool     []*hpaNode           // free list for hpaNode reuse
-	portalPathBuf   []int32              // reusable portal key accumulation
-	waypointsBuf    [][2]int32           // reusable waypoint accumulation
-	waypointsResult [][2]int32           // reusable result buffer (P2)
-	portalKeyBuf    []int32              // reusable result in findReachablePortals (start)
-	portalKeyEndBuf []int32              // reusable result in findReachablePortals (end)
-	endSetMap       map[int32]struct{}   // reusable end-portal set
-	pathCache       map[[2]int32][]int32 // portal path cache (P3): key=[startChunk,endChunk]
-	cacheMu         *sync.RWMutex
+	hpaNodePool     []*hpaNode
+	portalPathBuf   []int32
+	waypointsBuf    [][2]int32
+	waypointsResult [][2]int32
+	portalKeyBuf    []int32
+	portalKeyEndBuf []int32
+	endSetMap       map[int32]struct{}
 }
 
 // HPAOption configures an HPAFinder.
@@ -114,12 +119,6 @@ func NewHPAFinder(opts ...HPAOption) *HPAFinder {
 			finder.WithWeight(f.Weight),
 		)
 	}
-	// Pre-allocate buffers
-	f.neighborBuf = make([]*finder.Node, 0, 8)
-	f.tmpNode = &finder.Node{}
-	f.allNodes = make(map[int32]*hpaNode, 64)
-	f.openSlice = make([]*hpaNode, 0, 64)
-	f.endSetMap = make(map[int32]struct{})
 	f.pathCache = make(map[[2]int32][]int32, 64)
 	f.cacheMu = new(sync.RWMutex)
 	return f
@@ -168,23 +167,23 @@ type hpaNode struct {
 }
 
 // getHPANode returns a node from the pool, or allocates a new one.
-func (f *HPAFinder) getHPANode() *hpaNode {
-	if n := len(f.hpaNodePool); n > 0 {
-		node := f.hpaNodePool[n-1]
-		f.hpaNodePool = f.hpaNodePool[:n-1]
+func (s *hpaSearch) getHPANode() *hpaNode {
+	if n := len(s.hpaNodePool); n > 0 {
+		node := s.hpaNodePool[n-1]
+		s.hpaNodePool = s.hpaNodePool[:n-1]
 		return node
 	}
 	return &hpaNode{heapIdx: -1}
 }
 
 // recycleNodes clears the allNodes map and returns all hpaNodes to the pool.
-func (f *HPAFinder) recycleNodes() {
-	for _, n := range f.allNodes {
+func (s *hpaSearch) recycleNodes() {
+	for _, n := range s.allNodes {
 		*n = hpaNode{heapIdx: -1}
-		f.hpaNodePool = append(f.hpaNodePool, n)
+		s.hpaNodePool = append(s.hpaNodePool, n)
 	}
-	for k := range f.allNodes {
-		delete(f.allNodes, k)
+	for k := range s.allNodes {
+		delete(s.allNodes, k)
 	}
 }
 
@@ -197,33 +196,24 @@ func (f *HPAFinder) recycleNodes() {
 var _ finder.Finder = (*HPAFinder)(nil)
 
 func (f *HPAFinder) FindPath(startX, startY, endX, endY int32, grid finder.Grid, dst [][2]int32) ([][2]int32, error) {
-	local := *f
-	local.neighborBuf = nil
-	local.bfsCostsBuf = nil
-	local.bfsQueueBuf = nil
-	local.tmpNode = &finder.Node{}
-	local.allNodes = make(map[int32]*hpaNode)
-	local.openSlice = nil
-	local.hpaNodePool = nil
-	local.portalPathBuf = nil
-	local.waypointsBuf = nil
-	if dst != nil {
-		local.waypointsResult = dst[:0]
-	} else {
-		local.waypointsResult = nil
+	s := &hpaSearch{
+		HPAFinder: f,
+		tmpNode:   &finder.Node{},
+		allNodes:  make(map[int32]*hpaNode),
+		endSetMap: make(map[int32]struct{}),
 	}
-	local.portalKeyBuf = nil
-	local.portalKeyEndBuf = nil
-	local.endSetMap = make(map[int32]struct{})
-	p, err := local.findPath(startX, startY, endX, endY, grid)
+	if dst != nil {
+		s.waypointsResult = dst[:0]
+	}
+	p, err := s.findPath(startX, startY, endX, endY, grid)
 	if dst == nil || p == nil {
 		return p, err
 	}
 	return append(dst[:0], p...), err
 }
 
-func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid) ([][2]int32, error) {
-	if f.world == nil {
+func (s *hpaSearch) findPath(startX, startY, endX, endY int32, grid finder.Grid) ([][2]int32, error) {
+	if s.world == nil {
 		panic("HPAFinder: Build(grid) must be called before FindPath")
 	}
 	if !supportsHPA(grid) {
@@ -234,12 +224,12 @@ func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid)
 		return nil, finder.ErrOutOfBounds
 	}
 
-	world := f.world
+	world := s.world
 	startChunk := world.ChunkIDOf(startX, startY)
 	endChunk := world.ChunkIDOf(endX, endY)
 
 	if startChunk == endChunk {
-		return f.concreteFind(startX, startY, endX, endY, grid)
+		return s.concreteFind(startX, startY, endX, endY, grid)
 	}
 
 	if !grid.IsWalkableAt(endX, endY) {
@@ -249,29 +239,29 @@ func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid)
 		return nil, nil
 	}
 
-	startPortalKeys := f.findReachablePortals(world, startX, startY, startChunk, grid, f.portalKeyBuf)
+	startPortalKeys := s.findReachablePortals(world, startX, startY, startChunk, grid, s.portalKeyBuf)
 	if len(startPortalKeys) == 0 {
 		return nil, nil
 	}
 
-	endPortalKeys := f.findReachablePortals(world, endX, endY, endChunk, grid, f.portalKeyEndBuf)
+	endPortalKeys := s.findReachablePortals(world, endX, endY, endChunk, grid, s.portalKeyEndBuf)
 	if len(endPortalKeys) == 0 {
 		return nil, nil
 	}
 
 	// Reuse endSetMap
-	for k := range f.endSetMap {
-		delete(f.endSetMap, k)
+	for k := range s.endSetMap {
+		delete(s.endSetMap, k)
 	}
 	for _, k := range endPortalKeys {
-		f.endSetMap[k] = struct{}{}
+		s.endSetMap[k] = struct{}{}
 	}
 
 	// --- P3: Portal Path Cache ---
 	cacheKey := [2]int32{startChunk, endChunk}
-	f.cacheMu.RLock()
-	cachedPath, cacheHit := f.pathCache[cacheKey]
-	f.cacheMu.RUnlock()
+	s.cacheMu.RLock()
+	cachedPath, cacheHit := s.pathCache[cacheKey]
+	s.cacheMu.RUnlock()
 	useCache := false
 	if cacheHit && len(cachedPath) > 0 {
 		firstInStart := false
@@ -281,7 +271,7 @@ func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid)
 				break
 			}
 		}
-		_, lastInEnd := f.endSetMap[cachedPath[len(cachedPath)-1]]
+		_, lastInEnd := s.endSetMap[cachedPath[len(cachedPath)-1]]
 		if firstInStart && lastInEnd {
 			useCache = true
 		}
@@ -289,35 +279,35 @@ func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid)
 
 	if !useCache {
 		// Run abstract A* on portal graph
-		f.openSlice = f.openSlice[:0]
+		s.openSlice = s.openSlice[:0]
 
 		for _, pk := range startPortalKeys {
 			p := world.Portals[pk]
 			if p == nil {
 				continue
 			}
-			n := f.getHPANode()
+			n := s.getHPANode()
 			n.portalKey = pk
 			n.g = 0
-			n.h = f.heuristicCost(p.CenterX, p.CenterY, endX, endY)
-			n.f = n.h * f.Weight
+			n.h = s.heuristicCost(p.CenterX, p.CenterY, endX, endY)
+			n.f = n.h * s.Weight
 			n.parent = nil
 			n.closed = false
 			n.heapIdx = -1
-			f.allNodes[pk] = n
-			f.openSlice = f.push(f.openSlice, n)
+			s.allNodes[pk] = n
+			s.openSlice = s.push(s.openSlice, n)
 		}
 
 		var found *hpaNode
-		for len(f.openSlice) > 0 {
+		for len(s.openSlice) > 0 {
 			var cur *hpaNode
-			f.openSlice, cur = f.pop(f.openSlice)
+			s.openSlice, cur = s.pop(s.openSlice)
 			if cur.closed {
 				continue
 			}
 			cur.closed = true
 
-			if _, ok := f.endSetMap[cur.portalKey]; ok {
+			if _, ok := s.endSetMap[cur.portalKey]; ok {
 				found = cur
 				break
 			}
@@ -334,7 +324,7 @@ func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid)
 					continue
 				}
 				edgeG := cur.g + float32(cp.ExternalCosts[i])
-				f.openSlice = f.relaxEdge(ek, edgeG, ep, endX, endY, cur)
+				s.openSlice = s.relaxEdge(ek, edgeG, ep, endX, endY, cur)
 			}
 
 			for i := 0; i < cp.InternalCount; i++ {
@@ -344,119 +334,119 @@ func (f *HPAFinder) findPath(startX, startY, endX, endY int32, grid finder.Grid)
 					continue
 				}
 				edgeG := cur.g + float32(cp.InternalCosts[i])
-				f.openSlice = f.relaxEdge(ik, edgeG, ip, endX, endY, cur)
+				s.openSlice = s.relaxEdge(ik, edgeG, ip, endX, endY, cur)
 			}
 		}
 
 		if found == nil {
-			f.recycleNodes()
+			s.recycleNodes()
 			return nil, nil
 		}
 
 		// Build portal path (reversed from found linked list)
-		f.portalPathBuf = f.portalPathBuf[:0]
+		s.portalPathBuf = s.portalPathBuf[:0]
 		for n := found; n != nil; n = n.parent {
-			f.portalPathBuf = append(f.portalPathBuf, n.portalKey)
+			s.portalPathBuf = append(s.portalPathBuf, n.portalKey)
 		}
 		// Reverse
-		for i, j := 0, len(f.portalPathBuf)-1; i < j; i, j = i+1, j-1 {
-			f.portalPathBuf[i], f.portalPathBuf[j] = f.portalPathBuf[j], f.portalPathBuf[i]
+		for i, j := 0, len(s.portalPathBuf)-1; i < j; i, j = i+1, j-1 {
+			s.portalPathBuf[i], s.portalPathBuf[j] = s.portalPathBuf[j], s.portalPathBuf[i]
 		}
 
 		// Store in cache
-		cached := make([]int32, len(f.portalPathBuf))
-		copy(cached, f.portalPathBuf)
-		f.cacheMu.Lock()
-		f.pathCache[cacheKey] = cached
-		f.cacheMu.Unlock()
+		cached := make([]int32, len(s.portalPathBuf))
+		copy(cached, s.portalPathBuf)
+		s.cacheMu.Lock()
+		s.pathCache[cacheKey] = cached
+		s.cacheMu.Unlock()
 	} else {
 		// Reuse cached portal path
-		f.portalPathBuf = append(f.portalPathBuf[:0], cachedPath...)
+		s.portalPathBuf = append(s.portalPathBuf[:0], cachedPath...)
 	}
 
 	// Build concrete waypoints (shared by cache hit and miss)
-	f.waypointsBuf = f.waypointsBuf[:0]
+	s.waypointsBuf = s.waypointsBuf[:0]
 
-	firstPortal := world.Portals[f.portalPathBuf[0]]
-	seg, err := f.concreteFind(startX, startY, firstPortal.CenterX, firstPortal.CenterY, grid)
+	firstPortal := world.Portals[s.portalPathBuf[0]]
+	seg, err := s.concreteFind(startX, startY, firstPortal.CenterX, firstPortal.CenterY, grid)
 	if err != nil {
-		f.recycleNodes()
+		s.recycleNodes()
 		return nil, err
 	}
 	if seg == nil {
-		f.recycleNodes()
+		s.recycleNodes()
 		return nil, nil
 	}
-	f.waypointsBuf = append(f.waypointsBuf, seg[:len(seg)-1]...)
+	s.waypointsBuf = append(s.waypointsBuf, seg[:len(seg)-1]...)
 
-	for i := 0; i < len(f.portalPathBuf)-1; i++ {
-		p1 := world.Portals[f.portalPathBuf[i]]
-		p2 := world.Portals[f.portalPathBuf[i+1]]
-		seg, err = f.concreteFind(p1.CenterX, p1.CenterY, p2.CenterX, p2.CenterY, grid)
+	for i := 0; i < len(s.portalPathBuf)-1; i++ {
+		p1 := world.Portals[s.portalPathBuf[i]]
+		p2 := world.Portals[s.portalPathBuf[i+1]]
+		seg, err = s.concreteFind(p1.CenterX, p1.CenterY, p2.CenterX, p2.CenterY, grid)
 		if err != nil {
-			f.recycleNodes()
+			s.recycleNodes()
 			return nil, err
 		}
 		if seg == nil {
-			f.recycleNodes()
+			s.recycleNodes()
 			return nil, nil
 		}
-		f.waypointsBuf = append(f.waypointsBuf, seg[1:]...)
+		s.waypointsBuf = append(s.waypointsBuf, seg[1:]...)
 	}
 
-	lastPortal := world.Portals[f.portalPathBuf[len(f.portalPathBuf)-1]]
-	seg, err = f.concreteFind(lastPortal.CenterX, lastPortal.CenterY, endX, endY, grid)
+	lastPortal := world.Portals[s.portalPathBuf[len(s.portalPathBuf)-1]]
+	seg, err = s.concreteFind(lastPortal.CenterX, lastPortal.CenterY, endX, endY, grid)
 	if err != nil {
-		f.recycleNodes()
+		s.recycleNodes()
 		return nil, err
 	}
 	if seg == nil {
-		f.recycleNodes()
+		s.recycleNodes()
 		return nil, nil
 	}
-	f.waypointsBuf = append(f.waypointsBuf, seg[1:]...)
+	s.waypointsBuf = append(s.waypointsBuf, seg[1:]...)
 
 	// P1: String pulling — smooth path
-	if f.stringPulling {
-		f.waypointsBuf = f.smoothPath(f.waypointsBuf, grid)
+	if s.stringPulling {
+		s.waypointsBuf = s.smoothPath(s.waypointsBuf, grid)
 	}
 
 	// P2: Reusable result buffer
-	if cap(f.waypointsResult) >= len(f.waypointsBuf) {
-		f.waypointsResult = f.waypointsResult[:len(f.waypointsBuf)]
+	if cap(s.waypointsResult) >= len(s.waypointsBuf) {
+		s.waypointsResult = s.waypointsResult[:len(s.waypointsBuf)]
 	} else {
-		f.waypointsResult = make([][2]int32, len(f.waypointsBuf))
+		s.waypointsResult = make([][2]int32, len(s.waypointsBuf))
 	}
-	copy(f.waypointsResult, f.waypointsBuf)
+	copy(s.waypointsResult, s.waypointsBuf)
 
-	f.recycleNodes()
-	return f.waypointsResult, nil
+	s.recycleNodes()
+	return s.waypointsResult, nil
 }
 
-func (f *HPAFinder) relaxEdge(ik int32, edgeG float32, portal *Portal, endX, endY int32, parent *hpaNode) []*hpaNode {
-	existing, ok := f.allNodes[ik]
+func (s *hpaSearch) relaxEdge(ik int32, edgeG float32, portal *Portal, endX, endY int32, parent *hpaNode) []*hpaNode {
+	existing, ok := s.allNodes[ik]
 	if !ok {
-		n := f.getHPANode()
+		n := s.getHPANode()
 		n.portalKey = ik
 		n.g = edgeG
-		n.h = f.heuristicCost(portal.CenterX, portal.CenterY, endX, endY)
-		n.f = n.g + n.h*f.Weight
+		n.h = s.heuristicCost(portal.CenterX, portal.CenterY, endX, endY)
+		n.f = n.g + n.h*s.Weight
 		n.parent = parent
 		n.closed = false
 		n.heapIdx = -1
-		f.allNodes[ik] = n
-		return f.push(f.openSlice, n)
+		s.allNodes[ik] = n
+		return s.push(s.openSlice, n)
 	}
 	if existing.closed {
-		return f.openSlice
+		return s.openSlice
 	}
 	if edgeG < existing.g {
 		existing.g = edgeG
-		existing.f = existing.g + existing.h*f.Weight
+		existing.f = existing.g + existing.h*s.Weight
 		existing.parent = parent
-		return f.push(f.openSlice, existing)
+		return s.push(s.openSlice, existing)
 	}
-	return f.openSlice
+	return s.openSlice
 }
 
 func (f *HPAFinder) heuristicCost(ax, ay, bx, by int32) float32 {
@@ -471,18 +461,18 @@ func (f *HPAFinder) heuristicCost(ax, ay, bx, by int32) float32 {
 	return f.Heuristic(dx, dy) * 10
 }
 
-func (f *HPAFinder) findReachablePortals(world *HPAWorld, sx, sy int32, chunkID int32, grid finder.Grid, buf []int32) []int32 {
+func (s *hpaSearch) findReachablePortals(world *HPAWorld, sx, sy int32, chunkID int32, grid finder.Grid, buf []int32) []int32 {
 	cs := world.ChunkSize
 	cx := (sx / cs) * cs
 	cy := (sy / cs) * cs
 
-	f.neighborBuf = f.neighborBuf[:0]
-	costs, qBuf := bfsCostsInChunk(grid, sx, sy, cx, cy, cs, world.Diagonal, f.neighborBuf, f.bfsCostsBuf, f.bfsQueueBuf, f.tmpNode)
-	if cap(costs) > cap(f.bfsCostsBuf) {
-		f.bfsCostsBuf = costs
+	s.neighborBuf = s.neighborBuf[:0]
+	costs, qBuf := bfsCostsInChunk(grid, sx, sy, cx, cy, cs, world.Diagonal, s.neighborBuf, s.bfsCostsBuf, s.bfsQueueBuf, s.tmpNode)
+	if cap(costs) > cap(s.bfsCostsBuf) {
+		s.bfsCostsBuf = costs
 	}
-	if cap(qBuf) > cap(f.bfsQueueBuf) {
-		f.bfsQueueBuf = qBuf
+	if cap(qBuf) > cap(s.bfsQueueBuf) {
+		s.bfsQueueBuf = qBuf
 	}
 
 	dirs := []int32{DirN, DirE, DirS, DirW}
