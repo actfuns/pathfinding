@@ -460,11 +460,11 @@ func (f *HPAFinder) relaxEdge(ik int32, edgeG float32, portal *Portal, endX, end
 }
 
 func (f *HPAFinder) heuristicCost(ax, ay, bx, by int32) float32 {
-	dx := float32(bx - ax)
+	dx := float32(bx) - float32(ax)
 	if dx < 0 {
 		dx = -dx
 	}
-	dy := float32(by - ay)
+	dy := float32(by) - float32(ay)
 	if dy < 0 {
 		dy = -dy
 	}

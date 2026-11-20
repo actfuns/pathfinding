@@ -118,11 +118,11 @@ func runSVGTest(t *testing.T, gridType string, scenarios []svgScenario, newGrid 
 }
 
 // generateGrid creates a height x width grid with random obstacles at the given probability.
-func generateGrid(width, height int, obstacleProb float64) [][]int {
-	m := make([][]int, height)
+func generateGrid(width, height int, obstacleProb float64) [][]int32 {
+	m := make([][]int32, height)
 	rng := rand.New(rand.NewSource(42))
 	for y := range m {
-		row := make([]int, width)
+		row := make([]int32, width)
 		for x := range row {
 			if rng.Float64() < obstacleProb {
 				row[x] = 1

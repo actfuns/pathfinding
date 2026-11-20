@@ -20,7 +20,7 @@ import (
 
 func main() {
     // 定义地形：0 = 可通行，非零 = 障碍物
-    terrain := [][]int{
+    terrain := [][]int32{
         {0, 0, 0, 0, 0},
         {0, 1, 1, 1, 0},
         {0, 0, 0, 0, 0},
@@ -138,12 +138,12 @@ g := grid.NewOrthogonalGrid(terrain,
 - **流场群体寻路** — flowfield.New / GetDirection（O(1) 多人查表，v0.5.0+）
 - **世界坐标转换** — WorldToTile, TileToWorld, IsWalkableAtWorld, SetWalkableAtWorld
 - **最近可通行点** — FindNearestWalkable, FindNearestWalkableWorld
-- **寻路** — `FindPath` / `FindPathWorld`，返回 `([][2]int, error)`（可用 `WithSmoothBresenham()` 等选项做路径平滑）
+- **寻路** — `FindPath` / `FindPathWorld`，返回 `([][2]int32, error)`（可用 `WithSmoothBresenham()` 等选项做路径平滑）
 - **渲染** — RenderSVG(cfg, paths...)（权重着色 + 多路径 + 图例，v0.5.0+）
 
 ## 寻路结果与错误
 
-`FindPath` / `FindPathWorld` 统一返回 `([][2]int, error)`，三种结果形态：
+`FindPath` / `FindPathWorld` 统一返回 `([][2]int32, error)`，三种结果形态：
 
 | 返回 | 含义 | 处理方式 |
 | :--- | :--- | :--- |
@@ -183,7 +183,7 @@ if len(path) == 0 {
 搜索状态已经从 `finder.Node` 拆到 per-FindPath 的 scratch，由有界池按需创建：默认上限是 `GOMAXPROCS`，不会预先创建这么多实例。因此：
 
 - **同一个 Finder、同一个只读 Grid** 可以并发调用 `FindPath` / `FindPathWorld`。
-- 返回的 `[][2]int` / `[][2]float32` 是独立结果，归调用方所有，不需要在下一次调用前拷贝。
+- 返回的 `[][2]int32` / `[][2]float32` 是独立结果，归调用方所有，不需要在下一次调用前拷贝。
 - **不能**在搜索期间调用 `SetWalkableAt` / `SetWeightAt`，也不能并发修改 Finder 配置。
 - JPS+ 的 `Precompute`、HPA 的 `Build`、waypoint 图的增删边都必须在并发搜索开始前完成；它们与搜索并发不安全。
 - 每个 `FindPath` 占用一个状态槽；池会先复用空闲槽，没有空闲且未到上限时新建，达到上限后阻塞等待别人释放。内存随实际并发量增长。
@@ -212,11 +212,11 @@ wg.Wait()
 
 ### 路径缓冲
 
-tile 寻路的最后一参是 `[][2]int` 缓冲；只有 world 需要 `PathBuff`：
+tile 寻路的最后一参是 `[][2]int32` 缓冲；只有 world 需要 `PathBuff`：
 
 ```go
 // Finder / Grid tile 路径
-FindPath(..., grid Grid, dst [][2]int) ([][2]int, error)
+FindPath(..., grid Grid, dst [][2]int32) ([][2]int32, error)
 
 // Grid world 路径
 FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *grid.PathBuff) ([][2]float32, error)
@@ -224,7 +224,7 @@ FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *grid.PathBuff) ([][2]float32, er
 
 ```go
 type PathBuff struct {
-    Tile  [][2]int
+    Tile  [][2]int32
     World [][2]float32
 }
 
@@ -235,7 +235,7 @@ func (b *PathBuff) Reset()
 用法：
 
 ```go
-tile := make([][2]int, 0, 512)
+tile := make([][2]int32, 0, 512)
 path, err := f.FindPath(sx, sy, ex, ey, grid, tile[:0])
 
 buff := grid.NewPathBuff(512, 512)
@@ -302,7 +302,7 @@ import (
     "github.com/actfuns/pathfinding/grid"
 )
 
-matrix := [][]int{{0, 0, 0}, {0, 1, 0}, {0, 0, 0}}
+matrix := [][]int32{{0, 0, 0}, {0, 1, 0}, {0, 0, 0}}
 g := grid.NewOrthogonalGrid(matrix)
 
 f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
@@ -510,7 +510,7 @@ go run examples/flowfield/
 
 ### Unreleased — 状态外置与直接并发
 - `Node` 只保留 `X/Y/Walkable/Weight`；搜索状态改为 per-FindPath scratch，`Parent`/`HeapIndex` 使用 flat index
-- `Finder.FindPath` 接收 `[][2]int` 输出缓冲；`Grid.FindPathWorld` 接收 `*grid.PathBuff`（Tile + World）；核心 finder 可做到预热后 0 alloc/op
+- `Finder.FindPath` 接收 `[][2]int32` 输出缓冲；`Grid.FindPathWorld` 接收 `*grid.PathBuff`（Tile + World）；核心 finder 可做到预热后 0 alloc/op
 - 新增 `ErrSearchBusy` 与 `SetMaxSearchWait`：槽位等待超时返回错误，避免无限阻塞
 - 同一 Finder、同一只读 Grid 支持并发 `FindPath` / `FindPathWorld`；返回路径独立，归调用方所有
 - 移除 `grid.Pool` / `Proxy` / `PoolManager` / `Lease`；并发由有界状态/scratch 池限制，按需创建到 `GOMAXPROCS` 上限（可用 `SetMaxConcurrentSearches` 调整），未达上限先新建，达到后阻塞等待
@@ -518,6 +518,11 @@ go run examples/flowfield/
 - 修复回溯结果未写回缓冲导致的重复分配，以及池化状态被 heap/openList 间接持有的问题
 
 BREAKING: 移除 `Node` 搜索字段/`ResetSearch`、`Backtrace`/`BiBacktrace`/`NewMinHeap`、grid Pool API；JPS+ `Precompute`、HPA `Build` 不可与搜索并发
+
+### Unreleased — int32/float32 全链路迁移
+- tile 坐标、路径、网格尺寸与矩阵统一为 `int32` / `[][2]int32` / `[][]int32`
+- 权重、代价、启发式与 `G/H/F` 统一为 `float32`；`TimeLimit` 仍为 `float64`
+- `StepCost`、`HeuristicFunc` 签名同步迁移；内部 slice 索引仅在边界转换为 `int`
 
 ### v0.9.0 — 并发寻路 + 寻路返回 error
 - **破坏性变更**：`finder.Finder.FindPath`、`grid.Grid.FindPath` / `FindPathWorld`、`hpa` / `waypoint` / `flowfield.Field.FindPath` 改为返回 `([][2]int, error)`

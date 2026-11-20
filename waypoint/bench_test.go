@@ -11,7 +11,7 @@ func BenchmarkWaypointFindPath(b *testing.B) {
 	a := g.AddNode(0, 0)
 	prev := a
 	for i := 10; i <= 1000; i += 10 {
-		cur := g.AddNode(i, 0)
+		cur := g.AddNode(int32(i), 0)
 		prev.Connect(cur)
 		prev = cur
 	}

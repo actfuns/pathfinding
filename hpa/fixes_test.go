@@ -16,7 +16,7 @@ func TestHPAExternalPortalCapacity(t *testing.T) {
 	// West edge of the right chunk: alternating walkable rows, creating 8
 	// separate portals there. The left chunk's east edge is one long portal.
 	for y := 1; y < cs; y += 2 {
-		g.SetWalkableAt(cs, y, false)
+		g.SetWalkableAt(cs, int32(y), false)
 	}
 
 	w := BuildWorld(g, cs)
@@ -27,7 +27,7 @@ func TestHPAExternalPortalCapacity(t *testing.T) {
 	if p.ExternalCount != 8 {
 		t.Errorf("external connections = %d, want 8", p.ExternalCount)
 	}
-	if len(p.ExternalPortals) != p.ExternalCount || len(p.ExternalCosts) != p.ExternalCount {
+	if len(p.ExternalPortals) != int(p.ExternalCount) || len(p.ExternalCosts) != int(p.ExternalCount) {
 		t.Errorf("slice lengths: portals=%d costs=%d count=%d",
 			len(p.ExternalPortals), len(p.ExternalCosts), p.ExternalCount)
 	}
@@ -37,9 +37,9 @@ func TestHPAExternalPortalCapacity(t *testing.T) {
 // connectivity instead of hardcoding DiagonalNever.
 func TestHPAUsesDiagonalConnectivity(t *testing.T) {
 	const cs = 8
-	m := make([][]int, cs)
+	m := make([][]int32, cs)
 	for y := range m {
-		m[y] = make([]int, 2*cs)
+		m[y] = make([]int32, 2*cs)
 		for x := range m[y] {
 			m[y][x] = 1
 		}

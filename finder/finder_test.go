@@ -11,8 +11,8 @@ import (
 // testScenarios are shared across all finder tests.
 var testScenarios = []struct {
 	name                       string
-	startX, startY, endX, endY int
-	matrix                     [][]int
+	startX, startY, endX, endY int32
+	matrix                     [][]int32
 }{
 	{
 		name: "simple 2x2", startX: 0, startY: 0, endX: 1, endY: 1,
@@ -42,17 +42,17 @@ var testScenarios = []struct {
 	},
 	{
 		name: "large open 20x20", startX: 4, startY: 4, endX: 19, endY: 19,
-		matrix: func() [][]int {
-			m := make([][]int, 20)
+		matrix: func() [][]int32 {
+			m := make([][]int32, 20)
 			for i := range m {
-				m[i] = make([]int, 20)
+				m[i] = make([]int32, 20)
 			}
 			return m
 		}(),
 	},
 }
 
-func testFinderAgainstJS(t *testing.T, name string, newFinder func() finder.Finder, want [][][2]int3232) {
+func testFinderAgainstJS(t *testing.T, name string, newFinder func() finder.Finder, want [][][2]int32) {
 	t.Helper()
 	for i, s := range testScenarios {
 		g := grid.NewOrthogonalGrid(s.matrix)
@@ -191,7 +191,7 @@ func TestAllFindersRejectOutOfBounds(t *testing.T) {
 		"JPSPlus":        jpsPlus,
 	} {
 		t.Run(name, func(t *testing.T) {
-			for _, tc := range []struct{ sx, sy, ex, ey int }{
+			for _, tc := range []struct{ sx, sy, ex, ey int32 }{
 				{0, 0, 999, 999}, // end out of bounds
 				{999, 999, 0, 0}, // start out of bounds
 				{-1, 0, 1, 1},    // negative start

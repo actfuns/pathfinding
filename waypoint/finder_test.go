@@ -12,7 +12,7 @@ func walkableGrid(w, h int) finder.Grid {
 	nodes := make([]*finder.Node, w*h)
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			n := finder.NewNode(x, y)
+			n := finder.NewNode(int32(x), int32(y))
 			n.Walkable = true
 			nodes[y*w+x] = n
 		}
@@ -25,14 +25,16 @@ type testGrid struct {
 	nodes         []*finder.Node
 }
 
-func (g *testGrid) Width() int             { return g.width }
-func (g *testGrid) Height() int            { return g.height }
-func (g *testGrid) IsInside(x, y int) bool { return x >= 0 && x < g.width && y >= 0 && y < g.height }
-func (g *testGrid) IsWalkableAt(x, y int) bool {
-	return g.IsInside(x, y) && g.nodes[y*g.width+x].Walkable
+func (g *testGrid) Width() int32  { return int32(g.width) }
+func (g *testGrid) Height() int32 { return int32(g.height) }
+func (g *testGrid) IsInside(x, y int32) bool {
+	return x >= 0 && x < int32(g.width) && y >= 0 && y < int32(g.height)
 }
-func (g *testGrid) SetWalkableAt(x, y int, v bool)  { g.nodes[y*g.width+x].Walkable = v }
-func (g *testGrid) GetNodeAt(x, y int) *finder.Node { return g.nodes[y*g.width+x] }
+func (g *testGrid) IsWalkableAt(x, y int32) bool {
+	return g.IsInside(x, y) && g.nodes[int(y)*g.width+int(x)].Walkable
+}
+func (g *testGrid) SetWalkableAt(x, y int32, v bool)  { g.nodes[int(y)*g.width+int(x)].Walkable = v }
+func (g *testGrid) GetNodeAt(x, y int32) *finder.Node { return g.nodes[int(y)*g.width+int(x)] }
 func (g *testGrid) Clone() finder.Grid {
 	ng := &testGrid{width: g.width, height: g.height, nodes: make([]*finder.Node, len(g.nodes))}
 	for i, n := range g.nodes {
@@ -42,18 +44,18 @@ func (g *testGrid) Clone() finder.Grid {
 	return ng
 }
 func (g *testGrid) GetNeighbors(node *finder.Node, d finder.DiagonalMovement, buf []*finder.Node) []*finder.Node {
-	x, y, w := node.X, node.Y, g.width
+	x, y, w := int(node.X), int(node.Y), g.width
 	out := buf[:0]
-	if g.IsWalkableAt(x, y-1) {
+	if g.IsWalkableAt(int32(x), int32(y-1)) {
 		out = append(out, g.nodes[(y-1)*w+x])
 	}
-	if g.IsWalkableAt(x+1, y) {
+	if g.IsWalkableAt(int32(x+1), int32(y)) {
 		out = append(out, g.nodes[y*w+x+1])
 	}
-	if g.IsWalkableAt(x, y+1) {
+	if g.IsWalkableAt(int32(x), int32(y+1)) {
 		out = append(out, g.nodes[(y+1)*w+x])
 	}
-	if g.IsWalkableAt(x-1, y) {
+	if g.IsWalkableAt(int32(x-1), int32(y)) {
 		out = append(out, g.nodes[y*w+x-1])
 	}
 	return out
@@ -289,7 +291,7 @@ func TestWaypointRefusesOutOfBounds(t *testing.T) {
 		{-1, 0, 5, 5},
 		{0, 0, 0, -1},
 	} {
-		path, err := f.FindPath(tc.sx, tc.sy, tc.ex, tc.ey, g, nil)
+		path, err := f.FindPath(int32(tc.sx), int32(tc.sy), int32(tc.ex), int32(tc.ey), g, nil)
 		if !errors.Is(err, finder.ErrOutOfBounds) {
 			t.Errorf("FindPath(%d,%d,%d,%d) err = %v, want ErrOutOfBounds",
 				tc.sx, tc.sy, tc.ex, tc.ey, err)

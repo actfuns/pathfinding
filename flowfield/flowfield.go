@@ -13,9 +13,9 @@
 //
 // Multiple targets (each tile routes to the nearest goal):
 //
-//	ff := flowfield.NewMulti(grid, [][2]int{{3,5}, {9,7}})
-//	ff.Reset(7, 3)                          // switch to single goal
-//	ff.ResetMulti([][2]int{{1,1}, {9,9}})   // switch to multi goal
+//	ff := flowfield.NewMulti(grid, [][2]int32{{3,5}, {9,7}})
+//	ff.Reset(7, 3)                            // switch to single goal
+//	ff.ResetMulti([][2]int32{{1,1}, {9,9}})   // switch to multi goal
 package flowfield
 
 import (
@@ -24,7 +24,7 @@ import (
 
 // Field holds the precomputed integration and vector fields.
 type Field struct {
-	width, height int
+	width, height int32
 	grid          finder.Grid
 	diagonal      finder.DiagonalMovement
 
@@ -103,8 +103,8 @@ func WithDiagonal(d finder.DiagonalMovement) Option {
 func initField(grid finder.Grid, opts []Option) *Field {
 	w, h := grid.Width(), grid.Height()
 	ff := &Field{
-		width:       int(w),
-		height:      int(h),
+		width:       w,
+		height:      h,
 		grid:        grid,
 		diagonal:    finder.DiagonalNever,
 		cost:        make([]float32, int(w*h)),
@@ -140,32 +140,24 @@ func NewMulti(grid finder.Grid, goals [][2]int32, opts ...Option) *Field {
 	return ff
 }
 
-func toIntPairs(goals [][2]int32) [][2]int {
-	out := make([][2]int, len(goals))
-	for i, g := range goals {
-		out[i] = [2]int{int(g[0]), int(g[1])}
-	}
-	return out
-}
-
 // Reset recalculates the field for a new single goal. Reuses memory.
 func (ff *Field) Reset(goalX, goalY int32) {
 	ff.resetCosts()
-	ff.integrateMulti([][2]int{{int(goalX), int(goalY)}})
+	ff.integrateMulti([][2]int32{{goalX, goalY}})
 	ff.vectorize()
 }
 
 // ResetMulti recalculates the field for multiple goals. Reuses memory.
 func (ff *Field) ResetMulti(goals [][2]int32) {
 	ff.resetCosts()
-	ff.integrateMulti(toIntPairs(goals))
+	ff.integrateMulti(goals)
 	ff.vectorize()
 }
 
 // integrateMulti runs Dijkstra from all goals simultaneously (multi-source).
 // Each tile gets the cost to the nearest reachable goal.
-func (ff *Field) integrateMulti(goals [][2]int) {
-	w := ff.width
+func (ff *Field) integrateMulti(goals [][2]int32) {
+	w := int(ff.width)
 	grid := ff.grid
 	cost := ff.cost
 	diag := ff.diagonal
@@ -181,13 +173,13 @@ func (ff *Field) integrateMulti(goals [][2]int) {
 
 	// Push all walkable goals as initial sources
 	for _, g := range goals {
-		if !grid.IsInside(int32(g[0]), int32(g[1])) || !grid.IsWalkableAt(int32(g[0]), int32(g[1])) {
+		if !grid.IsInside(g[0], g[1]) || !grid.IsWalkableAt(g[0], g[1]) {
 			continue
 		}
-		gi := idx(int32(g[0]), int32(g[1]))
+		gi := idx(g[0], g[1])
 		if cost[gi] < 0 {
 			cost[gi] = 0
-			queue = append(queue, item{x: int32(g[0]), y: int32(g[1]), g: 0})
+			queue = append(queue, item{x: g[0], y: g[1], g: 0})
 		}
 	}
 
@@ -247,7 +239,7 @@ func (ff *Field) integrateMulti(goals [][2]int) {
 
 // vectorize builds the vector field from the integration field.
 func (ff *Field) vectorize() {
-	w, h := ff.width, ff.height
+	w, h := int(ff.width), int(ff.height)
 	grid := ff.grid
 	cost := ff.cost
 	diag := ff.diagonal
@@ -297,10 +289,10 @@ func (ff *Field) vectorize() {
 // GetDirection returns the movement direction for tile (x, y).
 // Returns (0,0) if the tile is blocked or unreachable.
 func (ff *Field) GetDirection(x, y int32) (int32, int32) {
-	if x < 0 || x >= int32(ff.width) || y < 0 || y >= int32(ff.height) {
+	if x < 0 || x >= ff.width || y < 0 || y >= ff.height {
 		return 0, 0
 	}
-	d := ff.dirs[int(y)*ff.width+int(x)]
+	d := ff.dirs[int(y)*int(ff.width)+int(x)]
 	return d.dx, d.dy
 }
 
@@ -340,10 +332,10 @@ func stepCostFunc(grid finder.Grid) func(dx, dy int32) float32 {
 // GetCost returns the integration cost (distance to nearest goal).
 // Returns -1 for unreachable tiles.
 func (ff *Field) GetCost(x, y int32) float32 {
-	if x < 0 || x >= int32(ff.width) || y < 0 || y >= int32(ff.height) {
+	if x < 0 || x >= ff.width || y < 0 || y >= ff.height {
 		return -1
 	}
-	return ff.cost[int(y)*ff.width+int(x)]
+	return ff.cost[int(y)*int(ff.width)+int(x)]
 }
 
 // FindPath backtracks from (x, y) by following the direction chain
@@ -353,7 +345,7 @@ func (ff *Field) GetCost(x, y int32) float32 {
 // map" from "that tile cannot reach any goal": the first is finder.ErrOutOfBounds,
 // the second is a nil path with a nil error.
 func (ff *Field) FindPath(startX, startY int32, dst [][2]int32) ([][2]int32, error) {
-	w := ff.width
+	w := int(ff.width)
 	if !ff.grid.IsInside(startX, startY) {
 		return nil, finder.ErrOutOfBounds
 	}

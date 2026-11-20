@@ -9,9 +9,9 @@ import (
 )
 
 func TestConcurrentFinders(t *testing.T) {
-	m := make([][]int, 32)
+	m := make([][]int32, 32)
 	for y := range m {
-		m[y] = make([]int, 32)
+		m[y] = make([]int32, 32)
 		for x := range m[y] {
 			if (x*5+y*11)%23 == 0 {
 				m[y][x] = 1
@@ -67,9 +67,9 @@ func TestConcurrentFinders(t *testing.T) {
 }
 
 func TestConcurrentJPSPlusAdaptive(t *testing.T) {
-	m := make([][]int, 32)
+	m := make([][]int32, 32)
 	for y := range m {
-		m[y] = make([]int, 32)
+		m[y] = make([]int32, 32)
 		for x := range m[y] {
 			if (x*7+y*11)%5 == 0 {
 				m[y][x] = 1

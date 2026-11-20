@@ -12,7 +12,7 @@ func TestOrthogonalWorldToTile(t *testing.T) {
 
 	tests := []struct {
 		wx, wy float32
-		tx, ty int
+		tx, ty int32
 	}{
 		{0, 0, 0, 0},
 		{31, 31, 0, 0},
@@ -39,7 +39,7 @@ func TestOrthogonalTileToWorld(t *testing.T) {
 	}, WithTileSize(32, 32))
 
 	tests := []struct {
-		tx, ty int
+		tx, ty int32
 		wx, wy float32
 	}{
 		{0, 0, 16, 16},
@@ -108,10 +108,10 @@ func TestOrthogonalSVG(t *testing.T) {
 		},
 		{
 			name: "all open 10x10", startX: 0, startY: 0, endX: 9, endY: 9,
-			matrix: func() [][]int {
-				m := make([][]int, 10)
+			matrix: func() [][]int32 {
+				m := make([][]int32, 10)
 				for i := range m {
-					m[i] = make([]int, 10)
+					m[i] = make([]int32, 10)
 				}
 				return m
 			}(),
@@ -131,7 +131,7 @@ func TestOrthogonalSVG(t *testing.T) {
 			},
 		},
 	}
-	runSVGTest(t, "orthogonal", scenarios, func(matrix [][]int) gridForSVG {
+	runSVGTest(t, "orthogonal", scenarios, func(matrix [][]int32) gridForSVG {
 		return NewOrthogonalGrid(matrix)
 	})
 }

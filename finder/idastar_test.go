@@ -11,7 +11,7 @@ import (
 )
 
 func TestIDAStarAgainstJS(t *testing.T) {
-	testFinderAgainstJS(t, "IDAStar", func() finder.Finder { return finder.NewIDAStarFinder() }, [][][2]int3232{
+	testFinderAgainstJS(t, "IDAStar", func() finder.Finder { return finder.NewIDAStarFinder() }, [][][2]int32{
 		{{0, 0}, {1, 0}, {1, 1}},
 		{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
 		{{0, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 5}, {3, 5}, {4, 5}, {4, 4}, {4, 3}, {3, 3}},
@@ -24,9 +24,9 @@ func TestIDAStarAgainstJS(t *testing.T) {
 // told the search gave up.
 func TestIDATimeLimitGivesUp(t *testing.T) {
 	rng := rand.New(rand.NewSource(3))
-	m := make([][]int, 120)
+	m := make([][]int32, 120)
 	for y := range m {
-		row := make([]int, 120)
+		row := make([]int32, 120)
 		for x := range row {
 			if rng.Float64() < 0.2 {
 				row[x] = 1
@@ -128,7 +128,7 @@ func TestIDAStarUnreachableTerminates(t *testing.T) {
 // Routes longer than the old fixed 512-entry buffer must work.
 func TestIDAStarLongCorridor(t *testing.T) {
 	const n = 600
-	row := make([]int, n)
+	row := make([]int32, n)
 	g := grid.NewOrthogonalGrid([][]int32{row})
 	f := finder.NewIDAStarFinder()
 

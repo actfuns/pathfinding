@@ -148,7 +148,7 @@ func TestNewHPAFinderWithOptions(t *testing.T) {
 		t.Errorf("expected DiagonalOnlyWhenNoObstacles, got %v", f2.DiagonalMovement)
 	}
 
-	customHeuristic := func(dx, dy float64) float64 { return dx + dy + 1 }
+	customHeuristic := func(dx, dy float32) float32 { return dx + dy + 1 }
 	f3 := NewHPAFinder(
 		WithDiagonal(finder.DiagonalAlways),
 		WithHeuristic(customHeuristic),
@@ -224,7 +224,7 @@ func TestHPARepeatable(t *testing.T) {
 
 	cases := []struct {
 		name           string
-		sx, sy, ex, ey int
+		sx, sy, ex, ey int32
 	}{
 		{"singleChunk", 1, 1, 6, 6},
 		{"crossChunk", 0, 0, 15, 7},
@@ -371,7 +371,7 @@ func TestWithStringPullingOption(t *testing.T) {
 
 // --- helpers ---
 
-func assertStartEnd(t *testing.T, path [][2]int32, sx, sy, ex, ey int) {
+func assertStartEnd(t *testing.T, path [][2]int32, sx, sy, ex, ey int32) {
 	t.Helper()
 	if path[0] != [2]int32{sx, sy} {
 		t.Errorf("expected start (%d,%d), got %v", sx, sy, path[0])
@@ -416,7 +416,7 @@ func TestHPARefusesOutOfBounds(t *testing.T) {
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
 
-	for _, tc := range []struct{ sx, sy, ex, ey int }{
+	for _, tc := range []struct{ sx, sy, ex, ey int32 }{
 		{0, 0, 999, 999},
 		{999, 999, 0, 0},
 		{-1, 0, 5, 5},

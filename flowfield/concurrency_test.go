@@ -8,9 +8,9 @@ import (
 )
 
 func TestConcurrentFlowFieldReads(t *testing.T) {
-	m := make([][]int, 48)
+	m := make([][]int32, 48)
 	for y := range m {
-		m[y] = make([]int, 48)
+		m[y] = make([]int32, 48)
 		for x := range m[y] {
 			if (x*7+y*11)%17 == 0 {
 				m[y][x] = 1
@@ -24,7 +24,7 @@ func TestConcurrentFlowFieldReads(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
-		go func(startX, startY int) {
+		go func(startX, startY int32) {
 			defer wg.Done()
 			dst := make([][2]int32, 0, 256)
 			for j := 0; j < 100; j++ {
@@ -39,7 +39,7 @@ func TestConcurrentFlowFieldReads(t *testing.T) {
 				}
 				dst = p
 			}
-		}(i%48, (i*7)%48)
+		}(int32(i%48), int32((i*7)%48))
 	}
 	wg.Wait()
 }

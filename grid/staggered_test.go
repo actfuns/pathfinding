@@ -22,7 +22,7 @@ func TestStaggeredTileToWorld(t *testing.T) {
 
 	// TileToWorld returns the tile centre: origin + half a tile.
 	tests := []struct {
-		tx, ty int
+		tx, ty int32
 		px, py float32
 	}{
 		{0, 0, 32, 16},
@@ -51,7 +51,7 @@ func TestStaggeredWorldToTile(t *testing.T) {
 	// So (10,16) → tile(0,0) means screenToTileCoords returns (0.xx, 0.xx) not exact integer
 	tests := []struct {
 		px, py float32
-		tx, ty int
+		tx, ty int32
 	}{
 		{10, 16, 0, 0},
 	}
@@ -84,7 +84,7 @@ func TestStaggeredWorldToTileTiledSuite(t *testing.T) {
 	// (32, -16) → (0, -2)
 	tests := []struct {
 		px, py float32
-		tx, ty int
+		tx, ty int32
 	}{
 		{10, 16, 0, 0},
 		{5, 5, -1, -1},
@@ -154,10 +154,10 @@ func TestStaggeredSVG(t *testing.T) {
 		},
 		{
 			name: "all open 8x6", startX: 0, startY: 0, endX: 7, endY: 5,
-			matrix: func() [][]int {
-				m := make([][]int, 6)
+			matrix: func() [][]int32 {
+				m := make([][]int32, 6)
 				for i := range m {
-					m[i] = make([]int, 8)
+					m[i] = make([]int32, 8)
 				}
 				return m
 			}(),
@@ -175,7 +175,7 @@ func TestStaggeredSVG(t *testing.T) {
 		},
 	}
 
-	runSVGTest(t, "staggered", scenarios, func(matrix [][]int) gridForSVG {
+	runSVGTest(t, "staggered", scenarios, func(matrix [][]int32) gridForSVG {
 		return NewStaggeredGrid(matrix)
 	})
 }
@@ -271,18 +271,18 @@ func TestStaggeredGetNeighborsNoDuplicates(t *testing.T) {
 
 	cases := []struct {
 		x, y     int
-		expected map[[2]int]bool
+		expected map[[2]int32]bool
 	}{
 		{ // odd row (shifted): corners are up-right and down-right
 			x: 1, y: 1,
-			expected: map[[2]int]bool{
+			expected: map[[2]int32]bool{
 				{1, 0}: true, {1, 2}: true, {2, 1}: true,
 				{0, 1}: true, {2, 0}: true, {2, 2}: true,
 			},
 		},
 		{ // even row: corners are up-left and down-left
 			x: 1, y: 2,
-			expected: map[[2]int]bool{
+			expected: map[[2]int32]bool{
 				{1, 1}: true, {1, 3}: true, {2, 2}: true,
 				{0, 2}: true, {0, 1}: true, {0, 3}: true,
 			},
@@ -290,12 +290,12 @@ func TestStaggeredGetNeighborsNoDuplicates(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		node := &finder.Node{X: tc.x, Y: tc.y}
+		node := &finder.Node{X: int32(tc.x), Y: int32(tc.y)}
 		neighbors := g.GetNeighbors(node, finder.DiagonalAlways, nil)
 		if len(neighbors) != 6 {
 			t.Errorf("(%d,%d): got %d neighbors, want 6: %v", tc.x, tc.y, len(neighbors), coords(neighbors))
 		}
-		seen := map[[2]int]bool{}
+		seen := map[[2]int32]bool{}
 		for _, n := range neighbors {
 			key := [2]int32{n.X, n.Y}
 			if seen[key] {

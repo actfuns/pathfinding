@@ -40,8 +40,8 @@ func finishPath(path, dst [][2]int32, owned bool) [][2]int32 {
 func PathLength(path [][2]int32) float32 {
 	var sum float32
 	for i := 1; i < len(path); i++ {
-		dx := float32(path[i-1][0] - path[i][0])
-		dy := float32(path[i-1][1] - path[i][1])
+		dx := float32(path[i-1][0]) - float32(path[i][0])
+		dy := float32(path[i-1][1]) - float32(path[i][1])
 		sum += float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	}
 	return sum
@@ -108,8 +108,8 @@ func CompressPath(path [][2]int32) [][2]int32 {
 	compressed := make([][2]int32, 0, len(path))
 	sx, sy := path[0][0], path[0][1]
 	px, py := path[1][0], path[1][1]
-	dx := float32(px - sx)
-	dy := float32(py - sy)
+	dx := float32(px) - float32(sx)
+	dy := float32(py) - float32(sy)
 	sq := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	dx /= sq
 	dy /= sq
@@ -120,8 +120,8 @@ func CompressPath(path [][2]int32) [][2]int32 {
 		lx, ly := px, py
 		ldx, ldy := dx, dy
 		px, py = path[i][0], path[i][1]
-		dx = float32(px - lx)
-		dy = float32(py - ly)
+		dx = float32(px) - float32(lx)
+		dy = float32(py) - float32(ly)
 		sq = float32(math.Sqrt(float64(dx*dx + dy*dy)))
 		dx /= sq
 		dy /= sq

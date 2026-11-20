@@ -51,9 +51,9 @@ func (n *WaypointNode) Connect(other *WaypointNode, states ...EdgeState) {
 	if len(states) > 0 {
 		state = states[0]
 	}
-	dx := n.X - other.X
-	dy := n.Y - other.Y
-	cost := sqrt(float32(dx*dx + dy*dy))
+	dx := float32(n.X) - float32(other.X)
+	dy := float32(n.Y) - float32(other.Y)
+	cost := sqrt(dx*dx + dy*dy)
 	n.Edges = append(n.Edges, &WaypointEdge{To: other, Cost: cost, State: state})
 	other.Edges = append(other.Edges, &WaypointEdge{To: n, Cost: cost, State: state})
 }
@@ -64,9 +64,9 @@ func (n *WaypointNode) ConnectOneWay(other *WaypointNode, states ...EdgeState) {
 	if len(states) > 0 {
 		state = states[0]
 	}
-	dx := n.X - other.X
-	dy := n.Y - other.Y
-	cost := sqrt(float32(dx*dx + dy*dy))
+	dx := float32(n.X) - float32(other.X)
+	dy := float32(n.Y) - float32(other.Y)
+	cost := sqrt(dx*dx + dy*dy)
 	n.Edges = append(n.Edges, &WaypointEdge{To: other, Cost: cost, State: state})
 }
 
@@ -295,9 +295,9 @@ func hasLineOfSight(x1, y1, x2, y2 int32, grid GridLOS) bool {
 }
 
 func distSq(x1, y1, x2, y2 int32) float32 {
-	dx := x1 - x2
-	dy := y1 - y2
-	return float32(dx*dx + dy*dy)
+	dx := float32(x1) - float32(x2)
+	dy := float32(y1) - float32(y2)
+	return dx*dx + dy*dy
 }
 
 // ConnectNearby auto-connects all nodes that are within maxDistance of each
@@ -305,7 +305,7 @@ func distSq(x1, y1, x2, y2 int32) float32 {
 // have edges are not reconnected. Uses the spatial index for O(n*k) complexity
 // (k = average nodes in neighboring cells) instead of O(n^2).
 func (g *WaypointGraph) ConnectNearby(maxDistance int32, grid GridLOS) {
-	maxDistSq := maxDistance * maxDistance
+	maxDistSq := float32(maxDistance) * float32(maxDistance)
 	for _, a := range g.Nodes {
 		ck := [2]int32{a.X / g.cellSize, a.Y / g.cellSize}
 		for dy := int32(-1); dy <= 1; dy++ {
@@ -319,7 +319,9 @@ func (g *WaypointGraph) ConnectNearby(maxDistance int32, grid GridLOS) {
 					if a.ID >= b.ID {
 						continue
 					}
-					d := (a.X-b.X)*(a.X-b.X) + (a.Y-b.Y)*(a.Y-b.Y)
+					dx := float32(a.X) - float32(b.X)
+					dy := float32(a.Y) - float32(b.Y)
+					d := dx*dx + dy*dy
 					if d > maxDistSq {
 						continue
 					}
@@ -335,7 +337,7 @@ func (g *WaypointGraph) ConnectNearby(maxDistance int32, grid GridLOS) {
 						}
 					}
 					if !connected {
-						cost := sqrt(float32(d))
+						cost := sqrt(d)
 						a.Edges = append(a.Edges, &WaypointEdge{To: b, Cost: cost, State: EdgeStateStatic})
 						b.Edges = append(b.Edges, &WaypointEdge{To: a, Cost: cost, State: EdgeStateStatic})
 					}

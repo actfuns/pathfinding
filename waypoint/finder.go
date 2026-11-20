@@ -236,8 +236,8 @@ func getANode(all map[*WaypointNode]*aNode, n *WaypointNode) *aNode {
 
 // heuristic computes Euclidean distance between two waypoint nodes.
 func heuristic(a, b *WaypointNode) float32 {
-	dx := a.X - b.X
-	dy := a.Y - b.Y
+	dx := float32(a.X) - float32(b.X)
+	dy := float32(a.Y) - float32(b.Y)
 	return float32(math.Sqrt(float64(dx*dx + dy*dy)))
 }
 

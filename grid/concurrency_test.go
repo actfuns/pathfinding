@@ -8,9 +8,9 @@ import (
 )
 
 func TestConcurrentReadOnlyFindPath(t *testing.T) {
-	m := make([][]int, 48)
+	m := make([][]int32, 48)
 	for y := range m {
-		m[y] = make([]int, 48)
+		m[y] = make([]int32, 48)
 		for x := range m[y] {
 			if (x*7+y*11)%19 == 0 {
 				m[y][x] = 1
@@ -53,9 +53,9 @@ func TestConcurrentReadOnlyFindPath(t *testing.T) {
 }
 
 func TestConcurrentJPSPlusReadOnlyFindPath(t *testing.T) {
-	m := make([][]int, 48)
+	m := make([][]int32, 48)
 	for y := range m {
-		m[y] = make([]int, 48)
+		m[y] = make([]int32, 48)
 		for x := range m[y] {
 			if (x*5+y*13)%23 == 0 {
 				m[y][x] = 1

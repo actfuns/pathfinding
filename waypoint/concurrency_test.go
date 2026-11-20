@@ -11,7 +11,7 @@ func TestConcurrentWaypointFindPath(t *testing.T) {
 	start := g.AddNode(0, 0)
 	prev := start
 	for i := 10; i <= 500; i += 10 {
-		cur := g.AddNode(i, 0)
+		cur := g.AddNode(int32(i), 0)
 		prev.Connect(cur)
 		prev = cur
 	}

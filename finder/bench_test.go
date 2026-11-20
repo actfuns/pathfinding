@@ -20,9 +20,9 @@ func BenchmarkCompare(b *testing.B) {
 	for _, sz := range sizes {
 		for _, d := range densities {
 			rng := rand.New(rand.NewSource(3))
-			matrix := make([][]int, sz.h)
+			matrix := make([][]int32, sz.h)
 			for y := 0; y < sz.h; y++ {
-				row := make([]int, sz.w)
+				row := make([]int32, sz.w)
 				for x := 0; x < sz.w; x++ {
 					if rng.Float64() < d.pct {
 						row[x] = 1
@@ -39,7 +39,7 @@ func BenchmarkCompare(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					f.FindPath(0, 0, sz.w-1, sz.h-1, base, nil)
+					f.FindPath(0, 0, int32(sz.w-1), int32(sz.h-1), base, nil)
 				}
 			})
 
@@ -48,7 +48,7 @@ func BenchmarkCompare(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					f.FindPath(0, 0, sz.w-1, sz.h-1, base, nil)
+					f.FindPath(0, 0, int32(sz.w-1), int32(sz.h-1), base, nil)
 				}
 			})
 
@@ -58,7 +58,7 @@ func BenchmarkCompare(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					f.FindPath(0, 0, sz.w-1, sz.h-1, base, nil)
+					f.FindPath(0, 0, int32(sz.w-1), int32(sz.h-1), base, nil)
 				}
 			})
 		}

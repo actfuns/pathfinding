@@ -38,7 +38,7 @@ func TestJPSPlusAgainstJS(t *testing.T) {
 	// JPS+ produces optimal paths — may differ from standard JPS on open grids
 	// (where standard JPS leverages a perpendicular recursive cascade that JPS+ cannot
 	// precompute), but all paths are equally valid and optimal.
-	want := [][][2]int3232{
+	want := [][][2]int32{
 		{{0, 0}, {1, 0}, {1, 1}},
 		{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
 		{{0, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 5}, {3, 5}, {4, 5}, {4, 4}, {4, 3}, {3, 3}},
@@ -122,9 +122,9 @@ func TestJPSPlusPrecomputePanic(t *testing.T) {
 
 func TestJPSPlusOpenGrid(t *testing.T) {
 	// On a fully open grid, JPS+ should find the direct diagonal or cardinal path
-	matrix := make([][]int, 100)
+	matrix := make([][]int32, 100)
 	for i := range matrix {
-		matrix[i] = make([]int, 100)
+		matrix[i] = make([]int32, 100)
 	}
 	g := grid.NewOrthogonalGrid(matrix)
 	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))

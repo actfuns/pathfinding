@@ -22,7 +22,7 @@ func TestFlowFieldBasic(t *testing.T) {
 
 	for y := 0; y < 3; y++ {
 		for x := 0; x < 3; x++ {
-			if c := ff.GetCost(x, y); c < 0 {
+			if c := ff.GetCost(int32(x), int32(y)); c < 0 {
 				t.Errorf("tile (%d,%d) should be reachable, got cost=%v", x, y, c)
 			}
 		}
@@ -251,7 +251,7 @@ func TestFlowFieldDiagonalMovement(t *testing.T) {
 	ffDiag := New(g, 2, 2, WithDiagonal(finder.DiagonalAlways))
 
 	stepsCard := 0
-	cx, cy := 0, 0
+	cx, cy := int32(0), int32(0)
 	for {
 		dx, dy := ffCard.GetDirection(cx, cy)
 		if dx == 0 && dy == 0 {
@@ -372,7 +372,7 @@ func TestFlowFieldHexStepCost(t *testing.T) {
 	if len(bfs) == 0 {
 		t.Fatal("BFS found no path")
 	}
-	want := float64(len(bfs) - 1)
+	want := float32(len(bfs) - 1)
 	if got := ff.GetCost(0, 0); got != want {
 		t.Errorf("hex cost(0,0) = %v, want %v (BFS steps)", got, want)
 	}

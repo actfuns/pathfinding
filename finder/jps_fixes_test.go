@@ -209,9 +209,9 @@ func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 	for it := 0; it < 500; it++ {
 		w := 2 + rng.Intn(6)
 		h := 2 + rng.Intn(6)
-		m := make([][]int, h)
+		m := make([][]int32, h)
 		for y := range m {
-			m[y] = make([]int, w)
+			m[y] = make([]int32, w)
 			for x := range m[y] {
 				if rng.Float64() < 0.3 {
 					m[y][x] = 1
@@ -224,10 +224,10 @@ func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 		g := grid.NewOrthogonalGrid(m)
 
 		for _, mode := range modes {
-			want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(sx, sy, ex, ey, g, nil)
+			want, _ := finder.NewAStarFinder(finder.WithDiagonal(mode)).FindPath(int32(sx), int32(sy), int32(ex), int32(ey), g, nil)
 			plus := finder.NewJPSPlusFinder(finder.WithDiagonal(mode))
 			_ = plus.Precompute(g)
-			got, err := plus.FindPath(sx, sy, ex, ey, g, nil)
+			got, err := plus.FindPath(int32(sx), int32(sy), int32(ex), int32(ey), g, nil)
 			if err != nil {
 				t.Fatalf("it=%d mode=%v: %v", it, mode, err)
 			}
@@ -249,8 +249,8 @@ func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 func TestJPSPlusKnownRegressions(t *testing.T) {
 	cases := []struct {
 		name           string
-		m              [][]int
-		sx, sy, ex, ey int
+		m              [][]int32
+		sx, sy, ex, ey int32
 		mode           finder.DiagonalMovement
 	}{
 		{
@@ -365,9 +365,9 @@ func TestHexFindersMatchBFS(t *testing.T) {
 	for it := 0; it < 60; it++ {
 		w := 3 + rng.Intn(3)
 		h := 3 + rng.Intn(3)
-		m := make([][]int, h)
+		m := make([][]int32, h)
 		for y := range m {
-			m[y] = make([]int, w)
+			m[y] = make([]int32, w)
 			for x := range m[y] {
 				if rng.Float64() < 0.25 {
 					m[y][x] = 1
@@ -379,7 +379,7 @@ func TestHexFindersMatchBFS(t *testing.T) {
 		m[sy][sx], m[ey][ex] = 0, 0
 		g := grid.NewHexGrid(m, grid.WithTileSize(55, 64), grid.WithHexSide(32))
 
-		bfs, _ := finder.NewBreadthFirstFinder().FindPath(sx, sy, ex, ey, g, nil)
+		bfs, _ := finder.NewBreadthFirstFinder().FindPath(int32(sx), int32(sy), int32(ex), int32(ey), g, nil)
 		finders := []struct {
 			name string
 			f    finder.Finder
@@ -389,7 +389,7 @@ func TestHexFindersMatchBFS(t *testing.T) {
 			{"IDAStar", finder.NewIDAStarFinder()},
 		}
 		for _, ft := range finders {
-			got, err := ft.f.FindPath(sx, sy, ex, ey, g, nil)
+			got, err := ft.f.FindPath(int32(sx), int32(sy), int32(ex), int32(ey), g, nil)
 			if err != nil {
 				t.Fatalf("it=%d %s: %v", it, ft.name, err)
 			}
@@ -431,10 +431,10 @@ func TestJPSPlusPrecomputedMismatch(t *testing.T) {
 func TestJPSPlusAdaptive(t *testing.T) {
 	rng := rand.New(rand.NewSource(13))
 	const n = 20
-	m := make([][]int, n)
+	m := make([][]int32, n)
 	walls := 0
 	for y := range m {
-		m[y] = make([]int, n)
+		m[y] = make([]int32, n)
 		for x := range m[y] {
 			if rng.Float64() < 0.3 {
 				m[y][x] = 1

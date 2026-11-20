@@ -8,7 +8,7 @@ import (
 )
 
 func TestAStarAgainstJS(t *testing.T) {
-	testFinderAgainstJS(t, "AStar", func() finder.Finder { return finder.NewAStarFinder() }, [][][2]int3232{
+	testFinderAgainstJS(t, "AStar", func() finder.Finder { return finder.NewAStarFinder() }, [][][2]int32{
 		{{0, 0}, {1, 0}, {1, 1}},
 		{{1, 1}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}},
 		{{0, 3}, {1, 3}, {1, 4}, {1, 5}, {2, 5}, {3, 5}, {4, 5}, {4, 4}, {4, 3}, {3, 3}},
