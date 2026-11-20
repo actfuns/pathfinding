@@ -2,6 +2,8 @@ package grid
 
 import (
 	"testing"
+
+	"github.com/actfuns/pathfinding/finder"
 )
 
 func TestOrthogonalWorldToTile(t *testing.T) {
@@ -277,4 +279,112 @@ func TestOrthogonalObstacleCount(t *testing.T) {
 	if n := g2.(*OrthogonalGrid).ObstacleCount(); n != 0 {
 		t.Errorf("clone: expected 0 obstacles, got %d", n)
 	}
+}
+
+func TestOrthogonalGetNeighborsOrderAndBounds(t *testing.T) {
+	g := NewOrthogonalGrid([][]int32{
+		{0, 0, 0},
+		{0, 0, 0},
+		{0, 0, 0},
+	})
+	cases := []struct {
+		name   string
+		x, y   int32
+		mode   finder.DiagonalMovement
+		expect [][2]int32
+	}{
+		{
+			name: "corner-never", x: 0, y: 0, mode: finder.DiagonalNever,
+			expect: [][2]int32{{1, 0}, {0, 1}},
+		},
+		{
+			name: "corner-no-obstacles", x: 0, y: 0, mode: finder.DiagonalOnlyWhenNoObstacles,
+			expect: [][2]int32{{1, 0}, {0, 1}, {1, 1}},
+		},
+		{
+			name: "corner-at-most-one", x: 0, y: 0, mode: finder.DiagonalIfAtMostOneObstacle,
+			expect: [][2]int32{{1, 0}, {0, 1}, {1, 1}},
+		},
+		{
+			name: "corner-always", x: 0, y: 0, mode: finder.DiagonalAlways,
+			expect: [][2]int32{{1, 0}, {0, 1}, {1, 1}},
+		},
+		{
+			name: "edge-top", x: 1, y: 0, mode: finder.DiagonalOnlyWhenNoObstacles,
+			expect: [][2]int32{{2, 0}, {1, 1}, {0, 0}, {2, 1}, {0, 1}},
+		},
+		{
+			name: "edge-right", x: 2, y: 1, mode: finder.DiagonalAlways,
+			expect: [][2]int32{{2, 0}, {2, 2}, {1, 1}, {1, 0}, {1, 2}},
+		},
+		{
+			name: "corner-far", x: 2, y: 2, mode: finder.DiagonalAlways,
+			expect: [][2]int32{{2, 1}, {1, 2}, {1, 1}},
+		},
+		{
+			name: "center-never", x: 1, y: 1, mode: finder.DiagonalNever,
+			expect: [][2]int32{{1, 0}, {2, 1}, {1, 2}, {0, 1}},
+		},
+		{
+			name: "center-always", x: 1, y: 1, mode: finder.DiagonalAlways,
+			expect: [][2]int32{{1, 0}, {2, 1}, {1, 2}, {0, 1}, {0, 0}, {2, 0}, {2, 2}, {0, 2}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := g.GetNeighbors(&finder.Node{X: tc.x, Y: tc.y}, tc.mode, nil)
+			if len(got) != len(tc.expect) {
+				t.Fatalf("neighbors = %v, want %v", coordsOf(got), tc.expect)
+			}
+			for i, n := range got {
+				if n.X != tc.expect[i][0] || n.Y != tc.expect[i][1] {
+					t.Fatalf("neighbor[%d] = (%d,%d), want %v; all=%v", i, n.X, n.Y, tc.expect[i], coordsOf(got))
+				}
+			}
+		})
+	}
+
+	for _, x := range []int32{-1, 3} {
+		if got := g.GetNeighbors(&finder.Node{X: x, Y: 1}, finder.DiagonalAlways, nil); len(got) != 0 {
+			t.Errorf("out-of-bounds x=%d returned %v", x, coordsOf(got))
+		}
+	}
+	for _, y := range []int32{-1, 3} {
+		if got := g.GetNeighbors(&finder.Node{X: 1, Y: y}, finder.DiagonalAlways, nil); len(got) != 0 {
+			t.Errorf("out-of-bounds y=%d returned %v", y, coordsOf(got))
+		}
+	}
+}
+
+func TestOrthogonalGetNeighborsBlockedCardinals(t *testing.T) {
+	g := NewOrthogonalGrid([][]int32{
+		{0, 1, 0},
+		{1, 0, 1},
+		{0, 1, 0},
+	})
+	center := &finder.Node{X: 1, Y: 1}
+	if got := g.GetNeighbors(center, finder.DiagonalOnlyWhenNoObstacles, nil); len(got) != 0 {
+		t.Errorf("OnlyWhenNoObstacles returned %v, want none", coordsOf(got))
+	}
+	if got := g.GetNeighbors(center, finder.DiagonalIfAtMostOneObstacle, nil); len(got) != 0 {
+		t.Errorf("AtMostOne returned %v, want none", coordsOf(got))
+	}
+	want := [][2]int32{{0, 0}, {2, 0}, {2, 2}, {0, 2}}
+	got := g.GetNeighbors(center, finder.DiagonalAlways, nil)
+	if len(got) != len(want) {
+		t.Fatalf("Always returned %v, want %v", coordsOf(got), want)
+	}
+	for i, n := range got {
+		if n.X != want[i][0] || n.Y != want[i][1] {
+			t.Fatalf("Always neighbor[%d] = (%d,%d), want %v; all=%v", i, n.X, n.Y, want[i], coordsOf(got))
+		}
+	}
+}
+
+func coordsOf(nodes []*finder.Node) [][2]int32 {
+	out := make([][2]int32, len(nodes))
+	for i, n := range nodes {
+		out[i] = [2]int32{n.X, n.Y}
+	}
+	return out
 }

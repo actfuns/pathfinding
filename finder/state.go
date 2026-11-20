@@ -47,6 +47,9 @@ func (s *searchStates) begin(width, height int32, seq int64) {
 	} else {
 		s.states = s.states[:n]
 	}
+	if cap(s.neighborBuf) < 8 {
+		s.neighborBuf = make([]*Node, 0, 8)
+	}
 }
 
 func (s *searchStates) get(n *Node) *nodeState {

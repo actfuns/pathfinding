@@ -581,36 +581,41 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuf
 // into the provided buffer slice (which is resliced to zero and reused), so the
 // caller must not hold references past the next call.
 func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
-	x, y := node.X, node.Y
-	w := g.width
+	x, y := int(node.X), int(node.Y)
+	w, h := int(g.width), int(g.height)
 	nodes := g.nodes
+	if x < 0 || y < 0 || x >= w || y >= h {
+		return buffer[:0]
+	}
+	index := y*w + x
+
 	neighbors := buffer[:0]
 
-	s0, d0 := false, false
-	s1, d1 := false, false
-	s2, d2 := false, false
-	s3, d3 := false, false
+	// Cardinal neighbors.
+	s0 := y > 0 && nodes[index-w].Walkable
+	s1 := x+1 < w && nodes[index+1].Walkable
+	s2 := y+1 < h && nodes[index+w].Walkable
+	s3 := x > 0 && nodes[index-1].Walkable
 
-	if g.walkableAt(x, y-1) {
-		neighbors = append(neighbors, &nodes[int((y-1)*w+x)])
-		s0 = true
+	if s0 {
+		neighbors = append(neighbors, &nodes[index-w])
 	}
-	if g.walkableAt(x+1, y) {
-		neighbors = append(neighbors, &nodes[int(y*w+x+1)])
-		s1 = true
+	if s1 {
+		neighbors = append(neighbors, &nodes[index+1])
 	}
-	if g.walkableAt(x, y+1) {
-		neighbors = append(neighbors, &nodes[int((y+1)*w+x)])
-		s2 = true
+	if s2 {
+		neighbors = append(neighbors, &nodes[index+w])
 	}
-	if g.walkableAt(x-1, y) {
-		neighbors = append(neighbors, &nodes[int(y*w+x-1)])
-		s3 = true
+	if s3 {
+		neighbors = append(neighbors, &nodes[index-1])
 	}
 
 	if diagonal == finder.DiagonalNever {
 		return neighbors
 	}
+
+	// Determine which diagonal directions are allowed.
+	var d0, d1, d2, d3 bool
 
 	switch diagonal {
 	case finder.DiagonalOnlyWhenNoObstacles:
@@ -618,26 +623,44 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 		d1 = s0 && s1
 		d2 = s1 && s2
 		d3 = s2 && s3
+
 	case finder.DiagonalIfAtMostOneObstacle:
 		d0 = s3 || s0
 		d1 = s0 || s1
 		d2 = s1 || s2
 		d3 = s2 || s3
+
 	case finder.DiagonalAlways:
 		d0, d1, d2, d3 = true, true, true, true
 	}
 
-	if d0 && g.walkableAt(x-1, y-1) {
-		neighbors = append(neighbors, &nodes[int((y-1)*w+x-1)])
+	// Diagonal neighbors.
+	if d0 && x > 0 && y > 0 {
+		i := index - w - 1
+		if nodes[i].Walkable {
+			neighbors = append(neighbors, &nodes[i])
+		}
 	}
-	if d1 && g.walkableAt(x+1, y-1) {
-		neighbors = append(neighbors, &nodes[int((y-1)*w+x+1)])
+
+	if d1 && x+1 < w && y > 0 {
+		i := index - w + 1
+		if nodes[i].Walkable {
+			neighbors = append(neighbors, &nodes[i])
+		}
 	}
-	if d2 && g.walkableAt(x+1, y+1) {
-		neighbors = append(neighbors, &nodes[int((y+1)*w+x+1)])
+
+	if d2 && x+1 < w && y+1 < h {
+		i := index + w + 1
+		if nodes[i].Walkable {
+			neighbors = append(neighbors, &nodes[i])
+		}
 	}
-	if d3 && g.walkableAt(x-1, y+1) {
-		neighbors = append(neighbors, &nodes[int((y+1)*w+x-1)])
+
+	if d3 && x > 0 && y+1 < h {
+		i := index + w - 1
+		if nodes[i].Walkable {
+			neighbors = append(neighbors, &nodes[i])
+		}
 	}
 
 	return neighbors
