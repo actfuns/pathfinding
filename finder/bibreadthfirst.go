@@ -6,9 +6,6 @@ type BiBreadthFirstFinder struct {
 	// under what conditions (e.g., never, always, or only when obstacles
 	// do not block the way).
 	DiagonalMovement DiagonalMovement
-
-	neighborBuf []*Node
-	pathBuf     [][2]int32
 }
 
 // NewBiBreadthFirstFinder creates a new BiBreadthFirstFinder.
@@ -16,7 +13,6 @@ func NewBiBreadthFirstFinder(opts ...Option) *BiBreadthFirstFinder {
 	opt := ApplyOptions(opts)
 	f := &BiBreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
-		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -40,15 +36,8 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int32, grid G
 	if err != nil {
 		return nil, err
 	}
-	local := *f
-	local.neighborBuf = states.neighborBuf[:0]
-	local.pathBuf = states.pathBuf[:0]
-	defer func() {
-		states.neighborBuf = local.neighborBuf
-		states.pathBuf = local.pathBuf
-		releaseStates(states)
-	}()
-	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	defer releaseStates(states)
+	p, err := f.findPath(startX, startY, endX, endY, grid, states)
 	return finishPath(p, dst, false), err
 }
 
@@ -75,7 +64,8 @@ func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid G
 	endState.Opened = BY_END
 	endState.Parent = -1
 
-	neighborBuf := f.neighborBuf[:0]
+	neighborBuf := states.neighborBuf[:0]
+	defer func() { states.neighborBuf = neighborBuf }()
 	startHead, endHead := 0, 0
 
 	for startHead < len(startOpenList) && endHead < len(endOpenList) {
@@ -84,6 +74,7 @@ func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid G
 		states.get(node).Closed = true
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
+		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
 			ns := states.get(neighbor)
 			if ns.Closed {
@@ -91,8 +82,8 @@ func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid G
 			}
 			if ns.Opened != 0 {
 				if ns.Opened == BY_END {
-					f.pathBuf = states.biBacktrace(node, neighbor, f.pathBuf)
-					return f.pathBuf, nil
+					states.pathBuf = states.biBacktrace(node, neighbor, states.pathBuf)
+					return states.pathBuf, nil
 				}
 				continue
 			}
@@ -106,6 +97,7 @@ func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid G
 		states.get(node).Closed = true
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
+		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
 			ns := states.get(neighbor)
 			if ns.Closed {
@@ -113,8 +105,8 @@ func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid G
 			}
 			if ns.Opened != 0 {
 				if ns.Opened == BY_START {
-					f.pathBuf = states.biBacktrace(neighbor, node, f.pathBuf)
-					return f.pathBuf, nil
+					states.pathBuf = states.biBacktrace(neighbor, node, states.pathBuf)
+					return states.pathBuf, nil
 				}
 				continue
 			}

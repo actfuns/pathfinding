@@ -19,11 +19,12 @@ func main() {
 	// Create a 10×8 grid with 32×32 px tiles
 	matrix := grid.NewMatrix(10, 8)
 	g := grid.NewOrthogonalGrid(matrix, grid.WithTileSize(32, 32))
+	m := g.(grid.MutableGrid)
 
 	// Place obstacles
-	g.SetWalkableAt(3, 3, false)
-	g.SetWalkableAt(3, 4, false)
-	g.SetWalkableAt(3, 5, false)
+	m.SetWalkableAt(3, 3, false)
+	m.SetWalkableAt(3, 4, false)
+	m.SetWalkableAt(3, 5, false)
 
 	// Goal in world coords (288,224) = tile (9,7)
 	goalTX, goalTY := g.WorldToTile(288, 224)

@@ -19,13 +19,14 @@ type OrthogonalGrid struct {
 	obstacleCount int32 // number of non-walkable tiles
 	nodes         []finder.Node
 	finder        finder.Finder
+	smoothMode    SmoothMode
 	smoother      Smoother // smoothing function; nil = default
 }
 
 // Finder returns the pathfinder associated with this grid.
 func (g *OrthogonalGrid) Finder() finder.Finder { return g.finder }
 
-func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) *OrthogonalGrid {
+func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) Grid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]finder.Node, w*h)
@@ -46,30 +47,13 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) *OrthogonalGrid {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	g := &OrthogonalGrid{width: int32(w), height: int32(h), tileW: cfg.tileW, tileH: cfg.tileH, obstacleCount: int32(obs), nodes: nodes, finder: cfg.finder}
+	g := &OrthogonalGrid{width: int32(w), height: int32(h), tileW: cfg.tileW, tileH: cfg.tileH, obstacleCount: int32(obs), smoothMode: cfg.smoothMode, nodes: nodes, finder: cfg.finder}
 	if cfg.finder == nil {
 		g.finder = finder.NewAStarFinder()
 	} else {
 		g.finder = cfg.finder
 	}
-	switch cfg.smoothMode {
-	case SmoothBresenham:
-		g.smoother = func(path [][2]int32) [][2]int32 {
-			return gridutil.SmoothenBresenham(g, path)
-		}
-	case SmoothBresenhamStrict:
-		g.smoother = func(path [][2]int32) [][2]int32 {
-			return gridutil.SmoothenBresenhamStrict(g, path)
-		}
-	case SmoothDense:
-		g.smoother = func(path [][2]int32) [][2]int32 {
-			return gridutil.SmoothenDense(g, path)
-		}
-	case SmoothSupercover:
-		g.smoother = func(path [][2]int32) [][2]int32 {
-			return gridutil.SmoothenSupercover(g, path)
-		}
-	}
+	g.initSmoother()
 	return g
 }
 
@@ -391,12 +375,44 @@ func (g *OrthogonalGrid) FindNearestWalkable(wx, wy float32, maxRadius int32) (i
 	return 0, 0, false
 }
 
+func (g *OrthogonalGrid) initSmoother() {
+	switch g.smoothMode {
+	case SmoothBresenham:
+		g.smoother = func(path [][2]int32) [][2]int32 {
+			return gridutil.SmoothenBresenham(g, path)
+		}
+	case SmoothBresenhamStrict:
+		g.smoother = func(path [][2]int32) [][2]int32 {
+			return gridutil.SmoothenBresenhamStrict(g, path)
+		}
+	case SmoothDense:
+		g.smoother = func(path [][2]int32) [][2]int32 {
+			return gridutil.SmoothenDense(g, path)
+		}
+	case SmoothSupercover:
+		g.smoother = func(path [][2]int32) [][2]int32 {
+			return gridutil.SmoothenSupercover(g, path)
+		}
+	}
+}
+
 // Clone creates a deep copy of the grid with its own node slice. The finder
 // reference and tile dimensions are shared from the original.
-func (g *OrthogonalGrid) Clone() finder.Grid {
-	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, finder: g.finder, smoother: g.smoother}
+func (g *OrthogonalGrid) clone() *OrthogonalGrid {
+	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, smoothMode: g.smoothMode, finder: g.finder}
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	copy(ng.nodes, g.nodes)
+	ng.initSmoother()
+	return ng
+}
+
+func (g *OrthogonalGrid) Clone() Grid { return g.clone() }
+
+func (g *OrthogonalGrid) CloneWith(edit func(MutableGrid)) Grid {
+	ng := g.clone()
+	if edit != nil {
+		edit(ng)
+	}
 	return ng
 }
 
@@ -436,6 +452,14 @@ func (g *OrthogonalGrid) IsWalkableAtWorld(wx, wy float32) bool {
 func (g *OrthogonalGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 	tx, ty := g.WorldToTile(wx, wy)
 	g.SetWalkableAt(tx, ty, walkable)
+}
+
+// SetWeightAtWorld sets the weight of the tile at the given world-space
+// coordinate. The coordinate is converted to tile-space via WorldToTile before
+// applying the change.
+func (g *OrthogonalGrid) SetWeightAtWorld(wx, wy float32, weight float32) {
+	tx, ty := g.WorldToTile(wx, wy)
+	g.SetWeightAt(tx, ty, weight)
 }
 
 // FindPath finds a path between two tile positions.

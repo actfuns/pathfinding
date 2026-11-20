@@ -41,13 +41,14 @@ type HexGrid struct {
 	// Precomputed neighbor offsets (indexed by parity)
 	neighborsEven [6][2]int32
 	neighborsOdd  [6][2]int32
+	smoothMode    SmoothMode
 	smoother      Smoother // smoothing function; nil = default
 }
 
 // Finder returns the pathfinder associated with this grid.
 func (g *HexGrid) Finder() finder.Finder { return g.finder }
 
-func NewHexGrid(matrix [][]int32, opts ...GridOption) *HexGrid {
+func NewHexGrid(matrix [][]int32, opts ...GridOption) Grid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]finder.Node, w*h)
@@ -77,6 +78,7 @@ func NewHexGrid(matrix [][]int32, opts ...GridOption) *HexGrid {
 		staggerX:      cfg.staggerX,
 		staggerEven:   cfg.staggerEven,
 		obstacleCount: int32(obs),
+		smoothMode:    cfg.smoothMode,
 		nodes:         nodes,
 		finder:        cfg.finder,
 	}
@@ -85,12 +87,7 @@ func NewHexGrid(matrix [][]int32, opts ...GridOption) *HexGrid {
 	} else {
 		g.finder = cfg.finder
 	}
-	switch cfg.smoothMode {
-	case SmoothDense:
-		g.smoother = func(path [][2]int32) [][2]int32 {
-			return gridutil.SmoothenDense(g, path)
-		}
-	}
+	g.initSmoother()
 	g.initParams()
 	return g
 }
@@ -247,8 +244,16 @@ func (g *HexGrid) ObstacleCount() int32 { return g.obstacleCount }
 
 // Clone returns a deep copy of the hex grid, including a copy of all nodes with
 // parent references cleared. The clone shares the finder and precomputed layout
+func (g *HexGrid) initSmoother() {
+	if g.smoothMode == SmoothDense {
+		g.smoother = func(path [][2]int32) [][2]int32 {
+			return gridutil.SmoothenDense(g, path)
+		}
+	}
+}
+
 // parameters but owns its own node slice.
-func (g *HexGrid) Clone() finder.Grid {
+func (g *HexGrid) clone() *HexGrid {
 	ng := &HexGrid{
 		width:         g.width,
 		height:        g.height,
@@ -269,10 +274,21 @@ func (g *HexGrid) Clone() finder.Grid {
 		neighborsOdd:  g.neighborsOdd,
 		obstacleCount: g.obstacleCount,
 		finder:        g.finder,
-		smoother:      g.smoother,
+		smoothMode:    g.smoothMode,
 	}
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	copy(ng.nodes, g.nodes)
+	ng.initSmoother()
+	return ng
+}
+
+func (g *HexGrid) Clone() Grid { return g.clone() }
+
+func (g *HexGrid) CloneWith(edit func(MutableGrid)) Grid {
+	ng := g.clone()
+	if edit != nil {
+		edit(ng)
+	}
 	return ng
 }
 
@@ -427,6 +443,12 @@ func (g *HexGrid) IsWalkableAtWorld(wx, wy float32) bool {
 func (g *HexGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 	tx, ty := g.WorldToTile(wx, wy)
 	g.SetWalkableAt(tx, ty, walkable)
+}
+
+// SetWeightAtWorld sets the weight of the tile at the given world position.
+func (g *HexGrid) SetWeightAtWorld(wx, wy float32, weight float32) {
+	tx, ty := g.WorldToTile(wx, wy)
+	g.SetWeightAt(tx, ty, weight)
 }
 
 // tileEdgePoint returns the closest point on the edge of tile (tx, ty) to (wx, wy),

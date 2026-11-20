@@ -19,11 +19,6 @@ type IDAStarFinder struct {
 	TimeLimit float64
 
 	customHeuristic bool
-
-	// Reusable search scratch, so repeated FindPath calls avoid allocations.
-	routeBuf     [][2]int32
-	neighborBufs [][]*Node
-	onPath       []bool
 }
 
 // NewIDAStarFinder creates a new IDAStarFinder.
@@ -70,17 +65,8 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 	if err != nil {
 		return nil, err
 	}
-	local := *f
-	local.routeBuf = states.routeBuf[:0]
-	local.neighborBufs = states.neighborBufs
-	local.onPath = states.onPath
-	defer func() {
-		states.routeBuf = local.routeBuf
-		states.neighborBufs = local.neighborBufs
-		states.onPath = local.onPath
-		releaseStates(states)
-	}()
-	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	defer releaseStates(states)
+	p, err := f.findPath(startX, startY, endX, endY, grid, states)
 	return finishPath(p, dst, true), err
 }
 
@@ -113,17 +99,17 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 	if maxDepth < 1 {
 		maxDepth = 1
 	}
-	route := f.routeBuf[:0]
+	route := states.routeBuf[:0]
 	// onPath prevents revisiting a tile within one depth-first branch. Without
 	// it the search can walk cycles forever and never prove that no path exists.
-	onPath := f.onPath
+	onPath := states.onPath
 	if cap(onPath) < maxDepth {
 		onPath = make([]bool, maxDepth)
 	} else {
 		onPath = onPath[:maxDepth]
 		clear(onPath)
 	}
-	f.onPath = onPath
+	states.onPath = onPath
 	startIdx := int(start.Y*width + start.X)
 	if startIdx >= 0 && startIdx < len(onPath) {
 		onPath[startIdx] = true
@@ -132,10 +118,10 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 	// Each recursion depth needs its own neighbor buffer: GetNeighbors writes
 	// into the buffer it is given, so sharing one across recursive calls would
 	// overwrite the parent's neighbor list while it is still being iterated.
-	neighborBufs := f.neighborBufs
+	neighborBufs := states.neighborBufs
 	defer func() {
-		f.routeBuf = route
-		f.neighborBufs = neighborBufs
+		states.routeBuf = route
+		states.neighborBufs = neighborBufs
 	}()
 	pathEnd := -1
 	var timedOut bool

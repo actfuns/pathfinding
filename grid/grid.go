@@ -89,9 +89,6 @@ type Grid interface {
 	// Equivalent to (index % Width, index / Width).
 	TileXY(index int) (int32, int32)
 
-	// SetWeightAt sets the per-tile movement cost multiplier for tile (x, y).
-	// Weight 1.0 is the default; higher values make movement more expensive.
-	SetWeightAt(x, y int32, weight float32)
 	// GetWeightAt returns the movement cost multiplier for tile (x, y).
 	// Returns 1.0 for tiles outside the grid.
 	GetWeightAt(x, y int32) float32
@@ -104,8 +101,6 @@ type Grid interface {
 	TileToWorld(tx, ty int32) (float32, float32)
 	// IsWalkableAtWorld reports whether the tile at world position (wx, wy) is walkable.
 	IsWalkableAtWorld(wx, wy float32) bool
-	// SetWalkableAtWorld sets the walkability of the tile at world position (wx, wy).
-	SetWalkableAtWorld(wx, wy float32, walkable bool)
 
 	// HasLineOfSight reports whether two tiles can see each other.
 	// Uses the appropriate algorithm for the grid type (Bresenham for orthogonal,
@@ -123,6 +118,14 @@ type Grid interface {
 	// (0, 0, false) if no walkable tile exists within the search radius.
 	FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edgeInset float32) (float32, float32, bool)
 
+	// Clone returns a read-only copy with its own node storage. The configured
+	// Finder and smoother are shared.
+	Clone() Grid
+	// CloneWith copies the grid once, applies edits to the private copy, and
+	// returns it as a new read-only snapshot. The callback must not retain the
+	// MutableGrid it receives. The configured Finder and smoother are shared;
+	// edits that change topology may require Precompute/Build again.
+	CloneWith(edit func(MutableGrid)) Grid
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
 	// FindPath finds a path between two tile positions.
@@ -146,4 +149,16 @@ type Grid interface {
 	// Start/end markers are derived from the first path.
 	// Pass nil to use the default SVG options.
 	RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string
+}
+
+// MutableGrid is the optional write capability of a grid. For a zero-copy
+// mutable view of a Grid, assert the Grid value to MutableGrid. The caller is
+// responsible for ensuring there are no concurrent readers or searches, and
+// for synchronizing publication of the changes.
+type MutableGrid interface {
+	Grid
+	SetWalkableAt(x, y int32, walkable bool)
+	SetWeightAt(x, y int32, weight float32)
+	SetWalkableAtWorld(wx, wy float32, walkable bool)
+	SetWeightAtWorld(wx, wy float32, weight float32)
 }

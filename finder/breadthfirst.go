@@ -5,9 +5,6 @@ type BreadthFirstFinder struct {
 	// DiagonalMovement determines whether diagonal moves are allowed and
 	// under what obstacle conditions. Defaults to DiagonalNever.
 	DiagonalMovement DiagonalMovement
-
-	neighborBuf []*Node
-	pathBuf     [][2]int32
 }
 
 // NewBreadthFirstFinder creates a new BreadthFirstFinder.
@@ -15,7 +12,6 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 	opt := ApplyOptions(opts)
 	f := &BreadthFirstFinder{
 		DiagonalMovement: DiagonalNever,
-		neighborBuf:      make([]*Node, 0, 8),
 	}
 	if opt.DiagonalMovement != 0 {
 		f.DiagonalMovement = opt.DiagonalMovement
@@ -39,15 +35,8 @@ func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int32, grid Gri
 	if err != nil {
 		return nil, err
 	}
-	local := *f
-	local.neighborBuf = states.neighborBuf[:0]
-	local.pathBuf = states.pathBuf[:0]
-	defer func() {
-		states.neighborBuf = local.neighborBuf
-		states.pathBuf = local.pathBuf
-		releaseStates(states)
-	}()
-	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	defer releaseStates(states)
+	p, err := f.findPath(startX, startY, endX, endY, grid, states)
 	return finishPath(p, dst, false), err
 }
 
@@ -60,7 +49,8 @@ func (f *BreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid Gri
 	openList = append(openList, startNode)
 	startState.Opened = 1
 
-	neighborBuf := f.neighborBuf[:0]
+	neighborBuf := states.neighborBuf[:0]
+	defer func() { states.neighborBuf = neighborBuf }()
 	head := 0
 
 	for head < len(openList) {
@@ -70,11 +60,12 @@ func (f *BreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid Gri
 		nodeState.Closed = true
 
 		if node == endNode {
-			f.pathBuf = states.backtrace(endNode, f.pathBuf)
-			return f.pathBuf, nil
+			states.pathBuf = states.backtrace(endNode, states.pathBuf)
+			return states.pathBuf, nil
 		}
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
+		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
 			ns := states.get(neighbor)
 			if ns.Closed || ns.Opened != 0 {

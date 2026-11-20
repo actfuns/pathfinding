@@ -18,7 +18,7 @@ func TestJPSIgnoresTileWeights(t *testing.T) {
 		{0, 0, 0, 0, 0},
 		{0, 0, 0, 0, 0},
 	})
-	g.SetWeightAt(2, 1, 100)
+	g.(grid.MutableGrid).SetWeightAt(2, 1, 100)
 
 	bfs, _ := finder.NewBreadthFirstFinder().FindPath(0, 1, 4, 1, g, nil)
 	if len(bfs) != 5 {

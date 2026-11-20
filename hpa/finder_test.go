@@ -170,7 +170,8 @@ func TestHPAReachablePortals(t *testing.T) {
 	})
 	f := NewHPAFinder(WithChunkSize(8))
 	f.Build(g)
-	keys := f.findReachablePortals(f.world, 1, 1, 0, g, nil)
+	s := &hpaSearch{HPAFinder: f}
+	keys := s.findReachablePortals(s.world, 1, 1, 0, g, nil)
 	if len(keys) == 0 {
 		t.Fatal("expected reachable portals from (1,1)")
 	}

@@ -28,13 +28,14 @@ type StaggeredGrid struct {
 	cardinalOffsets  [4][2]int32
 	diagNormOffsets  [4][2]int32 // diagonal offsets for non-shifted rows/cols
 	diagShiftOffsets [4][2]int32 // diagonal offsets for shifted rows/cols
-	smoother         Smoother    // smoothing function; nil = default
+	smoothMode       SmoothMode
+	smoother         Smoother // smoothing function; nil = default
 }
 
 // Finder returns the pathfinder associated with this grid.
 func (g *StaggeredGrid) Finder() finder.Finder { return g.finder }
 
-func NewStaggeredGrid(matrix [][]int32, opts ...GridOption) *StaggeredGrid {
+func NewStaggeredGrid(matrix [][]int32, opts ...GridOption) Grid {
 	h := len(matrix)
 	w := len(matrix[0])
 	nodes := make([]finder.Node, w*h)
@@ -64,6 +65,7 @@ func NewStaggeredGrid(matrix [][]int32, opts ...GridOption) *StaggeredGrid {
 		width:         int32(w),
 		height:        int32(h),
 		obstacleCount: int32(obs),
+		smoothMode:    cfg.smoothMode,
 		nodes:         nodes,
 		finder:        cfg.finder,
 	}
@@ -72,12 +74,7 @@ func NewStaggeredGrid(matrix [][]int32, opts ...GridOption) *StaggeredGrid {
 	} else {
 		g.finder = cfg.finder
 	}
-	switch cfg.smoothMode {
-	case SmoothDense:
-		g.smoother = func(path [][2]int32) [][2]int32 {
-			return gridutil.SmoothenDense(g, path)
-		}
-	}
+	g.initSmoother()
 	g.initNeighbors()
 	return g
 }
@@ -214,10 +211,18 @@ func (g *StaggeredGrid) HasLineOfSightWorld(x1, y1, x2, y2 float32) bool {
 // ObstacleCount returns the number of non-walkable tiles in the grid.
 func (g *StaggeredGrid) ObstacleCount() int32 { return g.obstacleCount }
 
+func (g *StaggeredGrid) initSmoother() {
+	if g.smoothMode == SmoothDense {
+		g.smoother = func(path [][2]int32) [][2]int32 {
+			return gridutil.SmoothenDense(g, path)
+		}
+	}
+}
+
 // Clone returns a deep copy of the staggered grid with independent node data.
 // The clone shares the Finder and layout parameters with the original; standard
 // finders keep per-call scratch and can be searched concurrently.
-func (g *StaggeredGrid) Clone() finder.Grid {
+func (g *StaggeredGrid) clone() *StaggeredGrid {
 	ng := &StaggeredGrid{
 		cardinalOffsets:  g.cardinalOffsets,
 		diagNormOffsets:  g.diagNormOffsets,
@@ -230,10 +235,21 @@ func (g *StaggeredGrid) Clone() finder.Grid {
 		height:           g.height,
 		obstacleCount:    g.obstacleCount,
 		finder:           g.finder,
-		smoother:         g.smoother,
+		smoothMode:       g.smoothMode,
 	}
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	copy(ng.nodes, g.nodes)
+	ng.initSmoother()
+	return ng
+}
+
+func (g *StaggeredGrid) Clone() Grid { return g.clone() }
+
+func (g *StaggeredGrid) CloneWith(edit func(MutableGrid)) Grid {
+	ng := g.clone()
+	if edit != nil {
+		edit(ng)
+	}
 	return ng
 }
 
@@ -433,6 +449,12 @@ func (g *StaggeredGrid) IsWalkableAtWorld(wx, wy float32) bool {
 func (g *StaggeredGrid) SetWalkableAtWorld(wx, wy float32, walkable bool) {
 	tx, ty := g.WorldToTile(wx, wy)
 	g.SetWalkableAt(tx, ty, walkable)
+}
+
+// SetWeightAtWorld sets the weight of the tile at the given world position.
+func (g *StaggeredGrid) SetWeightAtWorld(wx, wy float32, weight float32) {
+	tx, ty := g.WorldToTile(wx, wy)
+	g.SetWeightAt(tx, ty, weight)
 }
 
 // tileEdgePoint returns the closest point on the edge of tile (tx, ty) to (wx, wy),

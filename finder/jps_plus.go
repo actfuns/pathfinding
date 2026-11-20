@@ -90,14 +90,6 @@ type JPSPlusFinder struct {
 	jump16 []int16
 	wide   bool
 
-	// Runtime state
-	grid      Grid
-	startNode *Node
-	endNode   *Node
-	heapSlice []heapEntry
-	pathBuf   [][2]int32
-	expandBuf [][2]int32
-
 	// Pre-allocated direction slice (avoid allocation in hot path)
 	dirs []int
 }
@@ -330,7 +322,7 @@ func (j *JPSPlusFinder) setTable(i int, v int16) {
 
 // getDist returns the precomputed jump distance for cell (x,y) in direction dirIdx.
 func (j *JPSPlusFinder) getDist(x, y int32, dirIdx int) int16 {
-	if !j.grid.IsInside(x, y) {
+	if x < 0 || x >= j.width || y < 0 || y >= j.height {
 		return 0
 	}
 	i := int((y*j.width+x)*8) + dirIdx
@@ -493,53 +485,46 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 	if err != nil {
 		return nil, err
 	}
-	local := *j
-	local.grid = nil
-	local.startNode = nil
-	local.endNode = nil
-	local.heapSlice = states.heap[:0]
-	local.pathBuf = states.pathBuf[:0]
-	local.expandBuf = states.expandBuf[:0]
-	defer func() {
-		states.heap = local.heapSlice
-		states.pathBuf = local.pathBuf
-		states.expandBuf = local.expandBuf
-		releaseStates(states)
-	}()
-	p, err := local.findPath(startX, startY, endX, endY, grid, states)
+	defer releaseStates(states)
+	p, err := j.findPath(startX, startY, endX, endY, grid, states)
 	return finishPath(p, dst, false), err
 }
 
 func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
-	j.grid = grid
-	openList := &minHeap{nodes: j.heapSlice[:0], state: states}
+	openList := &minHeap{nodes: states.heap[:0], state: states}
 	defer func() {
 		clear(openList.nodes[:cap(openList.nodes)])
-		j.heapSlice = openList.nodes[:0]
+		states.heap = openList.nodes[:0]
+	}()
+	pathBuf := states.pathBuf[:0]
+	expandBuf := states.expandBuf[:0]
+	defer func() {
+		states.pathBuf = pathBuf
+		states.expandBuf = expandBuf
 	}()
 
-	j.startNode = grid.GetNodeAt(startX, startY)
-	j.endNode = grid.GetNodeAt(endX, endY)
-	if j.startNode == nil || j.endNode == nil {
+	startNode := grid.GetNodeAt(startX, startY)
+	endNode := grid.GetNodeAt(endX, endY)
+	if startNode == nil || endNode == nil {
 		return nil, nil
 	}
 
-	startState := states.get(j.startNode)
-	states.get(j.endNode)
+	startState := states.get(startNode)
+	states.get(endNode)
 	startState.G = 0
 	startState.F = 0
-	openList.Push(j.startNode)
+	openList.Push(startNode)
 
 	for !openList.Empty() {
 		node := openList.Pop()
 		states.get(node).Closed = true
 
-		if node.X == endX && node.Y == endY {
-			j.pathBuf = states.backtrace(node, j.pathBuf)
-			j.expandBuf = j.expandBuf[:0]
-			for i := 0; i < len(j.pathBuf)-1; i++ {
-				x0, y0 := j.pathBuf[i][0], j.pathBuf[i][1]
-				x1, y1 := j.pathBuf[i+1][0], j.pathBuf[i+1][1]
+		if node == endNode {
+			pathBuf = states.backtrace(node, pathBuf)
+			expandBuf = expandBuf[:0]
+			for i := 0; i < len(pathBuf)-1; i++ {
+				x0, y0 := pathBuf[i][0], pathBuf[i][1]
+				x1, y1 := pathBuf[i+1][0], pathBuf[i+1][1]
 				dx := x1 - x0
 				dy := y1 - y0
 				var sx, sy int32
@@ -560,7 +545,7 @@ func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 					if x0 == x1 && y0 == y1 {
 						break
 					}
-					j.expandBuf = append(j.expandBuf, [2]int32{x0, y0})
+					expandBuf = append(expandBuf, [2]int32{x0, y0})
 					e2 := 2 * err
 					if e2 > -dy {
 						err -= dy
@@ -572,20 +557,19 @@ func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 					}
 				}
 			}
-			j.expandBuf = append(j.expandBuf, j.pathBuf[len(j.pathBuf)-1])
-			return j.expandBuf, nil
+			expandBuf = append(expandBuf, pathBuf[len(pathBuf)-1])
+			return expandBuf, nil
 		}
 
-		j.identifySuccessors(node, states, openList)
+		j.identifySuccessors(node, grid, endNode, states, openList)
 	}
 	return nil, nil
 }
 
-func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, openList *minHeap) {
+func (j *JPSPlusFinder) identifySuccessors(node *Node, grid Grid, endNode *Node, states *searchStates, openList *minHeap) {
 	x, y := node.X, node.Y
-	endX, endY := j.endNode.X, j.endNode.Y
+	endX, endY := endNode.X, endNode.Y
 	heuristic := j.Heuristic
-	grid := j.grid
 	nodeState := states.get(node)
 
 	// Use diagonal movement setting to determine which directions to check
@@ -595,7 +579,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 	// complete and optimal when the static jump table cannot encode every
 	// goal-dependent jump point.
 	relaxAdjacent := func(dx, dy int32) {
-		if dx != 0 && dy != 0 && !j.diagonalStepAllowed(x, y, dx, dy) {
+		if dx != 0 && dy != 0 && !j.diagonalStepAllowed(grid, x, y, dx, dy) {
 			return
 		}
 		nx, ny := x+dx, y+dy
@@ -639,7 +623,6 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 			if (dist <= 0 && endDist <= obstacleDist) || (dist > 0 && endDist <= int32(dist)) {
 				// End is reachable in this direction, add it as successor
 				gd := octileDist(AbsInt(endX-x), AbsInt(endY-y))
-				endNode := j.endNode
 				ens := states.get(endNode)
 				ng := nodeState.G + gd
 				if !ens.Closed && (ens.Opened == 0 || ng < ens.G) {
@@ -706,8 +689,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, states *searchStates, ope
 
 // diagonalStepAllowed applies the configured diagonal movement rule to a
 // one-step diagonal move from (x, y).
-func (j *JPSPlusFinder) diagonalStepAllowed(x, y, dx, dy int32) bool {
-	grid := j.grid
+func (j *JPSPlusFinder) diagonalStepAllowed(grid Grid, x, y, dx, dy int32) bool {
 	switch j.DiagonalMovement {
 	case DiagonalNever:
 		return false

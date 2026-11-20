@@ -68,7 +68,6 @@ func TestJPSPlusDynamicTableWidth(t *testing.T) {
 		g := newFlatGrid(tc.w, 1)
 		f := NewJPSPlusFinder(WithDiagonal(DiagonalNever))
 		_ = f.Precompute(g)
-		f.grid = g
 
 		if f.wide != tc.wide {
 			t.Errorf("%s: wide=%v, want %v", tc.name, f.wide, tc.wide)
@@ -93,7 +92,6 @@ func TestJPSPlusDynamicTableWidth(t *testing.T) {
 		if err := f2.LoadPrecomputed(data); err != nil {
 			t.Fatalf("%s: LoadPrecomputed: %v", tc.name, err)
 		}
-		f2.grid = g
 		if f2.wide != tc.wide {
 			t.Errorf("%s: round-trip wide=%v, want %v", tc.name, f2.wide, tc.wide)
 		}

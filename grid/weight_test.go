@@ -24,14 +24,14 @@ func TestSetWeightAtRejectsInvalid(t *testing.T) {
 						t.Errorf("%s: SetWeightAt(%v) did not panic", tc.name, w)
 					}
 				}()
-				tc.g.SetWeightAt(0, 0, w)
+				tc.g.(MutableGrid).SetWeightAt(0, 0, w)
 			}()
 			if got := tc.g.GetWeightAt(0, 0); got != 1 {
 				t.Errorf("%s: weight changed to %v after rejecting %v", tc.name, got, w)
 			}
 		}
 
-		tc.g.SetWeightAt(0, 0, 2.5)
+		tc.g.(MutableGrid).SetWeightAt(0, 0, 2.5)
 		if got := tc.g.GetWeightAt(0, 0); got != 2.5 {
 			t.Errorf("%s: weight = %v, want 2.5", tc.name, got)
 		}

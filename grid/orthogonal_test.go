@@ -74,15 +74,15 @@ func TestOrthogonalRoundTrip(t *testing.T) {
 			t.Errorf("WorldToTile(%v,%v) = (%d,%d) outside grid", wp[0], wp[1], tx, ty)
 			continue
 		}
-		tileLeft := float32(tx * g.tileW)
-		tileTop := float32(ty * g.tileH)
-		if wp[0] < tileLeft || wp[0] >= tileLeft+float32(g.tileW) {
+		tileLeft := float32(tx * g.TileWidth())
+		tileTop := float32(ty * g.TileHeight())
+		if wp[0] < tileLeft || wp[0] >= tileLeft+float32(g.TileWidth()) {
 			t.Errorf("WorldToTile(%v,%v) = (%d,%d), worldX %v not in [%v,%v)",
-				wp[0], wp[1], tx, ty, wp[0], tileLeft, tileLeft+float32(g.tileW))
+				wp[0], wp[1], tx, ty, wp[0], tileLeft, tileLeft+float32(g.TileWidth()))
 		}
-		if wp[1] < tileTop || wp[1] >= tileTop+float32(g.tileH) {
+		if wp[1] < tileTop || wp[1] >= tileTop+float32(g.TileHeight()) {
 			t.Errorf("WorldToTile(%v,%v) = (%d,%d), worldY %v not in [%v,%v)",
-				wp[0], wp[1], tx, ty, wp[1], tileTop, tileTop+float32(g.tileH))
+				wp[0], wp[1], tx, ty, wp[1], tileTop, tileTop+float32(g.TileHeight()))
 		}
 	}
 }
@@ -257,16 +257,16 @@ func TestOrthogonalObstacleCount(t *testing.T) {
 	if n := g.ObstacleCount(); n != 1 {
 		t.Errorf("expected 1 obstacle, got %d", n)
 	}
-	g.SetWalkableAt(0, 0, false)
+	g.(MutableGrid).SetWalkableAt(0, 0, false)
 	if n := g.ObstacleCount(); n != 2 {
 		t.Errorf("expected 2 obstacles, got %d", n)
 	}
-	g.SetWalkableAt(1, 1, true)
-	g.SetWalkableAt(0, 0, true)
+	g.(MutableGrid).SetWalkableAt(1, 1, true)
+	g.(MutableGrid).SetWalkableAt(0, 0, true)
 	if n := g.ObstacleCount(); n != 0 {
 		t.Errorf("expected 0 obstacles, got %d", n)
 	}
-	g.SetWalkableAt(0, 0, true)
+	g.(MutableGrid).SetWalkableAt(0, 0, true)
 	if n := g.ObstacleCount(); n != 0 {
 		t.Errorf("expected 0 obstacles after no-op, got %d", n)
 	}
