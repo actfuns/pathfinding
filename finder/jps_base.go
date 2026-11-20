@@ -121,14 +121,17 @@ func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int32, grid Gr
 	startState := states.get(s.startNode)
 	startState.G = 0
 	startState.F = 0
-	openList.Push(s.startNode)
+	startIdx := states.index(s.startNode)
+	endIdx := states.index(s.endNode)
+	openList.Push(startIdx, startState.F)
 	startState.Opened = 1
 
 	for !openList.Empty() {
-		node := openList.Pop()
-		states.get(node).Closed = true
+		nodeIdx := openList.Pop()
+		node := grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
+		states.states[nodeIdx].Closed = true
 
-		if node == s.endNode {
+		if nodeIdx == endIdx {
 			pathBuf = states.backtrace(s.endNode, pathBuf)
 			// Jump point paths skip intermediate tiles, so expand inline.
 			// Uses expandBuf instead of ExpandPath to avoid allocation.
@@ -195,13 +198,14 @@ func (s *jpsSearch) identifySuccessors(node *Node, openList *minHeap) {
 			continue
 		}
 		jumpNode := grid.GetNodeAt(jx, jy)
-		ns := s.states.get(jumpNode)
+		jumpIdx := s.states.index(jumpNode)
+		ns := s.states.at(jumpIdx)
 		if ns.Closed {
 			continue
 		}
 
 		d := Octile(float32(AbsInt(jx-x)), float32(AbsInt(jy-y)))
-		ng := s.states.get(node).G + d
+		ng := s.states.states[nodeIdx].G + d
 
 		if ns.Opened == 0 || ng < ns.G {
 			ns.G = ng
@@ -212,10 +216,10 @@ func (s *jpsSearch) identifySuccessors(node *Node, openList *minHeap) {
 			ns.Parent = nodeIdx
 
 			if ns.Opened == 0 {
-				openList.Push(jumpNode)
+				openList.Push(jumpIdx, ns.F)
 				ns.Opened = 1
 			} else {
-				openList.UpdateItem(jumpNode)
+				openList.UpdateItem(jumpIdx, ns.F)
 			}
 		}
 	}

@@ -514,13 +514,16 @@ func (j *JPSPlusFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 	walk := newWalkableView(grid)
 	startState.G = 0
 	startState.F = 0
-	openList.Push(startNode)
+	startIdx := states.index(startNode)
+	endIdx := states.index(endNode)
+	openList.Push(startIdx, startState.F)
 
 	for !openList.Empty() {
-		node := openList.Pop()
-		states.get(node).Closed = true
+		nodeIdx := openList.Pop()
+		node := grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
+		states.states[nodeIdx].Closed = true
 
-		if node == endNode {
+		if nodeIdx == endIdx {
 			pathBuf = states.backtrace(node, pathBuf)
 			expandBuf = expandBuf[:0]
 			for i := 0; i < len(pathBuf)-1; i++ {
@@ -574,6 +577,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 	nodeState := states.get(node)
 	nodeIdx := states.index(node)
 	endState := states.get(endNode)
+	endIdx := states.index(endNode)
 
 	// Use diagonal movement setting to determine which directions to check
 	dirs := j.dirs
@@ -590,7 +594,8 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 			return
 		}
 		adjNode := walk.nodeAt(nx, ny)
-		ns := states.get(adjNode)
+		adjIdx := states.index(adjNode)
+		ns := states.at(adjIdx)
 		if ns.Closed {
 			return
 		}
@@ -607,10 +612,10 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 			ns.F = ns.G + ns.H*j.Weight
 			ns.Parent = nodeIdx
 			if ns.Opened == 0 {
-				openList.Push(adjNode)
+				openList.Push(adjIdx, ns.F)
 				ns.Opened = 1
 			} else {
-				openList.UpdateItem(adjNode)
+				openList.UpdateItem(adjIdx, ns.F)
 			}
 		}
 	}
@@ -636,7 +641,7 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 					ens.F = ng
 					ens.Parent = nodeIdx
 					if ens.Opened == 0 {
-						openList.Push(endNode)
+						openList.Push(endIdx, ens.F)
 						ens.Opened = 1
 					}
 				}
@@ -658,7 +663,8 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 		}
 
 		jumpNode := walk.nodeAt(jx, jy)
-		ns := states.get(jumpNode)
+		jumpIdx := states.index(jumpNode)
+		ns := states.at(jumpIdx)
 		if ns.Closed {
 			continue
 		}
@@ -675,10 +681,10 @@ func (j *JPSPlusFinder) identifySuccessors(node *Node, endNode *Node, states *se
 			ns.Parent = nodeIdx
 
 			if ns.Opened == 0 {
-				openList.Push(jumpNode)
+				openList.Push(jumpIdx, ns.F)
 				ns.Opened = 1
 			} else {
-				openList.UpdateItem(jumpNode)
+				openList.UpdateItem(jumpIdx, ns.F)
 			}
 		}
 

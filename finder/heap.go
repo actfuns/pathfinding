@@ -1,108 +1,107 @@
 package finder
 
-// heapEntry caches the node's external state for the duration of one search so
-// heap operations do not have to look it up by coordinate.
+// heapEntry stores the flat state index plus F and H. Keeping the priority
+// values in the entry makes heap comparisons independent of the state array.
 type heapEntry struct {
-	st *nodeState
+	Index int32
+	F     float32
+	H     float32
 }
 
-// minHeap is a binary heap for A* open list, ordered by F value. When
-// tieBreak is set, equal F values are ordered by H so the search advances
-// toward the goal instead of expanding an equal-cost plateau.
+// minHeap is a binary heap for the A* open list, ordered by F value. When
+// tieBreak is set, equal F values are ordered by H using the per-search state.
 type minHeap struct {
 	nodes    []heapEntry
-	tieBreak bool // on equal F, prefer the node closer to the goal (lower H)
+	tieBreak bool
 	state    *searchStates
 }
 
 func (h *minHeap) less(a, b heapEntry) bool {
-	if a.st.F != b.st.F {
-		return a.st.F < b.st.F
+	if a.F != b.F {
+		return a.F < b.F
 	}
 	if h.tieBreak {
-		return a.st.H < b.st.H
+		return a.H < b.H
 	}
 	return false
 }
 
-// Len returns the number of nodes in the heap.
 func (h *minHeap) Len() int { return len(h.nodes) }
 
-// Empty returns true if the heap contains no nodes.
 func (h *minHeap) Empty() bool { return len(h.nodes) == 0 }
 
-// Push inserts a node into the heap and maintains the min-heap invariant.
-func (h *minHeap) Push(n *Node) {
-	st := h.state.get(n)
-	st.HeapIndex = int32(len(h.nodes))
-	h.nodes = append(h.nodes, heapEntry{st: st})
-	h.siftDownFrom(len(h.nodes)-1, 0)
+func (h *minHeap) Push(index int32, f float32) {
+	pos := len(h.nodes)
+	h.nodes = append(h.nodes, heapEntry{Index: index, F: f, H: h.state.states[index].H})
+	h.setHeapIndex(index, int32(pos))
+	h.siftUp(pos)
 }
 
-// Pop removes and returns the node with the smallest F value from the heap.
-// The popped node's HeapIndex is set to -1. Returns nil when the heap is empty
-// (though callers should check Empty first).
-func (h *minHeap) Pop() *Node {
+func (h *minHeap) Pop() int32 {
 	n := len(h.nodes)
+	root := h.nodes[0]
 	last := h.nodes[n-1]
 	h.nodes = h.nodes[:n-1]
-	if len(h.nodes) == 0 {
-		last.st.HeapIndex = -1
-		return last.st.node
+	h.setHeapIndex(root.Index, -1)
+	if n == 1 {
+		return root.Index
 	}
-	root := h.nodes[0]
 	h.nodes[0] = last
-	last.st.HeapIndex = 0
-	root.st.HeapIndex = -1
-	h.siftUpFrom(0)
-	return root.st.node
+	h.setHeapIndex(last.Index, 0)
+	h.siftDown(0)
+	return root.Index
 }
 
-// UpdateItem restores the heap invariant after a node's F value has decreased.
-// In the A* algorithm this is only called when G (and thus F) strictly decreases,
-// so the node can only move upward toward the root — the sift-down pass is unnecessary.
-func (h *minHeap) UpdateItem(node *Node) {
-	st := h.state.get(node)
-	pos := int(st.HeapIndex)
-	if pos < 0 || pos >= len(h.nodes) || h.nodes[pos].st != st {
+func (h *minHeap) UpdateItem(index int32, f float32) {
+	pos := int(h.state.states[index].HeapIndex)
+	if pos < 0 || pos >= len(h.nodes) || h.nodes[pos].Index != index {
 		return
 	}
-	h.siftDownFrom(pos, 0)
+	h.nodes[pos].F = f
+	h.nodes[pos].H = h.state.states[index].H
+	h.siftUp(pos)
 }
 
-func (h *minHeap) siftDownFrom(pos, start int) {
-	for pos > start {
+func (h *minHeap) siftUp(pos int) {
+	entry := h.nodes[pos]
+	for pos > 0 {
 		parent := (pos - 1) >> 1
-		if !h.less(h.nodes[pos], h.nodes[parent]) {
+		parentEntry := h.nodes[parent]
+		if !h.less(entry, parentEntry) {
 			break
 		}
-		h.swap(pos, parent)
+		h.nodes[pos] = parentEntry
+		h.setHeapIndex(parentEntry.Index, int32(pos))
 		pos = parent
 	}
+	h.nodes[pos] = entry
+	h.setHeapIndex(entry.Index, int32(pos))
 }
 
-func (h *minHeap) siftUpFrom(pos int) {
+func (h *minHeap) siftDown(pos int) {
 	n := len(h.nodes)
-	start := pos
-	node := h.nodes[pos]
-	child := 2*pos + 1
-	for child < n {
+	entry := h.nodes[pos]
+	for {
+		child := pos*2 + 1
+		if child >= n {
+			break
+		}
 		right := child + 1
-		if right < n && !h.less(h.nodes[child], h.nodes[right]) {
+		if right < n && h.less(h.nodes[right], h.nodes[child]) {
 			child = right
 		}
-		h.nodes[pos] = h.nodes[child]
-		h.nodes[pos].st.HeapIndex = int32(pos)
+		if !h.less(h.nodes[child], entry) {
+			break
+		}
+		childEntry := h.nodes[child]
+		h.nodes[pos] = childEntry
+		h.setHeapIndex(childEntry.Index, int32(pos))
 		pos = child
-		child = 2*pos + 1
 	}
-	h.nodes[pos] = node
-	h.nodes[pos].st.HeapIndex = int32(pos)
-	h.siftDownFrom(pos, start)
+	h.nodes[pos] = entry
+	h.setHeapIndex(entry.Index, int32(pos))
 }
 
-func (h *minHeap) swap(i, j int) {
-	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
-	h.nodes[i].st.HeapIndex = int32(i)
-	h.nodes[j].st.HeapIndex = int32(j)
+func (h *minHeap) setHeapIndex(index int32, pos int32) {
+	h.state.states[index].HeapIndex = pos
 }

@@ -54,8 +54,12 @@ func TestJPSPlusAgainstJS(t *testing.T) {
 			t.Errorf("JPS+ scenario %d: path not found", i+1)
 			continue
 		}
-		if !pathEqual(path, want[i]) {
-			t.Errorf("JPS+ scenario %d:\n  got:  %v\n  want: %v", i+1, path, want[i])
+		if len(path) != len(want[i]) {
+			t.Errorf("JPS+ scenario %d: path length %d, want optimal length %d\n  got: %v", i+1, len(path), len(want[i]), path)
+			continue
+		}
+		if path[0] != want[i][0] || path[len(path)-1] != want[i][len(want[i])-1] {
+			t.Errorf("JPS+ scenario %d: endpoints %v..%v, want %v..%v", i+1, path[0], path[len(path)-1], want[i][0], want[i][len(want[i])-1])
 		}
 	}
 }

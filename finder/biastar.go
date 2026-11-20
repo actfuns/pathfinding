@@ -87,27 +87,31 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 	startState := states.get(startNode)
 	startState.G = 0
 	startState.F = 0
-	startOpenList.Push(startNode)
+	startIdx := states.index(startNode)
+	startOpenList.Push(startIdx, startState.F)
 	startState.Opened = BY_START
 
 	endState := states.get(endNode)
 	endState.G = 0
 	endState.F = 0
-	endOpenList.Push(endNode)
+	endIdx := states.index(endNode)
+	endOpenList.Push(endIdx, endState.F)
 	endState.Opened = BY_END
 
 	neighborBuf := states.neighborBuf[:0]
 	defer func() { states.neighborBuf = neighborBuf }()
 
 	for !startOpenList.Empty() && !endOpenList.Empty() {
-		node := startOpenList.Pop()
-		nodeState := states.get(node)
+		nodeIdx := startOpenList.Pop()
+		node := grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
+		nodeState := &states.states[nodeIdx]
 		nodeState.Closed = true
 
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
-			ns := states.get(neighbor)
+			neighborIdx := states.index(neighbor)
+			ns := states.at(neighborIdx)
 			if ns.Closed {
 				continue
 			}
@@ -132,25 +136,27 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 					ns.H = f.Weight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
 				}
 				ns.F = ns.G + ns.H
-				ns.Parent = states.index(node)
+				ns.Parent = nodeIdx
 
 				if ns.Opened == 0 {
-					startOpenList.Push(neighbor)
+					startOpenList.Push(neighborIdx, ns.F)
 					ns.Opened = BY_START
 				} else {
-					startOpenList.UpdateItem(neighbor)
+					startOpenList.UpdateItem(neighborIdx, ns.F)
 				}
 			}
 		}
 
-		node = endOpenList.Pop()
-		nodeState = states.get(node)
+		nodeIdx = endOpenList.Pop()
+		node = grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
+		nodeState = &states.states[nodeIdx]
 		nodeState.Closed = true
 
 		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
-			ns := states.get(neighbor)
+			neighborIdx := states.index(neighbor)
+			ns := states.at(neighborIdx)
 			if ns.Closed {
 				continue
 			}
@@ -175,13 +181,13 @@ func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 					ns.H = f.Weight * heuristic(float32(AbsInt(x-startX)), float32(AbsInt(y-startY)))
 				}
 				ns.F = ns.G + ns.H
-				ns.Parent = states.index(node)
+				ns.Parent = nodeIdx
 
 				if ns.Opened == 0 {
-					endOpenList.Push(neighbor)
+					endOpenList.Push(neighborIdx, ns.F)
 					ns.Opened = BY_END
 				} else {
-					endOpenList.UpdateItem(neighbor)
+					endOpenList.UpdateItem(neighborIdx, ns.F)
 				}
 			}
 		}

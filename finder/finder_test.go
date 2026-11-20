@@ -68,6 +68,26 @@ func testFinderAgainstJS(t *testing.T, name string, newFinder func() finder.Find
 	}
 }
 
+func testFinderAgainstJSOptimal(t *testing.T, name string, newFinder func() finder.Finder, want [][][2]int32) {
+	t.Helper()
+	for i, s := range testScenarios {
+		g := grid.NewOrthogonalGrid(s.matrix)
+		f := newFinder()
+		path, _ := f.FindPath(s.startX, s.startY, s.endX, s.endY, g, nil)
+		if path == nil {
+			t.Errorf("%s scenario %d: path not found", name, i+1)
+			continue
+		}
+		if len(path) != len(want[i]) {
+			t.Errorf("%s scenario %d: path length %d, want optimal length %d\n  got: %v", name, i+1, len(path), len(want[i]), path)
+			continue
+		}
+		if path[0] != want[i][0] || path[len(path)-1] != want[i][len(want[i])-1] {
+			t.Errorf("%s scenario %d: endpoints %v..%v, want %v..%v", name, i+1, path[0], path[len(path)-1], want[i][0], want[i][len(want[i])-1])
+		}
+	}
+}
+
 func pathEqual(a, b [][2]int32) bool {
 	if len(a) != len(b) {
 		return false

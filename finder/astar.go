@@ -83,17 +83,18 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 	startState := states.get(startNode)
 	startState.G = 0
 	startState.F = 0
-	openList.Push(startNode)
+	startIdx := states.index(startNode)
+	openList.Push(startIdx, startState.F)
 	startState.Opened = 1
 
 	neighborBuf := states.neighborBuf[:0]
 	defer func() { states.neighborBuf = neighborBuf }()
 
 	for !openList.Empty() {
-		node := openList.Pop()
-		nodeState := states.get(node)
+		nodeIdx := openList.Pop()
+		nodeState := &states.states[nodeIdx]
 		nodeState.Closed = true
-		nodeIdx := states.index(node)
+		node := grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
 
 		if node == endNode {
 			states.pathBuf = states.backtrace(endNode, states.pathBuf)
@@ -103,7 +104,8 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
-			ns := states.get(neighbor)
+			neighborIdx := states.index(neighbor)
+			ns := states.at(neighborIdx)
 			if ns.Closed {
 				continue
 			}
@@ -127,10 +129,10 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 				ns.Parent = nodeIdx
 
 				if ns.Opened == 0 {
-					openList.Push(neighbor)
+					openList.Push(neighborIdx, ns.F)
 					ns.Opened = 1
 				} else {
-					openList.UpdateItem(neighbor)
+					openList.UpdateItem(neighborIdx, ns.F)
 				}
 			}
 		}
