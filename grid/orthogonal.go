@@ -57,6 +57,9 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) Grid {
 	return g
 }
 
+// SetFinder replaces the pathfinder used by this mutable grid view.
+func (g *OrthogonalGrid) SetFinder(f finder.Finder) { g.finder = f }
+
 // --- tile coordinate implementations of finder.Grid ---
 
 func (g *OrthogonalGrid) index(x, y int32) int { return int(y)*int(g.width) + int(x) }
@@ -136,6 +139,12 @@ func (g *OrthogonalGrid) GetWeightAt(x, y int32) float32 {
 		return 1.0
 	}
 	return g.nodes[g.index(x, y)].Weight
+}
+
+// GetWeightAtWorld returns the movement cost multiplier at a world position.
+func (g *OrthogonalGrid) GetWeightAtWorld(wx, wy float32) float32 {
+	tx, ty := g.WorldToTile(wx, wy)
+	return g.GetWeightAt(tx, ty)
 }
 
 // HasLineOfSight reports whether two tiles can see each other using Bresenham.
@@ -406,14 +415,25 @@ func (g *OrthogonalGrid) clone() *OrthogonalGrid {
 	return ng
 }
 
-func (g *OrthogonalGrid) Clone() Grid { return g.clone() }
+func (g *OrthogonalGrid) Clone() (Grid, error) {
+	if !finder.IsStateless(g.finder) {
+		return nil, ErrFinderRequired
+	}
+	return g.clone(), nil
+}
 
-func (g *OrthogonalGrid) CloneWith(edit func(MutableGrid)) Grid {
+func (g *OrthogonalGrid) CloneWith(edit func(MutableGrid)) (Grid, error) {
 	ng := g.clone()
+	if !finder.IsStateless(g.finder) {
+		ng.finder = nil
+	}
 	if edit != nil {
 		edit(ng)
 	}
-	return ng
+	if ng.finder == nil {
+		return nil, ErrFinderRequired
+	}
+	return ng, nil
 }
 
 // SupportsJPSCanonicalPruning returns true — orthogonal grids have axis-aligned topology

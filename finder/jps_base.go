@@ -27,6 +27,9 @@ type jpsSearch struct {
 	neighborBuf []*Node
 }
 
+// statelessFinder marks the base JPS implementation as safe to reuse after a grid clone.
+func (b *JumpPointFinderBase) statelessFinder() {}
+
 // GridWithJPSSupport is optionally implemented by Grid types that support
 // canonical JPS neighbor pruning (standard orthogonal grids with axis-aligned topology).
 type GridWithJPSSupport interface {

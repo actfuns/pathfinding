@@ -1,10 +1,15 @@
 package grid
 
 import (
+	"errors"
 	"math"
 
 	"github.com/actfuns/pathfinding/finder"
 )
+
+// ErrFinderRequired is returned by CloneWith when the source finder is
+// stateful and the edit callback does not install a replacement finder.
+var ErrFinderRequired = errors.New("grid: CloneWith requires an explicit finder for a stateful finder")
 
 // Smoother is a path smoothing function. It takes a tile path and returns a
 // simplified path with fewer waypoints, typically by removing intermediate
@@ -92,6 +97,8 @@ type Grid interface {
 	// GetWeightAt returns the movement cost multiplier for tile (x, y).
 	// Returns 1.0 for tiles outside the grid.
 	GetWeightAt(x, y int32) float32
+	// GetWeightAtWorld returns the movement cost multiplier at a world position.
+	GetWeightAtWorld(wx, wy float32) float32
 
 	// WorldToTile converts a world-space coordinate to tile-space.
 	// Results outside the grid should be checked with IsInside.
@@ -118,14 +125,17 @@ type Grid interface {
 	// (0, 0, false) if no walkable tile exists within the search radius.
 	FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edgeInset float32) (float32, float32, bool)
 
-	// Clone returns a read-only copy with its own node storage. The configured
-	// Finder and smoother are shared.
-	Clone() Grid
+	// Clone returns a read-only copy with its own node storage. A stateless
+	// Finder is shared; a stateful Finder returns ErrFinderRequired. Use
+	// CloneWith to install a Finder prepared for the new snapshot.
+	Clone() (Grid, error)
 	// CloneWith copies the grid once, applies edits to the private copy, and
 	// returns it as a new read-only snapshot. The callback must not retain the
-	// MutableGrid it receives. The configured Finder and smoother are shared;
-	// edits that change topology may require Precompute/Build again.
-	CloneWith(edit func(MutableGrid)) Grid
+	// MutableGrid it receives. A stateless Finder is shared automatically; for a
+	// stateful Finder (JPS+, HPA, Waypoint), the callback must call SetFinder
+	// with a Finder prepared for the new grid, otherwise ErrFinderRequired is
+	// returned.
+	CloneWith(edit func(MutableGrid)) (Grid, error)
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
 	// FindPath finds a path between two tile positions.
@@ -161,4 +171,5 @@ type MutableGrid interface {
 	SetWeightAt(x, y int32, weight float32)
 	SetWalkableAtWorld(wx, wy float32, walkable bool)
 	SetWeightAtWorld(wx, wy float32, weight float32)
+	SetFinder(f finder.Finder)
 }

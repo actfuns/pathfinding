@@ -25,6 +25,9 @@ func NewBreadthFirstFinder(opts ...Option) *BreadthFirstFinder {
 	return f
 }
 
+// statelessFinder marks BreadthFirstFinder as safe to reuse after a grid clone.
+func (f *BreadthFirstFinder) statelessFinder() {}
+
 // FindPath finds a path using BFS.
 func (f *BreadthFirstFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {

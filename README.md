@@ -135,7 +135,7 @@ g := grid.NewOrthogonalGrid(terrain,
 所有网格类型实现统一的 `grid.Grid` 接口：
 
 - **瓦片坐标查询** — Width, Height, IsInside, IsWalkableAt, GetNodeAt, ObstacleCount
-- **瓦片权重** — GetWeightAt（写权重使用 `MutableGrid.SetWeightAt`）
+- **瓦片权重** — GetWeightAt / GetWeightAtWorld（写权重使用 `MutableGrid.SetWeightAt`）
 - **流场群体寻路** — flowfield.New / GetDirection（O(1) 多人查表，v0.5.0+）
 - **世界坐标转换** — WorldToTile, TileToWorld, IsWalkableAtWorld
 - **最近可通行点** — FindNearestWalkable, FindNearestWalkableWorld
@@ -153,16 +153,25 @@ g := grid.NewOrthogonalGrid(matrix)
 g.(grid.MutableGrid).SetWalkableAt(1, 2, false)
 ```
 
+- **只做只读快照**：用 `Clone`。无状态 Finder 自动共享；有状态 Finder 返回 `grid.ErrFinderRequired`：
+
+```go
+g2, err := g.Clone()
+```
+
 - **并发搜索期间修改**：用 `CloneWith` 复制一次，批量修改后得到新快照：
 
 ```go
-g2 := g.CloneWith(func(m grid.MutableGrid) {
+g2, err := g.CloneWith(func(m grid.MutableGrid) {
     m.SetWalkableAt(1, 2, false)
     m.SetWeightAt(3, 4, 5)
 })
+if err != nil {
+    // 原 Finder 有状态且回调没有 SetFinder 时返回 grid.ErrFinderRequired
+}
 ```
 
-`MutableGrid` 的断言是零拷贝的，调用方必须保证没有并发读/搜索；`CloneWith` 返回的新网格与旧网格完全隔离。可写接口包含 `SetWalkableAt`、`SetWeightAt`、`SetWalkableAtWorld`、`SetWeightAtWorld`。修改 walkability 后，JPS+ 的预计算表、HPA world 等缓存需要重建。
+`MutableGrid` 的断言是零拷贝的，调用方必须保证没有并发读/搜索；`CloneWith` 返回的新网格与旧网格完全隔离。无状态 Finder 会被自动共享；JPS+ / HPA / Waypoint 等有状态 Finder 不会复制，回调必须 `SetFinder` 换成针对新网格准备好的 Finder，否则返回 `grid.ErrFinderRequired`。可写接口包含 `SetWalkableAt`、`SetWeightAt`、`SetWalkableAtWorld`、`SetWeightAtWorld` 和 `SetFinder`。
 
 ## 寻路结果与错误
 
@@ -550,7 +559,8 @@ BREAKING: 移除 `Node` 搜索字段/`ResetSearch`、`Backtrace`/`BiBacktrace`/`
 ### Unreleased — 只读 Grid 与显式可变视图
 - `NewOrthogonalGrid` / `NewHexGrid` / `NewStaggeredGrid` 返回只读 `grid.Grid`
 - Setter 移入 `grid.MutableGrid`；单线程可通过类型断言零拷贝访问
-- 新增 `Grid.CloneWith(func(MutableGrid)) Grid`，一次复制后批量修改并返回新快照
+- `Grid.Clone() (Grid, error)`：只读快照；有状态 Finder 返回 `ErrFinderRequired`
+- 新增 `Grid.CloneWith(func(MutableGrid)) (Grid, error)`：一次复制后批量修改并返回新快照；有状态 Finder 必须显式替换
 
 ### v0.9.0 — 并发寻路 + 寻路返回 error
 - **破坏性变更**：`finder.Finder.FindPath`、`grid.Grid.FindPath` / `FindPathWorld`、`hpa` / `waypoint` / `flowfield.Field.FindPath` 改为返回 `([][2]int, error)`

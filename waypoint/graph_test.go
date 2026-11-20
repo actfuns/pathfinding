@@ -286,8 +286,8 @@ func TestConnectNearbySpatialConsistency(t *testing.T) {
 
 func BenchmarkConnectNearby(b *testing.B) {
 	grid := walkableGrid(500, 500)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		g := NewWaypointGraph()
 		for x := 0; x < 500; x += 20 {
 			for y := 0; y < 500; y += 20 {

@@ -51,6 +51,9 @@ func NewAStarFinder(opts ...Option) *AStarFinder {
 	return f
 }
 
+// statelessFinder marks AStarFinder as safe to reuse after a grid clone.
+func (f *AStarFinder) statelessFinder() {}
+
 // FindPath finds a path from (startX, startY) to (endX, endY) on the grid.
 func (f *AStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {

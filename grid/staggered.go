@@ -79,6 +79,9 @@ func NewStaggeredGrid(matrix [][]int32, opts ...GridOption) Grid {
 	return g
 }
 
+// SetFinder replaces the pathfinder used by this mutable grid view.
+func (g *StaggeredGrid) SetFinder(f finder.Finder) { g.finder = f }
+
 func (g *StaggeredGrid) initNeighbors() {
 	g.cardinalOffsets = [4][2]int32{
 		{0, -1}, // N
@@ -196,6 +199,12 @@ func (g *StaggeredGrid) GetWeightAt(x, y int32) float32 {
 	return g.nodes[g.index(x, y)].Weight
 }
 
+// GetWeightAtWorld returns the movement cost multiplier at a world position.
+func (g *StaggeredGrid) GetWeightAtWorld(wx, wy float32) float32 {
+	tx, ty := g.WorldToTile(wx, wy)
+	return g.GetWeightAt(tx, ty)
+}
+
 // HasLineOfSight reports whether two tiles can see each other using dense world-space sampling.
 func (g *StaggeredGrid) HasLineOfSight(x1, y1, x2, y2 int32) bool {
 	return gridutil.HasLineOfSightDense(g, x1, y1, x2, y2)
@@ -243,14 +252,25 @@ func (g *StaggeredGrid) clone() *StaggeredGrid {
 	return ng
 }
 
-func (g *StaggeredGrid) Clone() Grid { return g.clone() }
+func (g *StaggeredGrid) Clone() (Grid, error) {
+	if !finder.IsStateless(g.finder) {
+		return nil, ErrFinderRequired
+	}
+	return g.clone(), nil
+}
 
-func (g *StaggeredGrid) CloneWith(edit func(MutableGrid)) Grid {
+func (g *StaggeredGrid) CloneWith(edit func(MutableGrid)) (Grid, error) {
 	ng := g.clone()
+	if !finder.IsStateless(g.finder) {
+		ng.finder = nil
+	}
 	if edit != nil {
 		edit(ng)
 	}
-	return ng
+	if ng.finder == nil {
+		return nil, ErrFinderRequired
+	}
+	return ng, nil
 }
 
 // --- world coordinate conversion (Tiled StaggeredRenderer) ---
@@ -919,7 +939,8 @@ func (g *StaggeredGrid) RenderSVG(cfg *SVGOpts, paths ...[][2]int32) string {
 	for y := 0; y < gh; y++ {
 		for x := 0; x < gw; x++ {
 			cx, cy := g.tileToScreenCoords(int32(x), int32(gh-1-y))
-			fill, stroke := "#c8e6c9", "#cccccc"
+			var fill string
+			stroke := "#cccccc"
 			if !g.IsWalkableAt(int32(x), int32(y)) {
 				fill, stroke = "#555555", "#444444"
 			} else {

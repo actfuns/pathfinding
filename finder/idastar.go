@@ -55,6 +55,9 @@ func NewIDAStarFinder(opts ...Option) *IDAStarFinder {
 	return f
 }
 
+// statelessFinder marks IDAStarFinder as safe to reuse after a grid clone.
+func (f *IDAStarFinder) statelessFinder() {}
+
 // FindPath finds a path using IDA*.
 func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst [][2]int32) ([][2]int32, error) {
 	if path, err := preflight(startX, startY, endX, endY, grid); path != nil || err != nil {
