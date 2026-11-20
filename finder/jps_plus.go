@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/actfuns/pathfinding/internal/walkability"
 )
 
 // Direction index mapping for JPS+ jump table.
@@ -21,9 +23,10 @@ const (
 
 // Jump-table format magics: JPS (int8) and JPS2 (int16).
 const (
-	jpsPlusMagic8        uint32 = 0x4A5053
-	jpsPlusMagic16       uint32 = 0x4A505332
-	jpsPlusCanonicalFlag uint32 = 1 << 31
+	jpsPlusMagic8          uint32 = 0x4A5053
+	jpsPlusMagic16         uint32 = 0x4A505332
+	jpsPlusCanonicalFlag   uint32 = 1 << 31
+	jpsPlusFingerprintFlag uint32 = 1 << 29
 )
 
 var jpsCardinalDirs = [4][2]int32{
@@ -85,10 +88,12 @@ type JPSPlusFinder struct {
 	// Layout: (y*width + x)*8 + dir
 	// Positive = jump point at that distance; negative = obstacle at abs(distance).
 	// int8 is used when both dimensions are <= 128; int16 otherwise.
-	jump8     []int8
-	jump16    []int16
-	wide      bool
-	canonical bool
+	jump8          []int8
+	jump16         []int16
+	wide           bool
+	canonical      bool
+	fingerprint    uint64
+	hasFingerprint bool
 
 	// Pre-allocated direction slice (avoid allocation in hot path)
 	dirs []int
@@ -138,6 +143,8 @@ func (j *JPSPlusFinder) precompute(grid Grid, wide bool) {
 	j.width = grid.Width()
 	j.height = grid.Height()
 	j.wide = wide
+	j.fingerprint = gridWalkabilityFingerprint(grid)
+	j.hasFingerprint = true
 	j.canonical = j.DiagonalMovement == DiagonalAlways && j.width <= 32768 && j.height <= 32768
 	size := int(j.width * j.height * 8)
 	if j.wide {
@@ -168,6 +175,22 @@ func (j *JPSPlusFinder) precompute(grid Grid, wide bool) {
 
 	// Phase 2: compute cardinal and diagonal distances
 	j.computeDistances(grid, primaryJPs)
+}
+
+func gridWalkabilityFingerprint(grid Grid) uint64 {
+	if g, ok := grid.(interface{ WalkabilityFingerprint() uint64 }); ok {
+		return g.WalkabilityFingerprint()
+	}
+	width, height := grid.Width(), grid.Height()
+	var fingerprint uint64
+	for y := int32(0); y < height; y++ {
+		for x := int32(0); x < width; x++ {
+			if !grid.IsWalkableAt(x, y) {
+				fingerprint = walkability.Toggle(fingerprint, uint64(y)*uint64(width)+uint64(x))
+			}
+		}
+	}
+	return fingerprint
 }
 
 // detectPrimaryJumpPoints scans each walkable cell for forced neighbors.
@@ -354,54 +377,76 @@ func (j *JPSPlusFinder) PrecomputedData() ([]byte, error) {
 	if j.canonical {
 		magic |= jpsPlusCanonicalFlag
 	}
-	// Format: magic(4) + width(4) + height(4) + table
-	size := 12 + int(j.width*j.height*8)*cellBytes
-	buf := make([]byte, size)
+	headerSize := 12
+	if j.hasFingerprint {
+		magic |= jpsPlusFingerprintFlag
+		headerSize += 8
+	}
+	// Format: magic(4) + width(4) + height(4) + optional fingerprint(8) + table.
+	buf := make([]byte, j.PrecomputedSize())
 	binary.LittleEndian.PutUint32(buf[0:4], magic)
 	binary.LittleEndian.PutUint32(buf[4:8], uint32(j.width))
 	binary.LittleEndian.PutUint32(buf[8:12], uint32(j.height))
+	if j.hasFingerprint {
+		binary.LittleEndian.PutUint64(buf[12:20], j.fingerprint)
+	}
 	if j.wide {
 		for i, v := range j.jump16 {
-			binary.LittleEndian.PutUint16(buf[12+i*2:], uint16(v))
+			binary.LittleEndian.PutUint16(buf[headerSize+i*cellBytes:], uint16(v))
 		}
 	} else {
 		for i, v := range j.jump8 {
-			buf[12+i] = byte(v)
+			buf[headerSize+i] = byte(v)
 		}
 	}
 	return buf, nil
 }
 
 // LoadPrecomputed loads previously exported jump table data.
-// Must be called before FindPath with a grid of matching dimensions.
+// FindPath verifies the dimensions and obstacle layout against the table.
 // Canonical tables also require DiagonalAlways.
+// Legacy data without a fingerprint can be loaded, but searches use online
+// JPS until Precompute builds a table bound to the map.
 func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 	if len(data) < 12 {
 		return errors.New("JPSPlusFinder: precomputed data too short")
 	}
 	magic := binary.LittleEndian.Uint32(data[0:4])
 	var wide bool
-	switch magic &^ jpsPlusCanonicalFlag {
+	switch magic &^ (jpsPlusCanonicalFlag | jpsPlusFingerprintFlag) {
 	case jpsPlusMagic8:
 	case jpsPlusMagic16:
 		wide = true
 	default:
 		return fmt.Errorf("JPSPlusFinder: invalid magic 0x%X", magic)
 	}
-	w := int(binary.LittleEndian.Uint32(data[4:8]))
-	h := int(binary.LittleEndian.Uint32(data[8:12]))
-	tableSize := w * h * 8
+	w := binary.LittleEndian.Uint32(data[4:8])
+	h := binary.LittleEndian.Uint32(data[8:12])
+	hasFingerprint := magic&jpsPlusFingerprintFlag != 0
+	headerSize := 12
+	var fingerprint uint64
+	if hasFingerprint {
+		headerSize += 8
+		if len(data) < headerSize {
+			return errors.New("JPSPlusFinder: precomputed data is missing its fingerprint")
+		}
+		fingerprint = binary.LittleEndian.Uint64(data[12:20])
+	}
 	cellBytes := 1
 	if wide {
 		cellBytes = 2
 	}
-	if len(data)-12 < tableSize*cellBytes {
-		return fmt.Errorf("JPSPlusFinder: precomputed data too short, need %d bytes", tableSize*cellBytes)
+	cells := uint64(w) * uint64(h)
+	if w == 0 || h == 0 || w > 1<<31-1 || h > 1<<31-1 || cells > uint64((len(data)-headerSize)/(8*cellBytes)) {
+		return errors.New("JPSPlusFinder: invalid dimensions or truncated precomputed data")
 	}
+	tableSize := int(cells * 8)
 	j.width = int32(w)
 	j.height = int32(h)
 	j.wide = wide
 	j.canonical = magic&jpsPlusCanonicalFlag != 0
+	j.fingerprint = fingerprint
+	j.hasFingerprint = hasFingerprint
 	if wide {
 		if cap(j.jump16) < tableSize {
 			j.jump16 = make([]int16, tableSize)
@@ -410,7 +455,7 @@ func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 		}
 		j.jump8 = nil
 		for i := 0; i < tableSize; i++ {
-			j.jump16[i] = int16(binary.LittleEndian.Uint16(data[12+i*2:]))
+			j.jump16[i] = int16(binary.LittleEndian.Uint16(data[headerSize+i*2:]))
 		}
 	} else {
 		if cap(j.jump8) < tableSize {
@@ -420,7 +465,7 @@ func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 		}
 		j.jump16 = nil
 		for i := 0; i < tableSize; i++ {
-			j.jump8[i] = int8(data[12+i])
+			j.jump8[i] = int8(data[headerSize+i])
 		}
 	}
 	return nil
@@ -436,7 +481,11 @@ func (j *JPSPlusFinder) PrecomputedSize() int {
 	if j.wide {
 		cellBytes = 2
 	}
-	return 12 + int(j.width*j.height*8)*cellBytes
+	headerSize := 12
+	if j.hasFingerprint {
+		headerSize += 8
+	}
+	return headerSize + len(j.jump8) + len(j.jump16)*cellBytes
 }
 
 // AdaptiveDensityThreshold is the obstacle ratio at or above which Adaptive
@@ -477,7 +526,8 @@ func (j *JPSPlusFinder) preflight(startX, startY, endX, endY int32, grid Grid) (
 		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
 	}
 	if grid.Width() != j.width || grid.Height() != j.height ||
-		(j.canonical && j.DiagonalMovement != DiagonalAlways) {
+		(j.canonical && j.DiagonalMovement != DiagonalAlways) ||
+		(j.hasFingerprint && gridWalkabilityFingerprint(grid) != j.fingerprint) {
 		return nil, ErrPrecomputedMismatch
 	}
 	return nil, nil
@@ -491,6 +541,10 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 	}
 	if j.Adaptive && j.useAStar(grid) {
 		return j.newAdaptiveFallback().FindPath(startX, startY, endX, endY, grid, dst)
+	}
+	if !j.hasFingerprint {
+		fallback := NewJumpPointFinder(WithDiagonal(j.DiagonalMovement), WithHeuristic(j.Heuristic), WithWeight(j.Weight))
+		return fallback.FindPath(startX, startY, endX, endY, grid, dst)
 	}
 	searchSeq := globalSearchSeq.Add(1)
 	states, err := acquireStates(grid.Width(), grid.Height(), searchSeq)

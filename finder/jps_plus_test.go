@@ -43,7 +43,7 @@ func TestJPSPlusDiagonalAlwaysMatchesAStar(t *testing.T) {
 			for query := 0; query < 100; query++ {
 				start := [2]int32{rng.Int31n(size), rng.Int31n(size)}
 				end := [2]int32{rng.Int31n(size), rng.Int31n(size)}
-				if !g.IsWalkableAt(start[0], start[1]) || !g.IsWalkableAt(end[0], end[1]) {
+				if !g.IsWalkableAt(end[0], end[1]) {
 					continue
 				}
 				want, err := astar.FindPath(start[0], start[1], end[0], end[1], g, nil)
@@ -83,6 +83,52 @@ func TestJPSPlusDiagonalAlwaysMatchesAStar(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestJPSPlusBlockedStart(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int32{{1, 0, 0}})
+	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalAlways))
+	if err := f.Precompute(g); err != nil {
+		t.Fatal(err)
+	}
+	path, err := f.FindPath(0, 0, 2, 0, g, nil)
+	if err != nil || len(path) != 3 || path[1] != [2]int32{1, 0} {
+		t.Fatalf("got %v, %v, want path out of blocked start", path, err)
+	}
+}
+
+func TestJPSPlusRejectsMismatchedWalkability(t *testing.T) {
+	option := finder.WithDiagonal(finder.DiagonalAlways)
+	open := grid.NewOrthogonalGrid([][]int32{{0, 0, 0, 0}})
+	blocked := grid.NewOrthogonalGrid([][]int32{{0, 0, 1, 0}})
+	f := finder.NewJPSPlusFinder(option)
+	if err := f.Precompute(open); err != nil {
+		t.Fatal(err)
+	}
+	data, err := f.PrecomputedData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := finder.NewJPSPlusFinder(option)
+	if err := loaded.LoadPrecomputed(data); err != nil {
+		t.Fatal(err)
+	}
+	for _, search := range []*finder.JPSPlusFinder{f, loaded} {
+		if path, err := search.FindPath(0, 0, 3, 0, blocked, nil); path != nil || !errors.Is(err, finder.ErrPrecomputedMismatch) {
+			t.Fatalf("different map: got %v, %v, want ErrPrecomputedMismatch", path, err)
+		}
+	}
+	edited, err := open.CloneWith(func(g grid.MutableGrid) { g.SetWalkableAt(2, 0, false) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path, err := loaded.FindPath(0, 0, 3, 0, edited, nil); path != nil || !errors.Is(err, finder.ErrPrecomputedMismatch) {
+		t.Fatalf("edited clone: got %v, %v, want ErrPrecomputedMismatch", path, err)
+	}
+	identical := grid.NewOrthogonalGrid([][]int32{{0, 0, 0, 0}})
+	if path, err := loaded.FindPath(0, 0, 3, 0, identical, nil); len(path) != 4 || err != nil {
+		t.Fatalf("same layout: got %v, %v, want a path", path, err)
 	}
 }
 

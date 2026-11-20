@@ -7,20 +7,22 @@ import (
 
 	"github.com/actfuns/pathfinding/finder"
 	"github.com/actfuns/pathfinding/gridutil"
+	"github.com/actfuns/pathfinding/internal/walkability"
 )
 
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
 // World-space helpers convert using tileW/tileH.
 type OrthogonalGrid struct {
-	tileW         int32 // world units per tile horizontally
-	tileH         int32 // world units per tile vertically
-	width         int32 // tiles across
-	height        int32 // tiles down
-	obstacleCount int32 // number of non-walkable tiles
-	nodes         []finder.Node
-	finder        finder.Finder
-	smoothMode    SmoothMode
-	smoother      Smoother // smoothing function; nil = default
+	tileW                  int32 // world units per tile horizontally
+	tileH                  int32 // world units per tile vertically
+	width                  int32 // tiles across
+	height                 int32 // tiles down
+	obstacleCount          int32 // number of non-walkable tiles
+	walkabilityFingerprint uint64
+	nodes                  []finder.Node
+	finder                 finder.Finder
+	smoothMode             SmoothMode
+	smoother               Smoother // smoothing function; nil = default
 }
 
 // Finder returns the pathfinder associated with this grid.
@@ -31,12 +33,14 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) Grid {
 	w := len(matrix[0])
 	nodes := make([]finder.Node, w*h)
 	obs := 0
+	var fingerprint uint64
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			i := y*w + x
 			walkable := matrix[y][x] == 0
 			if !walkable {
 				obs++
+				fingerprint = walkability.Toggle(fingerprint, uint64(i))
 			}
 			nodes[i] = finder.Node{X: int32(x), Y: int32(y), Walkable: walkable, Weight: 1.0}
 		}
@@ -48,6 +52,7 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) Grid {
 		opt(&cfg)
 	}
 	g := &OrthogonalGrid{width: int32(w), height: int32(h), tileW: cfg.tileW, tileH: cfg.tileH, obstacleCount: int32(obs), smoothMode: cfg.smoothMode, nodes: nodes, finder: cfg.finder}
+	g.walkabilityFingerprint = fingerprint
 	if cfg.finder == nil {
 		g.finder = finder.NewAStarFinder()
 	} else {
@@ -88,6 +93,9 @@ func (g *OrthogonalGrid) TileHeight() int32 { return g.tileH }
 // ObstacleCount returns the number of non-walkable tiles in the grid.
 func (g *OrthogonalGrid) ObstacleCount() int32 { return g.obstacleCount }
 
+// WalkabilityFingerprint returns a fingerprint of the current obstacle layout.
+func (g *OrthogonalGrid) WalkabilityFingerprint() uint64 { return g.walkabilityFingerprint }
+
 // IsInside reports whether the tile coordinate (x, y) is within the grid bounds.
 func (g *OrthogonalGrid) IsInside(x, y int32) bool {
 	return x >= 0 && x < g.width && y >= 0 && y < g.height
@@ -117,7 +125,8 @@ func (g *OrthogonalGrid) IsWalkableAt(x, y int32) bool {
 // SetWalkableAt sets the walkability of the tile at (x, y). The caller must
 // ensure the coordinate is inside the grid; otherwise the method panics.
 func (g *OrthogonalGrid) SetWalkableAt(x, y int32, walkable bool) {
-	node := &g.nodes[g.index(x, y)]
+	index := g.index(x, y)
+	node := &g.nodes[index]
 	if node.Walkable == walkable {
 		return
 	}
@@ -127,6 +136,7 @@ func (g *OrthogonalGrid) SetWalkableAt(x, y int32, walkable bool) {
 		g.obstacleCount++
 	}
 	node.Walkable = walkable
+	g.walkabilityFingerprint = walkability.Toggle(g.walkabilityFingerprint, uint64(index))
 }
 
 // SetWeightAt sets the movement cost multiplier for the tile at (x, y).
@@ -417,6 +427,7 @@ func (g *OrthogonalGrid) initSmoother() {
 // reference and tile dimensions are shared from the original.
 func (g *OrthogonalGrid) clone() *OrthogonalGrid {
 	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, smoothMode: g.smoothMode, finder: g.finder}
+	ng.walkabilityFingerprint = g.walkabilityFingerprint
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	copy(ng.nodes, g.nodes)
 	ng.initSmoother()

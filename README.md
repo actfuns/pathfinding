@@ -322,7 +322,7 @@ JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `ju
 | 特性 | 说明 |
 | :--- | :--- |
 | **Precompute** | 两阶段预计算：Phase 1 检测 Primary Jump Points，Phase 2 计算 8 方向距离表 |
-| **export/import** | `PrecomputedData()` / `LoadPrecomputed()` 支持烘焙数据导出为文件，服务端启动直接加载 |
+| **export/import** | `PrecomputedData()` / `LoadPrecomputed()` 支持烘焙数据导出和加载。新表会校验地图的障碍布局，旧表加载后使用在线 JPS，重新预计算即可启用查表 |
 | **searchSeq 全局唯一** | 所有 finder 的 `searchSeq` 通过全局原子计数器初始化，不同 finder 可安全共享同一 grid |
 | **Adaptive** | `finder.WithAdaptive()`：障碍密度 ≥10% 时自动改用 A*，避免密集图上的退化 |
 

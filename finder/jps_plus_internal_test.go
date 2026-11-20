@@ -1,9 +1,32 @@
 package finder
 
 import (
+	"encoding/binary"
 	"math/rand"
 	"testing"
 )
+
+func TestJPSPlusLegacyTableUsesLiveGrid(t *testing.T) {
+	g := newFlatGrid(4, 1)
+	f := NewJPSPlusFinder(WithDiagonal(DiagonalAlways))
+	if err := f.Precompute(g); err != nil {
+		t.Fatal(err)
+	}
+	data, err := f.PrecomputedData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := append(data[:12:12], data[20:]...)
+	magic := binary.LittleEndian.Uint32(legacy)
+	binary.LittleEndian.PutUint32(legacy, magic&^jpsPlusFingerprintFlag)
+	if err := f.LoadPrecomputed(legacy); err != nil {
+		t.Fatal(err)
+	}
+	g.SetWalkableAt(2, 0, false)
+	if path, err := f.FindPath(0, 0, 3, 0, g, nil); path != nil || err != nil {
+		t.Fatalf("got %v, %v, want no path through the new obstacle", path, err)
+	}
+}
 
 // flatGrid is a minimal all-walkable Grid used to inspect precomputed jump
 // distances without importing the grid package (which imports finder).
@@ -80,7 +103,7 @@ func TestJPSPlusDynamicTableWidth(t *testing.T) {
 		if tc.wide {
 			cellBytes = 2
 		}
-		if want := 12 + tc.w*1*8*cellBytes; f.PrecomputedSize() != want {
+		if want := 20 + tc.w*1*8*cellBytes; f.PrecomputedSize() != want {
 			t.Errorf("%s: PrecomputedSize()=%d, want %d", tc.name, f.PrecomputedSize(), want)
 		}
 

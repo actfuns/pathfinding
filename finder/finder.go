@@ -27,7 +27,7 @@ var ErrNotWalkable = errors.New("finder: destination is not walkable")
 var ErrUnsupportedGrid = errors.New("finder: grid topology is not supported by this algorithm")
 
 // ErrPrecomputedMismatch is returned when precomputed JPS+ data was built for a
-// grid of different dimensions than the one being searched.
+// grid of different dimensions or walkability, or an incompatible movement mode.
 var ErrPrecomputedMismatch = errors.New("finder: precomputed data does not match the grid")
 
 // ErrSearchBusy is returned when no search slot became available before the

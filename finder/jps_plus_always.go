@@ -18,7 +18,9 @@ func (j *JPSPlusFinder) computeAlwaysDistances(grid Grid) {
 					x = j.width - 1 - column
 				}
 				nx, ny := x+dx, y+dy
-				if !walk.at(x, y) || !walk.at(nx, ny) {
+				// A search may leave a blocked source tile, but every tile
+				// reached along the ray must be walkable.
+				if !walk.at(nx, ny) {
 					continue
 				}
 				ahead := int((ny*j.width + nx) * 8)
