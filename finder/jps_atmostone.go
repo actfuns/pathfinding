@@ -22,7 +22,7 @@ func atMostOneJump(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
 		return 0, 0, false
 	}
 
-	if s.TrackRecursion {
+	if s.trackRecursion {
 		s.states.get(s.grid.GetNodeAt(x, y)).Tested = true
 	}
 

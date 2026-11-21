@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"errors"
 	"math"
 	"math/rand"
 	"slices"
@@ -8,6 +9,29 @@ import (
 
 	"github.com/actfuns/pathfinding/finder"
 )
+
+type rejectingWorldFinder struct{}
+
+var errWorldFinder = errors.New("world finder called")
+
+func (rejectingWorldFinder) FindPath(int32, int32, int32, int32, finder.Grid, [][2]int32) ([][2]int32, error) {
+	return nil, errWorldFinder
+}
+
+func TestFindPathWorldUsesConfiguredFinderOnOpenMaps(t *testing.T) {
+	option := WithFinder(rejectingWorldFinder{})
+	for _, g := range []Grid{
+		NewOrthogonalGrid(NewMatrix(3, 3), option),
+		NewHexGrid(NewMatrix(3, 3), option),
+		NewStaggeredGrid(NewMatrix(3, 3), option),
+	} {
+		x1, y1 := g.TileToWorld(0, 0)
+		x2, y2 := g.TileToWorld(2, 2)
+		if path, err := g.FindPathWorld(x1, y1, x2, y2, nil); path != nil || !errors.Is(err, errWorldFinder) {
+			t.Fatalf("%T: got %v, %v, want finder error", g, path, err)
+		}
+	}
+}
 
 func TestFindPathWorldAcrossMapsMatchesDijkstra(t *testing.T) {
 	const width, height = 13, 9

@@ -2,11 +2,7 @@
 
 package grid
 
-import (
-	"testing"
-
-	"github.com/actfuns/pathfinding/finder"
-)
+import "testing"
 
 func TestHexStress_AllOpen(t *testing.T) {
 	matrix := generateGrid(100, 100, 0)
@@ -20,7 +16,7 @@ func TestHexStress_AllOpen(t *testing.T) {
 		t.Fatalf("FindPathWorld: %v", err)
 	}
 	if path == nil {
-		t.Skip("hex FindPathWorld: no path (coordinate edge behavior)")
+		t.Fatal("FindPathWorld: expected a path on the open hex grid")
 	}
 	smooth, err := NewHexGrid(matrix, append(opts, WithSmoothDense())...).FindPathWorld(sx, sy, ex, ey, nil)
 	if err != nil {

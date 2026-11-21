@@ -3,7 +3,7 @@ package finder
 // computeAlwaysDistances records the first goal-independent JPS jump on
 // each ray. Negative distances record the number of walkable steps. Each
 // directional pass visits the cell ahead before the current cell.
-func (j *JPSPlusFinder) computeAlwaysDistances(grid Grid) {
+func (j *jumpTable) computeAlwaysDistances(grid Grid) {
 	walk := newWalkableView(grid)
 	for _, dir := range [...]int{dirN, dirE, dirS, dirW, dirNE, dirSE, dirSW, dirNW} {
 		dx, dy := dirToVec(dir)
@@ -55,7 +55,8 @@ func staticAlwaysJump(walk *walkableView, x, y, dx, dy int32) bool {
 	}
 }
 
-func (j *JPSPlusFinder) jumpAlways(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
+func alwaysTableJump(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
+	j := s.table
 	dx, dy := x-px, y-py
 	rx, ry := s.endX-px, s.endY-py
 	dir := jpsCardinalIdx[[2]int32{dx, dy}]

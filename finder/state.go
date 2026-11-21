@@ -20,6 +20,7 @@ type searchStates struct {
 	width, height int32
 	seq           int64
 	states        []nodeState
+	reverse       []nodeState // allocated only for bidirectional weighted searches
 
 	// Per-search scratch. It lives here so one pool slot owns both the tile
 	// state and the finder buffers for one FindPath.

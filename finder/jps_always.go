@@ -21,7 +21,7 @@ func alwaysJump(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
 // scanAlways advances along one ray. Only diagonal rays need to probe other rays.
 func scanAlways(s *jpsSearch, x, y, dx, dy int32) (int32, int32, bool) {
 	for s.walk.at(x, y) {
-		if s.TrackRecursion {
+		if s.trackRecursion {
 			s.states.get(s.walk.nodeAt(x, y)).Tested = true
 		}
 		if x == s.endX && y == s.endY {

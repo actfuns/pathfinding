@@ -44,18 +44,44 @@ func validWeight(w float32) bool {
 	return w > 0 && !math.IsNaN(float64(w)) && !math.IsInf(float64(w), 0)
 }
 
-// setNodeWeight maintains a lower bound capped at the default weight of 1.
-func setNodeWeight(nodes []finder.Node, index int, weight float32, lowerBound *float32) {
+// tileWeightBounds tracks the minimum below 1 and how many tiles share it.
+// Its zero value represents a grid with no discounted tiles.
+type tileWeightBounds struct {
+	minimum float32
+	count   int
+}
+
+func (b tileWeightBounds) lowerBound() float32 {
+	if b.count == 0 {
+		return 1
+	}
+	return b.minimum
+}
+
+func (b *tileWeightBounds) set(nodes []finder.Node, index int, weight float32) {
 	previous := nodes[index].Weight
+	if previous == weight {
+		return
+	}
 	nodes[index].Weight = weight
-	if weight < *lowerBound {
-		*lowerBound = weight
-	} else if previous == *lowerBound && previous < 1 && weight > previous {
-		bound := float32(1)
-		for _, node := range nodes {
-			bound = min(bound, node.Weight)
+	switch {
+	case weight < b.lowerBound():
+		*b = tileWeightBounds{minimum: weight, count: 1}
+	case b.count > 0 && weight == b.minimum:
+		b.count++
+	case b.count > 0 && previous == b.minimum:
+		b.count--
+		if b.count != 0 {
+			return
 		}
-		*lowerBound = bound
+		for _, node := range nodes {
+			switch {
+			case node.Weight < b.lowerBound():
+				*b = tileWeightBounds{minimum: node.Weight, count: 1}
+			case b.count > 0 && node.Weight == b.minimum:
+				b.count++
+			}
+		}
 	}
 }
 

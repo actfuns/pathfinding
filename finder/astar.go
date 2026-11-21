@@ -70,13 +70,7 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst 
 }
 
 func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
-	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
-	heuristicWeight := f.Weight
-	if !f.customHeuristic {
-		if terrain, ok := grid.(interface{ HeuristicWeightLowerBound() float32 }); ok {
-			heuristicWeight *= terrain.HeuristicWeightLowerBound()
-		}
-	}
+	heuristic, heuristicWeight := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic, f.Weight)
 	stepCost := gridStepCost(grid)
 	openList := &minHeap{nodes: states.heap[:0], tieBreak: true, state: states}
 	defer func() {
@@ -127,14 +121,7 @@ func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, stat
 			}
 
 			x, y := neighbor.X, neighbor.Y
-			var ng float32
-			if stepCost != nil {
-				ng = nodeG + stepCost(x-node.X, y-node.Y)*neighbor.Weight
-			} else if x == node.X || y == node.Y {
-				ng = nodeG + neighbor.Weight
-			} else {
-				ng = nodeG + SQRT2*neighbor.Weight
-			}
+			ng := nodeG + moveCost(stepCost, x-node.X, y-node.Y, neighbor.Weight)
 
 			if ns.Opened == 0 || ng < ns.G {
 				ns.G = ng
