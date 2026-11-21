@@ -2,11 +2,223 @@ package finder_test
 
 import (
 	"errors"
+	"math/rand"
 	"testing"
 
 	"github.com/actfuns/pathfinding/finder"
 	"github.com/actfuns/pathfinding/grid"
 )
+
+func TestJPSPlusLargeMapsMatchDijkstra(t *testing.T) {
+	for _, mode := range []finder.DiagonalMovement{
+		finder.DiagonalNever, finder.DiagonalAlways,
+		finder.DiagonalOnlyWhenNoObstacles, finder.DiagonalIfAtMostOneObstacle,
+	} {
+		option := finder.WithDiagonal(mode)
+		reference := finder.NewDijkstraFinder(option)
+		plus := finder.NewJPSPlusFinder(option)
+		rng := rand.New(rand.NewSource(18))
+		for _, size := range []int32{48, 96} {
+			for sample := 0; sample < 3; sample++ {
+				matrix := grid.NewMatrix(size, size)
+				var walkable [][2]int32
+				for y, row := range matrix {
+					for x := range row {
+						if rng.Intn(5) == 0 {
+							row[x] = 1
+						} else {
+							walkable = append(walkable, [2]int32{int32(x), int32(y)})
+						}
+					}
+				}
+				g := grid.NewOrthogonalGrid(matrix)
+				if err := plus.Precompute(g); err != nil {
+					t.Fatal(err)
+				}
+				for query := 0; query < 50; query++ {
+					a, b := walkable[rng.Intn(len(walkable))], walkable[rng.Intn(len(walkable))]
+					got, err := plus.FindPath(a[0], a[1], b[0], b[1], g, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					want, err := reference.FindPath(a[0], a[1], b[0], b[1], g, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if (got == nil) != (want == nil) {
+						t.Fatalf("mode %v size %d map %d, %v to %v: got %v, want %v", mode, size, sample, a, b, got, want)
+					}
+					if got != nil {
+						if got[0] != a || got[len(got)-1] != b {
+							t.Fatalf("mode %v: incorrect endpoints %v to %v: %v", mode, a, b, got)
+						}
+						gotCost := weightedRouteCost(t, g, mode, got)
+						wantCost := weightedRouteCost(t, g, mode, want)
+						if gotCost-wantCost > 1e-5 || wantCost-gotCost > 1e-5 {
+							t.Fatalf("mode %v size %d map %d, %v to %v: cost %g, want %g", mode, size, sample, a, b, gotCost, wantCost)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestJPSPlusBoundaryAndCornerRoutes(t *testing.T) {
+	for _, mode := range []finder.DiagonalMovement{
+		finder.DiagonalNever, finder.DiagonalAlways,
+		finder.DiagonalOnlyWhenNoObstacles, finder.DiagonalIfAtMostOneObstacle,
+	} {
+		option := finder.WithDiagonal(mode)
+		reference, plus := finder.NewDijkstraFinder(option), finder.NewJPSPlusFinder(option)
+		for _, matrix := range [][][]int32{
+			grid.NewMatrix(129, 1),
+			{{0, 0, 0, 0}, {1, 1, 1, 0}, {1, 1, 1, 0}},
+			{{0, 1}, {0, 0}},
+			{{0, 1}, {1, 0}},
+		} {
+			g := grid.NewOrthogonalGrid(matrix)
+			ex, ey := g.Width()-1, g.Height()-1
+			if err := plus.Precompute(g); err != nil {
+				t.Fatal(err)
+			}
+			got, err := plus.FindPath(0, 0, ex, ey, g, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := reference.FindPath(0, 0, ex, ey, g, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (got == nil) != (want == nil) || weightedRouteCost(t, g, mode, got) != weightedRouteCost(t, g, mode, want) {
+				t.Fatalf("mode %v map %dx%d: got %v, want cost of %v", mode, g.Width(), g.Height(), got, want)
+			}
+		}
+	}
+}
+
+func TestJPSPlusDiagonalAlwaysMatchesAStar(t *testing.T) {
+	const size = 16
+	rng := rand.New(rand.NewSource(31))
+	option := finder.WithDiagonal(finder.DiagonalAlways)
+	astar := finder.NewAStarFinder(option)
+
+	for _, density := range []int{0, 10, 30, 55} {
+		for sample := 0; sample < 8; sample++ {
+			matrix := make([][]int32, size)
+			for y := range matrix {
+				matrix[y] = make([]int32, size)
+				for x := range matrix[y] {
+					if rng.Intn(100) < density {
+						matrix[y][x] = 1
+					}
+				}
+			}
+			g := grid.NewOrthogonalGrid(matrix)
+			plus := finder.NewJPSPlusFinder(option)
+			if err := plus.Precompute(g); err != nil {
+				t.Fatal(err)
+			}
+			data, err := plus.PrecomputedData()
+			if err != nil {
+				t.Fatal(err)
+			}
+			reloaded := finder.NewJPSPlusFinder(option)
+			if err := reloaded.LoadPrecomputed(data); err != nil {
+				t.Fatal(err)
+			}
+
+			for query := 0; query < 100; query++ {
+				start := [2]int32{rng.Int31n(size), rng.Int31n(size)}
+				end := [2]int32{rng.Int31n(size), rng.Int31n(size)}
+				if !g.IsWalkableAt(end[0], end[1]) {
+					continue
+				}
+				want, err := astar.FindPath(start[0], start[1], end[0], end[1], g, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := reloaded.FindPath(start[0], start[1], end[0], end[1], g, nil)
+				if err != nil || (got == nil) != (want == nil) {
+					t.Fatalf("density %d map %d, %v to %v: got %v, err %v, want %v", density, sample, start, end, got, err, want)
+				}
+				if got == nil {
+					continue
+				}
+				if got[0] != start || got[len(got)-1] != end {
+					t.Fatalf("wrong endpoints for %v to %v: %v", start, end, got)
+				}
+				steps := func(path [][2]int32) (cardinal, diagonal int) {
+					for i := 1; i < len(path); i++ {
+						prev, next := path[i-1], path[i]
+						dx, dy := finder.AbsInt(next[0]-prev[0]), finder.AbsInt(next[1]-prev[1])
+						if max(dx, dy) != 1 || !g.IsWalkableAt(next[0], next[1]) {
+							t.Fatalf("invalid step %v to %v", prev, next)
+						}
+						if dx != 0 && dy != 0 {
+							diagonal++
+						} else {
+							cardinal++
+						}
+					}
+					return cardinal, diagonal
+				}
+				gotCardinal, gotDiagonal := steps(got)
+				wantCardinal, wantDiagonal := steps(want)
+				if gotCardinal != wantCardinal || gotDiagonal != wantDiagonal {
+					t.Fatalf("density %d map %d, %v to %v: got %d cardinal and %d diagonal steps, want %d and %d",
+						density, sample, start, end, gotCardinal, gotDiagonal, wantCardinal, wantDiagonal)
+				}
+			}
+		}
+	}
+}
+
+func TestJPSPlusBlockedStart(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int32{{1, 0, 0}})
+	f := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalAlways))
+	if err := f.Precompute(g); err != nil {
+		t.Fatal(err)
+	}
+	path, err := f.FindPath(0, 0, 2, 0, g, nil)
+	if err != nil || len(path) != 3 || path[1] != [2]int32{1, 0} {
+		t.Fatalf("got %v, %v, want path out of blocked start", path, err)
+	}
+}
+
+func TestJPSPlusRejectsMismatchedWalkability(t *testing.T) {
+	option := finder.WithDiagonal(finder.DiagonalAlways)
+	open := grid.NewOrthogonalGrid([][]int32{{0, 0, 0, 0}})
+	blocked := grid.NewOrthogonalGrid([][]int32{{0, 0, 1, 0}})
+	f := finder.NewJPSPlusFinder(option)
+	if err := f.Precompute(open); err != nil {
+		t.Fatal(err)
+	}
+	data, err := f.PrecomputedData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := finder.NewJPSPlusFinder(option)
+	if err := loaded.LoadPrecomputed(data); err != nil {
+		t.Fatal(err)
+	}
+	for _, search := range []*finder.JPSPlusFinder{f, loaded} {
+		if path, err := search.FindPath(0, 0, 3, 0, blocked, nil); path != nil || !errors.Is(err, finder.ErrPrecomputedMismatch) {
+			t.Fatalf("different map: got %v, %v, want ErrPrecomputedMismatch", path, err)
+		}
+	}
+	edited, err := open.CloneWith(func(g grid.MutableGrid) { g.SetWalkableAt(2, 0, false) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path, err := loaded.FindPath(0, 0, 3, 0, edited, nil); path != nil || !errors.Is(err, finder.ErrPrecomputedMismatch) {
+		t.Fatalf("edited clone: got %v, %v, want ErrPrecomputedMismatch", path, err)
+	}
+	identical := grid.NewOrthogonalGrid([][]int32{{0, 0, 0, 0}})
+	if path, err := loaded.FindPath(0, 0, 3, 0, identical, nil); len(path) != 4 || err != nil {
+		t.Fatalf("same layout: got %v, %v, want a path", path, err)
+	}
+}
 
 func TestJPSPlusNeverPrecompute(t *testing.T) {
 	matrix := [][]int32{
@@ -54,8 +266,12 @@ func TestJPSPlusAgainstJS(t *testing.T) {
 			t.Errorf("JPS+ scenario %d: path not found", i+1)
 			continue
 		}
-		if !pathEqual(path, want[i]) {
-			t.Errorf("JPS+ scenario %d:\n  got:  %v\n  want: %v", i+1, path, want[i])
+		if len(path) != len(want[i]) {
+			t.Errorf("JPS+ scenario %d: path length %d, want optimal length %d\n  got: %v", i+1, len(path), len(want[i]), path)
+			continue
+		}
+		if path[0] != want[i][0] || path[len(path)-1] != want[i][len(want[i])-1] {
+			t.Errorf("JPS+ scenario %d: endpoints %v..%v, want %v..%v", i+1, path[0], path[len(path)-1], want[i][0], want[i][len(want[i])-1])
 		}
 	}
 }

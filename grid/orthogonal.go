@@ -7,21 +7,27 @@ import (
 
 	"github.com/actfuns/pathfinding/finder"
 	"github.com/actfuns/pathfinding/gridutil"
+	"github.com/actfuns/pathfinding/internal/walkability"
 )
 
 // OrthogonalGrid is a standard rectangular grid. Coordinates are in tile space.
 // World-space helpers convert using tileW/tileH.
 type OrthogonalGrid struct {
-	tileW         int32 // world units per tile horizontally
-	tileH         int32 // world units per tile vertically
-	width         int32 // tiles across
-	height        int32 // tiles down
-	obstacleCount int32 // number of non-walkable tiles
-	nodes         []finder.Node
-	finder        finder.Finder
-	smoothMode    SmoothMode
-	smoother      Smoother // smoothing function; nil = default
+	tileW                  int32 // world units per tile horizontally
+	tileH                  int32 // world units per tile vertically
+	width                  int32 // tiles across
+	height                 int32 // tiles down
+	obstacleCount          int32 // number of non-walkable tiles
+	walkabilityFingerprint uint64
+	weightBounds           tileWeightBounds
+	nodes                  []finder.Node
+	finder                 finder.Finder
+	smoothMode             SmoothMode
+	smoother               Smoother // smoothing function; nil = default
 }
+
+// HasSymmetricNeighbors reports that edges between walkable tiles are reversible.
+func (g *OrthogonalGrid) HasSymmetricNeighbors() bool { return true }
 
 // Finder returns the pathfinder associated with this grid.
 func (g *OrthogonalGrid) Finder() finder.Finder { return g.finder }
@@ -31,12 +37,14 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) Grid {
 	w := len(matrix[0])
 	nodes := make([]finder.Node, w*h)
 	obs := 0
+	var fingerprint uint64
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			i := y*w + x
 			walkable := matrix[y][x] == 0
 			if !walkable {
 				obs++
+				fingerprint = walkability.Toggle(fingerprint, uint64(i))
 			}
 			nodes[i] = finder.Node{X: int32(x), Y: int32(y), Walkable: walkable, Weight: 1.0}
 		}
@@ -48,6 +56,7 @@ func NewOrthogonalGrid(matrix [][]int32, opts ...GridOption) Grid {
 		opt(&cfg)
 	}
 	g := &OrthogonalGrid{width: int32(w), height: int32(h), tileW: cfg.tileW, tileH: cfg.tileH, obstacleCount: int32(obs), smoothMode: cfg.smoothMode, nodes: nodes, finder: cfg.finder}
+	g.walkabilityFingerprint = fingerprint
 	if cfg.finder == nil {
 		g.finder = finder.NewAStarFinder()
 	} else {
@@ -88,6 +97,9 @@ func (g *OrthogonalGrid) TileHeight() int32 { return g.tileH }
 // ObstacleCount returns the number of non-walkable tiles in the grid.
 func (g *OrthogonalGrid) ObstacleCount() int32 { return g.obstacleCount }
 
+// WalkabilityFingerprint returns a fingerprint of the current obstacle layout.
+func (g *OrthogonalGrid) WalkabilityFingerprint() uint64 { return g.walkabilityFingerprint }
+
 // IsInside reports whether the tile coordinate (x, y) is within the grid bounds.
 func (g *OrthogonalGrid) IsInside(x, y int32) bool {
 	return x >= 0 && x < g.width && y >= 0 && y < g.height
@@ -97,19 +109,28 @@ func (g *OrthogonalGrid) IsInside(x, y int32) bool {
 // the coordinate is inside the grid (see IsInside); otherwise the method panics.
 func (g *OrthogonalGrid) GetNodeAt(x, y int32) *finder.Node { return &g.nodes[g.index(x, y)] }
 
+// NodesView exposes the contiguous node slice for read-only fast paths.
+// Callers must not mutate the returned nodes.
+func (g *OrthogonalGrid) NodesView() []finder.Node { return g.nodes }
+
 // IsWalkableAt reports whether the tile at (x, y) is walkable. Coordinates
 // outside the grid are reported as not walkable.
-func (g *OrthogonalGrid) IsWalkableAt(x, y int32) bool {
-	if !g.IsInside(x, y) {
+func (g *OrthogonalGrid) walkableAt(x, y int32) bool {
+	if uint32(x) >= uint32(g.width) || uint32(y) >= uint32(g.height) {
 		return false
 	}
-	return g.nodes[g.index(x, y)].Walkable
+	return g.nodes[int(y)*int(g.width)+int(x)].Walkable
+}
+
+func (g *OrthogonalGrid) IsWalkableAt(x, y int32) bool {
+	return g.walkableAt(x, y)
 }
 
 // SetWalkableAt sets the walkability of the tile at (x, y). The caller must
 // ensure the coordinate is inside the grid; otherwise the method panics.
 func (g *OrthogonalGrid) SetWalkableAt(x, y int32, walkable bool) {
-	node := &g.nodes[g.index(x, y)]
+	index := g.index(x, y)
+	node := &g.nodes[index]
 	if node.Walkable == walkable {
 		return
 	}
@@ -119,6 +140,7 @@ func (g *OrthogonalGrid) SetWalkableAt(x, y int32, walkable bool) {
 		g.obstacleCount++
 	}
 	node.Walkable = walkable
+	g.walkabilityFingerprint = walkability.Toggle(g.walkabilityFingerprint, uint64(index))
 }
 
 // SetWeightAt sets the movement cost multiplier for the tile at (x, y).
@@ -129,8 +151,11 @@ func (g *OrthogonalGrid) SetWeightAt(x, y int32, weight float32) {
 	if !validWeight(weight) {
 		panic("grid: weight must be a finite positive number")
 	}
-	g.nodes[g.index(x, y)].Weight = weight
+	g.weightBounds.set(g.nodes, g.index(x, y), weight)
 }
+
+// HeuristicWeightLowerBound returns a lower bound for tile movement weights.
+func (g *OrthogonalGrid) HeuristicWeightLowerBound() float32 { return g.weightBounds.lowerBound() }
 
 // GetWeightAt returns the movement cost multiplier for the tile at (x, y).
 // Returns the default weight (1.0) for tiles outside the grid.
@@ -409,6 +434,8 @@ func (g *OrthogonalGrid) initSmoother() {
 // reference and tile dimensions are shared from the original.
 func (g *OrthogonalGrid) clone() *OrthogonalGrid {
 	ng := &OrthogonalGrid{width: g.width, height: g.height, tileW: g.tileW, tileH: g.tileH, obstacleCount: g.obstacleCount, smoothMode: g.smoothMode, finder: g.finder}
+	ng.walkabilityFingerprint = g.walkabilityFingerprint
+	ng.weightBounds = g.weightBounds
 	ng.nodes = make([]finder.Node, len(g.nodes))
 	copy(ng.nodes, g.nodes)
 	ng.initSmoother()
@@ -504,66 +531,10 @@ func (g *OrthogonalGrid) FindPath(x1, y1, x2, y2 int32, dst [][2]int32) ([][2]in
 	return path, nil
 }
 
+// FindPathWorld uses the configured finder and then applies any configured
+// geometric smoothing before converting the path to world coordinates.
 func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
-	var dst [][2]float32
-	var tileDst [][2]int32
-	if buff != nil {
-		dst = buff.World[:0]
-		tileDst = buff.Tile[:0]
-	}
-	if g.finder == nil {
-		return nil, nil
-	}
-	sx, sy := g.WorldToTile(wx1, wy1)
-	ex, ey := g.WorldToTile(wx2, wy2)
-	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
-		return nil, finder.ErrOutOfBounds
-	}
-	if g.obstacleCount == 0 {
-		var out [][2]float32
-		if dst != nil && cap(dst) >= 2 {
-			out = dst[:2]
-		} else {
-			out = make([][2]float32, 2)
-		}
-		out[0][0], out[0][1] = wx1, wy1
-		out[1][0], out[1][1] = wx2, wy2
-		if buff != nil {
-			buff.World = out
-		}
-		return out, nil
-	}
-	path, err := g.finder.FindPath(sx, sy, ex, ey, g, tileDst)
-	if err != nil {
-		return nil, err
-	}
-	if path == nil {
-		return nil, nil
-	}
-	if g.smoother != nil {
-		path = g.smoother(path)
-	}
-	if path == nil {
-		return nil, nil
-	}
-	if buff != nil {
-		buff.Tile = path
-	}
-	var out [][2]float32
-	if dst != nil && cap(dst) >= len(path) {
-		out = dst[:len(path)]
-	} else {
-		out = make([][2]float32, len(path))
-	}
-	for i, p := range path {
-		out[i][0], out[i][1] = g.TileToWorld(p[0], p[1])
-	}
-	out[0][0], out[0][1] = wx1, wy1
-	out[len(out)-1][0], out[len(out)-1][1] = wx2, wy2
-	if buff != nil {
-		buff.World = out
-	}
-	return out, nil
+	return findPathWorld(g, g.smoother, wx1, wy1, wx2, wy2, buff)
 }
 
 // --- neighbors ---
@@ -574,36 +545,40 @@ func (g *OrthogonalGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuf
 // caller must not hold references past the next call.
 func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.DiagonalMovement, buffer []*finder.Node) []*finder.Node {
 	x, y := int(node.X), int(node.Y)
-	w := int(g.width)
+	w, h := int(g.width), int(g.height)
 	nodes := g.nodes
+	if x < 0 || y < 0 || x >= w || y >= h {
+		return buffer[:0]
+	}
+	index := y*w + x
+
 	neighbors := buffer[:0]
-	walk := func(x, y int) bool { return g.IsWalkableAt(int32(x), int32(y)) }
 
-	s0, d0 := false, false
-	s1, d1 := false, false
-	s2, d2 := false, false
-	s3, d3 := false, false
+	// Cardinal neighbors.
+	s0 := y > 0 && nodes[index-w].Walkable
+	s1 := x+1 < w && nodes[index+1].Walkable
+	s2 := y+1 < h && nodes[index+w].Walkable
+	s3 := x > 0 && nodes[index-1].Walkable
 
-	if walk(x, y-1) {
-		neighbors = append(neighbors, &nodes[(y-1)*w+x])
-		s0 = true
+	if s0 {
+		neighbors = append(neighbors, &nodes[index-w])
 	}
-	if walk(x+1, y) {
-		neighbors = append(neighbors, &nodes[y*w+x+1])
-		s1 = true
+	if s1 {
+		neighbors = append(neighbors, &nodes[index+1])
 	}
-	if walk(x, y+1) {
-		neighbors = append(neighbors, &nodes[(y+1)*w+x])
-		s2 = true
+	if s2 {
+		neighbors = append(neighbors, &nodes[index+w])
 	}
-	if walk(x-1, y) {
-		neighbors = append(neighbors, &nodes[y*w+x-1])
-		s3 = true
+	if s3 {
+		neighbors = append(neighbors, &nodes[index-1])
 	}
 
 	if diagonal == finder.DiagonalNever {
 		return neighbors
 	}
+
+	// Determine which diagonal directions are allowed.
+	var d0, d1, d2, d3 bool
 
 	switch diagonal {
 	case finder.DiagonalOnlyWhenNoObstacles:
@@ -611,26 +586,44 @@ func (g *OrthogonalGrid) GetNeighbors(node *finder.Node, diagonal finder.Diagona
 		d1 = s0 && s1
 		d2 = s1 && s2
 		d3 = s2 && s3
+
 	case finder.DiagonalIfAtMostOneObstacle:
 		d0 = s3 || s0
 		d1 = s0 || s1
 		d2 = s1 || s2
 		d3 = s2 || s3
+
 	case finder.DiagonalAlways:
 		d0, d1, d2, d3 = true, true, true, true
 	}
 
-	if d0 && walk(x-1, y-1) {
-		neighbors = append(neighbors, &nodes[(y-1)*w+x-1])
+	// Diagonal neighbors.
+	if d0 && x > 0 && y > 0 {
+		i := index - w - 1
+		if nodes[i].Walkable {
+			neighbors = append(neighbors, &nodes[i])
+		}
 	}
-	if d1 && walk(x+1, y-1) {
-		neighbors = append(neighbors, &nodes[(y-1)*w+x+1])
+
+	if d1 && x+1 < w && y > 0 {
+		i := index - w + 1
+		if nodes[i].Walkable {
+			neighbors = append(neighbors, &nodes[i])
+		}
 	}
-	if d2 && walk(x+1, y+1) {
-		neighbors = append(neighbors, &nodes[(y+1)*w+x+1])
+
+	if d2 && x+1 < w && y+1 < h {
+		i := index + w + 1
+		if nodes[i].Walkable {
+			neighbors = append(neighbors, &nodes[i])
+		}
 	}
-	if d3 && walk(x-1, y+1) {
-		neighbors = append(neighbors, &nodes[(y+1)*w+x-1])
+
+	if d3 && x > 0 && y+1 < h {
+		i := index + w - 1
+		if nodes[i].Walkable {
+			neighbors = append(neighbors, &nodes[i])
+		}
 	}
 
 	return neighbors

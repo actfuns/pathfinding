@@ -1,6 +1,10 @@
 package gridutil
 
-import "math"
+import (
+	"math"
+
+	"github.com/actfuns/pathfinding/finder"
+)
 
 // HasLineOfSightBresenham reports whether two tiles can see each other —
 // every tile on the Bresenham line between them is walkable.
@@ -143,8 +147,9 @@ func smoothenPathInternal(g GridLOS, path [][2]int32, strict bool) [][2]int32 {
 		return path
 	}
 	writeIdx := 1
+	checker := newLineChecker(g)
 	for i := 2; i < len(path); i++ {
-		if !tileLineOfSight(g, path[writeIdx-1], path[i], strict) {
+		if !tileLineOfSight(&checker, path[writeIdx-1], path[i], strict) {
 			path[writeIdx] = path[i-1]
 			writeIdx++
 		}
@@ -156,10 +161,34 @@ func smoothenPathInternal(g GridLOS, path [][2]int32, strict bool) [][2]int32 {
 	return path[:writeIdx]
 }
 
+type lineChecker struct {
+	g     GridLOS
+	nodes []finder.Node
+	w, h  int32
+}
+
+func newLineChecker(g GridLOS) lineChecker {
+	c := lineChecker{g: g, w: g.Width(), h: g.Height()}
+	if nv, ok := g.(interface{ NodesView() []finder.Node }); ok {
+		c.nodes = nv.NodesView()
+	}
+	return c
+}
+
+func (c *lineChecker) walkableAt(x, y int32) bool {
+	if uint32(x) >= uint32(c.w) || uint32(y) >= uint32(c.h) {
+		return false
+	}
+	if c.nodes != nil {
+		return c.nodes[int(y)*int(c.w)+int(x)].Walkable
+	}
+	return c.g.IsWalkableAt(x, y)
+}
+
 // tileLineOfSight checks walkability along a Bresenham line between two tiles.
 // When strict=true, also checks the two axis-aligned cells at each diagonal step
 // to prevent corner-cutting.
-func tileLineOfSight(g GridLOS, a, b [2]int32, strict bool) bool {
+func tileLineOfSight(c *lineChecker, a, b [2]int32, strict bool) bool {
 	x0, y0 := a[0], a[1]
 	x1, y1 := b[0], b[1]
 	dx := x1 - x0
@@ -180,7 +209,7 @@ func tileLineOfSight(g GridLOS, a, b [2]int32, strict bool) bool {
 	err := dx - dy
 
 	for {
-		if !g.IsWalkableAt(x0, y0) {
+		if !c.walkableAt(x0, y0) {
 			return false
 		}
 		if x0 == x1 && y0 == y1 {
@@ -202,7 +231,7 @@ func tileLineOfSight(g GridLOS, a, b [2]int32, strict bool) bool {
 		// also check the two axis-aligned cells the line passes through
 		// the corner of. This prevents corner-cutting.
 		if strict && movedX && movedY {
-			if !g.IsWalkableAt(x0, y0-sy) || !g.IsWalkableAt(x0-sx, y0) {
+			if !c.walkableAt(x0, y0-sy) || !c.walkableAt(x0-sx, y0) {
 				return false
 			}
 		}

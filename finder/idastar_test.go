@@ -2,6 +2,7 @@ package finder_test
 
 import (
 	"errors"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -9,6 +10,24 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 	"github.com/actfuns/pathfinding/grid"
 )
+
+func TestIDAStarUsesDiscountedTerrainLowerBound(t *testing.T) {
+	g := grid.NewOrthogonalGrid(grid.NewMatrix(5, 2))
+	for x := int32(0); x < 5; x++ {
+		g.(grid.MutableGrid).SetWeightAt(x, 1, 0.1)
+	}
+	path, err := finder.NewIDAStarFinder().FindPath(0, 0, 4, 0, g, nil)
+	if err != nil || len(path) != 7 {
+		t.Fatalf("got %v, %v, want the seven-point detour", path, err)
+	}
+	var cost float32
+	for _, tile := range path[1:] {
+		cost += g.GetWeightAt(tile[0], tile[1])
+	}
+	if math.Abs(float64(cost)-1.5) > 1e-6 {
+		t.Fatalf("got cost %g, want 1.5", cost)
+	}
+}
 
 func TestIDAStarAgainstJS(t *testing.T) {
 	testFinderAgainstJS(t, "IDAStar", func() finder.Finder { return finder.NewIDAStarFinder() }, [][][2]int32{

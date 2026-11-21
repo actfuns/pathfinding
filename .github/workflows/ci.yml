@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test -count=1 ./...
+      - name: Stress tests
+        if: runner.os == 'Windows'
+        run: go test -tags stress -count=1 ./...
+      - name: Race detection with stress tests
+        if: runner.os == 'Linux'
+        run: go test -race -tags stress -count=1 ./...
+      - name: Vet
+        run: go vet -tags stress ./...

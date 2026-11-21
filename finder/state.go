@@ -20,6 +20,7 @@ type searchStates struct {
 	width, height int32
 	seq           int64
 	states        []nodeState
+	reverse       []nodeState // allocated only for bidirectional weighted searches
 
 	// Per-search scratch. It lives here so one pool slot owns both the tile
 	// state and the finder buffers for one FindPath.
@@ -27,6 +28,7 @@ type searchStates struct {
 	queue          []*Node
 	queueB         []*Node
 	neighborPosBuf [][2]int32
+	jps            jpsSearch
 	heap           []heapEntry
 	heapB          []heapEntry
 	pathBuf        [][2]int32
@@ -46,6 +48,9 @@ func (s *searchStates) begin(width, height int32, seq int64) {
 		s.states = make([]nodeState, n)
 	} else {
 		s.states = s.states[:n]
+	}
+	if cap(s.neighborBuf) < 8 {
+		s.neighborBuf = make([]*Node, 0, 8)
 	}
 }
 

@@ -1,9 +1,159 @@
 package finder
 
 import (
+	"bytes"
+	"encoding/binary"
+	"errors"
 	"math/rand"
 	"testing"
 )
+
+type jpsGridWithoutFingerprint struct {
+	GridWithJPSSupport
+	walkabilityChecks int
+}
+
+func (g *jpsGridWithoutFingerprint) IsWalkableAt(x, y int32) bool {
+	g.walkabilityChecks++
+	return g.GridWithJPSSupport.IsWalkableAt(x, y)
+}
+
+func TestJPSPlusGridWithoutFingerprintAvoidsFullScan(t *testing.T) {
+	base := newFlatGrid(128, 128)
+	g := &jpsGridWithoutFingerprint{GridWithJPSSupport: base}
+	f := NewJPSPlusFinder(WithDiagonal(DiagonalAlways))
+	if err := f.Precompute(g); err != nil {
+		t.Fatal(err)
+	}
+	g.walkabilityChecks = 0
+	base.SetWalkableAt(1, 0, false)
+	base.SetWalkableAt(0, 1, false)
+	base.SetWalkableAt(1, 1, false)
+	path, err := f.FindPath(0, 0, 2, 0, g, nil)
+	if err != nil || path != nil {
+		t.Fatalf("got %v, %v, want no path from the isolated start", path, err)
+	}
+	if g.walkabilityChecks >= int(g.Width()*g.Height()) {
+		t.Fatalf("query scanned the entire grid: %d walkability checks", g.walkabilityChecks)
+	}
+}
+
+func TestJPSPlusRejectsOversizedTableBeforeScanning(t *testing.T) {
+	// Deliberately omit node storage. Invalid dimensions must be rejected
+	// before the grid is inspected or a jump table is allocated.
+	g := &flatGrid{w: 32768, h: 8192}
+	f := NewJPSPlusFinder(WithDiagonal(DiagonalAlways))
+	if err := f.Precompute(g); !errors.Is(err, ErrUnsupportedGrid) {
+		t.Fatalf("Precompute error = %v, want ErrUnsupportedGrid", err)
+	}
+}
+
+func FuzzJPSPlusLoadPrecomputed(f *testing.F) {
+	option := WithDiagonal(DiagonalAlways)
+	original := NewJPSPlusFinder(option)
+	narrowGrid := newFlatGrid(8, 3)
+	for _, g := range []*flatGrid{narrowGrid, newFlatGrid(129, 3)} {
+		if err := original.Precompute(g); err != nil {
+			f.Fatal(err)
+		}
+		data, err := original.PrecomputedData()
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(data)
+
+		withoutChecksum := bytes.Clone(data[:len(data)-4])
+		binary.LittleEndian.PutUint32(withoutChecksum, binary.LittleEndian.Uint32(data)&^jpsPlusChecksumFlag)
+		f.Add(withoutChecksum)
+
+		legacy := append(bytes.Clone(withoutChecksum[:12]), withoutChecksum[20:]...)
+		binary.LittleEndian.PutUint32(legacy, binary.LittleEndian.Uint32(data)&^(jpsPlusFingerprintFlag|jpsPlusChecksumFlag|jpsPlusCanonicalFlag))
+		f.Add(legacy)
+	}
+	f.Add([]byte{})
+	if err := original.Precompute(narrowGrid); err != nil {
+		f.Fatal(err)
+	}
+	baseline, err := original.PrecomputedData()
+	if err != nil {
+		f.Fatal(err)
+	}
+
+	f.Fuzz(func(t *testing.T, input []byte) {
+		finder := NewJPSPlusFinder(option)
+		if err := finder.LoadPrecomputed(baseline); err != nil {
+			t.Fatal(err)
+		}
+		err := finder.LoadPrecomputed(input)
+		encoded, exportErr := finder.PrecomputedData()
+		if exportErr != nil {
+			t.Fatal(exportErr)
+		}
+		if err != nil {
+			if !bytes.Equal(encoded, baseline) {
+				t.Fatal("rejected input changed the active table")
+			}
+			return
+		}
+
+		reloaded := NewJPSPlusFinder(option)
+		if err := reloaded.LoadPrecomputed(encoded); err != nil {
+			t.Fatalf("could not load re-encoded table: %v", err)
+		}
+		roundTrip, err := reloaded.PrecomputedData()
+		if err != nil || !bytes.Equal(roundTrip, encoded) {
+			t.Fatalf("round trip changed the table: %v", err)
+		}
+	})
+}
+
+func TestJPSPlusLegacyTableUsesLiveGrid(t *testing.T) {
+	g := newFlatGrid(4, 1)
+	f := NewJPSPlusFinder(WithDiagonal(DiagonalAlways))
+	if err := f.Precompute(g); err != nil {
+		t.Fatal(err)
+	}
+	data, err := f.PrecomputedData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := append(data[:12:12], data[20:len(data)-4]...)
+	magic := binary.LittleEndian.Uint32(legacy)
+	binary.LittleEndian.PutUint32(legacy, magic&^(jpsPlusFingerprintFlag|jpsPlusChecksumFlag))
+	if err := f.LoadPrecomputed(legacy); err != nil {
+		t.Fatal(err)
+	}
+	g.SetWalkableAt(2, 0, false)
+	if path, err := f.FindPath(0, 0, 3, 0, g, nil); path != nil || err != nil {
+		t.Fatalf("got %v, %v, want no path through the new obstacle", path, err)
+	}
+}
+
+func TestJPSPlusRejectsCorruptTableWithoutReplacingIt(t *testing.T) {
+	g := newFlatGrid(4, 2)
+	f := NewJPSPlusFinder(WithDiagonal(DiagonalAlways))
+	if err := f.Precompute(g); err != nil {
+		t.Fatal(err)
+	}
+	data, err := f.PrecomputedData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := append([]byte(nil), data...)
+	bad[20+dirE] = 127
+	if err := f.LoadPrecomputed(bad); err == nil {
+		t.Fatal("accepted corrupted checksum")
+	}
+	unchecked := bad[:len(bad)-4]
+	binary.LittleEndian.PutUint32(unchecked, binary.LittleEndian.Uint32(unchecked)&^jpsPlusChecksumFlag)
+	if err := f.LoadPrecomputed(unchecked); err == nil {
+		t.Fatal("accepted an out-of-bounds distance without a checksum")
+	}
+	path, err := f.FindPath(0, 0, 3, 0, g, nil)
+	if err != nil || len(path) != 4 {
+		t.Fatalf("failed load replaced the existing table: %v, %v", path, err)
+	}
+}
 
 // flatGrid is a minimal all-walkable Grid used to inspect precomputed jump
 // distances without importing the grid package (which imports finder).
@@ -80,7 +230,7 @@ func TestJPSPlusDynamicTableWidth(t *testing.T) {
 		if tc.wide {
 			cellBytes = 2
 		}
-		if want := 12 + tc.w*1*8*cellBytes; f.PrecomputedSize() != want {
+		if want := 24 + tc.w*1*8*cellBytes; f.PrecomputedSize() != want {
 			t.Errorf("%s: PrecomputedSize()=%d, want %d", tc.name, f.PrecomputedSize(), want)
 		}
 

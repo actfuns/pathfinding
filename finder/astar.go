@@ -70,66 +70,72 @@ func (f *AStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, dst 
 }
 
 func (f *AStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
-	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
+	heuristic, heuristicWeight := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic, f.Weight)
 	stepCost := gridStepCost(grid)
 	openList := &minHeap{nodes: states.heap[:0], tieBreak: true, state: states}
 	defer func() {
-		clear(openList.nodes[:cap(openList.nodes)])
 		states.heap = openList.nodes[:0]
 	}()
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
+	endIdx := states.index(endNode)
+	var nodes []Node
+	if view, ok := grid.(nodesView); ok {
+		nodes = view.NodesView()
+	}
 
 	startState := states.get(startNode)
 	startState.G = 0
 	startState.F = 0
-	openList.Push(startNode)
+	startIdx := states.index(startNode)
+	openList.Push(startIdx, startState.F)
 	startState.Opened = 1
 
 	neighborBuf := states.neighborBuf[:0]
 	defer func() { states.neighborBuf = neighborBuf }()
 
 	for !openList.Empty() {
-		node := openList.Pop()
-		nodeState := states.get(node)
+		nodeIdx := openList.Pop()
+		nodeState := &states.states[nodeIdx]
 		nodeState.Closed = true
 
-		if node == endNode {
+		if nodeIdx == endIdx {
 			states.pathBuf = states.backtrace(endNode, states.pathBuf)
 			return states.pathBuf, nil
 		}
 
+		var node *Node
+		if nodes != nil {
+			node = &nodes[nodeIdx]
+		} else {
+			node = grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
+		}
+		nodeG := nodeState.G
 		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
 		neighborBuf = neighbors
 		for _, neighbor := range neighbors {
-			ns := states.get(neighbor)
+			neighborIdx := states.index(neighbor)
+			ns := states.at(neighborIdx)
 			if ns.Closed {
 				continue
 			}
 
 			x, y := neighbor.X, neighbor.Y
-			var ng float32
-			if stepCost != nil {
-				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
-			} else if x-node.X == 0 || y-node.Y == 0 {
-				ng = nodeState.G + neighbor.Weight
-			} else {
-				ng = nodeState.G + SQRT2*neighbor.Weight
-			}
+			ng := nodeG + moveCost(stepCost, x-node.X, y-node.Y, neighbor.Weight)
 
 			if ns.Opened == 0 || ng < ns.G {
 				ns.G = ng
 				if ns.Opened == 0 {
-					ns.H = f.Weight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
+					ns.H = heuristicWeight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
 				}
 				ns.F = ns.G + ns.H
-				ns.Parent = states.index(node)
+				ns.Parent = nodeIdx
 
 				if ns.Opened == 0 {
-					openList.Push(neighbor)
+					openList.Push(neighborIdx, ns.F)
 					ns.Opened = 1
 				} else {
-					openList.UpdateItem(neighbor)
+					openList.UpdateItem(neighborIdx, ns.F)
 				}
 			}
 		}

@@ -37,6 +37,7 @@ type HexGrid struct {
 	nodes         []finder.Node
 	finder        finder.Finder
 	obstacleCount int32
+	weightBounds  tileWeightBounds
 
 	// Precomputed neighbor offsets (indexed by parity)
 	neighborsEven [6][2]int32
@@ -44,6 +45,9 @@ type HexGrid struct {
 	smoothMode    SmoothMode
 	smoother      Smoother // smoothing function; nil = default
 }
+
+// HasSymmetricNeighbors reports that edges between walkable tiles are reversible.
+func (g *HexGrid) HasSymmetricNeighbors() bool { return true }
 
 // Finder returns the pathfinder associated with this grid.
 func (g *HexGrid) Finder() finder.Finder { return g.finder }
@@ -78,9 +82,10 @@ func NewHexGrid(matrix [][]int32, opts ...GridOption) Grid {
 		staggerX:      cfg.staggerX,
 		staggerEven:   cfg.staggerEven,
 		obstacleCount: int32(obs),
-		smoothMode:    cfg.smoothMode,
-		nodes:         nodes,
-		finder:        cfg.finder,
+
+		smoothMode: cfg.smoothMode,
+		nodes:      nodes,
+		finder:     cfg.finder,
 	}
 	if cfg.finder == nil {
 		g.finder = finder.NewAStarFinder()
@@ -220,8 +225,11 @@ func (g *HexGrid) SetWeightAt(x, y int32, weight float32) {
 	if !validWeight(weight) {
 		panic("grid: weight must be a finite positive number")
 	}
-	g.nodes[g.index(x, y)].Weight = weight
+	g.weightBounds.set(g.nodes, g.index(x, y), weight)
 }
+
+// HeuristicWeightLowerBound returns a lower bound for tile movement weights.
+func (g *HexGrid) HeuristicWeightLowerBound() float32 { return g.weightBounds.lowerBound() }
 
 func (g *HexGrid) GetWeightAt(x, y int32) float32 {
 	if !g.IsInside(x, y) {
@@ -282,6 +290,7 @@ func (g *HexGrid) clone() *HexGrid {
 		neighborsEven: g.neighborsEven,
 		neighborsOdd:  g.neighborsOdd,
 		obstacleCount: g.obstacleCount,
+		weightBounds:  g.weightBounds,
 		finder:        g.finder,
 		smoothMode:    g.smoothMode,
 	}
@@ -710,65 +719,7 @@ func (g *HexGrid) FindPath(x1, y1, x2, y2 int32, dst [][2]int32) ([][2]int32, er
 }
 
 func (g *HexGrid) FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
-	var dst [][2]float32
-	var tileDst [][2]int32
-	if buff != nil {
-		dst = buff.World[:0]
-		tileDst = buff.Tile[:0]
-	}
-	if g.finder == nil {
-		return nil, nil
-	}
-	sx, sy := g.WorldToTile(wx1, wy1)
-	ex, ey := g.WorldToTile(wx2, wy2)
-	if !g.IsInside(sx, sy) || !g.IsInside(ex, ey) {
-		return nil, finder.ErrOutOfBounds
-	}
-	if g.obstacleCount == 0 {
-		var out [][2]float32
-		if dst != nil && cap(dst) >= 2 {
-			out = dst[:2]
-		} else {
-			out = make([][2]float32, 2)
-		}
-		out[0][0], out[0][1] = wx1, wy1
-		out[1][0], out[1][1] = wx2, wy2
-		if buff != nil {
-			buff.World = out
-		}
-		return out, nil
-	}
-	path, err := g.finder.FindPath(sx, sy, ex, ey, g, tileDst)
-	if err != nil {
-		return nil, err
-	}
-	if path == nil {
-		return nil, nil
-	}
-	if g.smoother != nil {
-		path = g.smoother(path)
-	}
-	if path == nil {
-		return nil, nil
-	}
-	if buff != nil {
-		buff.Tile = path
-	}
-	var out [][2]float32
-	if dst != nil && cap(dst) >= len(path) {
-		out = dst[:len(path)]
-	} else {
-		out = make([][2]float32, len(path))
-	}
-	for i, p := range path {
-		out[i][0], out[i][1] = g.TileToWorld(p[0], p[1])
-	}
-	out[0][0], out[0][1] = wx1, wy1
-	out[len(out)-1][0], out[len(out)-1][1] = wx2, wy2
-	if buff != nil {
-		buff.World = out
-	}
-	return out, nil
+	return findPathWorld(g, g.smoother, wx1, wy1, wx2, wy2, buff)
 }
 
 // GetNeighbors returns the 6 hex neighbors. Diagonal parameter is ignored

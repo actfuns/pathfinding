@@ -15,30 +15,29 @@ func NewJPFNeverMoveDiagonally(opts ...Option) *JPFNeverMoveDiagonally {
 }
 
 func neverJump(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
-	grid := s.grid
 	dx := x - px
 	dy := y - py
 
-	if !grid.IsWalkableAt(x, y) {
+	if !s.walk.at(x, y) {
 		return 0, 0, false
 	}
 
-	if s.TrackRecursion {
+	if s.trackRecursion {
 		s.states.get(s.grid.GetNodeAt(x, y)).Tested = true
 	}
 
-	if grid.GetNodeAt(x, y) == s.endNode {
+	if x == s.endX && y == s.endY {
 		return x, y, true
 	}
 
 	if dx != 0 {
-		if (grid.IsWalkableAt(x, y-1) && !grid.IsWalkableAt(x-dx, y-1)) ||
-			(grid.IsWalkableAt(x, y+1) && !grid.IsWalkableAt(x-dx, y+1)) {
+		if (s.walk.at(x, y-1) && !s.walk.at(x-dx, y-1)) ||
+			(s.walk.at(x, y+1) && !s.walk.at(x-dx, y+1)) {
 			return x, y, true
 		}
 	} else if dy != 0 {
-		if (grid.IsWalkableAt(x-1, y) && !grid.IsWalkableAt(x-1, y-dy)) ||
-			(grid.IsWalkableAt(x+1, y) && !grid.IsWalkableAt(x+1, y-dy)) {
+		if (s.walk.at(x-1, y) && !s.walk.at(x-1, y-dy)) ||
+			(s.walk.at(x+1, y) && !s.walk.at(x+1, y-dy)) {
 			return x, y, true
 		}
 		if _, _, ok := neverJump(s, x+1, y, x, y); ok {
@@ -57,7 +56,6 @@ func neverJump(s *jpsSearch, x, y, px, py int32) (int32, int32, bool) {
 func neverFindNeighbors(s *jpsSearch, node *Node, buf [][2]int32) [][2]int32 {
 	parent := s.states.get(node).Parent
 	x, y := node.X, node.Y
-	grid := s.grid
 
 	if parent >= 0 {
 		px, py := s.states.xy(parent)
@@ -67,23 +65,23 @@ func neverFindNeighbors(s *jpsSearch, node *Node, buf [][2]int32) [][2]int32 {
 		neighbors := buf[:0]
 
 		if dx != 0 {
-			if grid.IsWalkableAt(x, y-1) {
+			if s.walk.at(x, y-1) {
 				neighbors = append(neighbors, [2]int32{x, y - 1})
 			}
-			if grid.IsWalkableAt(x, y+1) {
+			if s.walk.at(x, y+1) {
 				neighbors = append(neighbors, [2]int32{x, y + 1})
 			}
-			if grid.IsWalkableAt(x+dx, y) {
+			if s.walk.at(x+dx, y) {
 				neighbors = append(neighbors, [2]int32{x + dx, y})
 			}
 		} else if dy != 0 {
-			if grid.IsWalkableAt(x-1, y) {
+			if s.walk.at(x-1, y) {
 				neighbors = append(neighbors, [2]int32{x - 1, y})
 			}
-			if grid.IsWalkableAt(x+1, y) {
+			if s.walk.at(x+1, y) {
 				neighbors = append(neighbors, [2]int32{x + 1, y})
 			}
-			if grid.IsWalkableAt(x, y+dy) {
+			if s.walk.at(x, y+dy) {
 				neighbors = append(neighbors, [2]int32{x, y + dy})
 			}
 		}

@@ -26,6 +26,28 @@ type StepCostGrid interface {
 	StepCost(dx, dy int32) float32
 }
 
+// SymmetricNeighborGrid opts into bidirectional search. For each supported
+// movement rule, a walkable tile must list another walkable tile as a neighbor
+// exactly when the reverse edge exists. Edge costs may differ by direction.
+type SymmetricNeighborGrid interface {
+	Grid
+	HasSymmetricNeighbors() bool
+}
+
+func canSearchBidirectionally(grid Grid, startX, startY int32) bool {
+	topology, ok := grid.(SymmetricNeighborGrid)
+	// A blocked start may have outgoing edges without reverse edges.
+	return ok && topology.HasSymmetricNeighbors() && grid.IsWalkableAt(startX, startY)
+}
+
+// WalkabilityFingerprintGrid lets JPS+ validate a jump table in constant time.
+// The fingerprint must reflect the current obstacle layout and be stable across
+// equivalent snapshots of the same grid implementation.
+type WalkabilityFingerprintGrid interface {
+	Grid
+	WalkabilityFingerprint() uint64
+}
+
 // heuristicGrid is optionally implemented by grids that need a topology-specific
 // default heuristic (for example, hex grids with unit-cost moves).
 type heuristicGrid interface {
@@ -41,13 +63,28 @@ func gridStepCost(grid Grid) func(dx, dy int32) float32 {
 	return nil
 }
 
-// heuristicFor returns the grid's default heuristic unless the caller supplied
-// an explicit one.
-func heuristicFor(grid Grid, diagonal DiagonalMovement, fallback HeuristicFunc, custom bool) HeuristicFunc {
-	if !custom {
-		if g, ok := grid.(heuristicGrid); ok {
-			return g.DefaultHeuristic(diagonal)
-		}
+// moveCost prices a directed edge using the forward destination's weight.
+func moveCost(stepCost func(int32, int32) float32, dx, dy int32, tileWeight float32) float32 {
+	if stepCost != nil {
+		return stepCost(dx, dy) * tileWeight
 	}
-	return fallback
+	if dx != 0 && dy != 0 {
+		return SQRT2 * tileWeight
+	}
+	return tileWeight
+}
+
+// heuristicFor resolves the topology and terrain cost of the default
+// heuristic. An explicit heuristic owns its cost model.
+func heuristicFor(grid Grid, diagonal DiagonalMovement, heuristic HeuristicFunc, custom bool, weight float32) (HeuristicFunc, float32) {
+	if custom {
+		return heuristic, weight
+	}
+	if g, ok := grid.(heuristicGrid); ok {
+		heuristic = g.DefaultHeuristic(diagonal)
+	}
+	if g, ok := grid.(interface{ HeuristicWeightLowerBound() float32 }); ok {
+		weight *= g.HeuristicWeightLowerBound()
+	}
+	return heuristic, weight
 }

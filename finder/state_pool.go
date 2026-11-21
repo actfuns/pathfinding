@@ -161,8 +161,6 @@ func releaseStates(s *searchStates) {
 	if s == nil {
 		return
 	}
-	clear(s.heap[:cap(s.heap)])
-	clear(s.heapB[:cap(s.heapB)])
 	clear(s.neighborBuf[:cap(s.neighborBuf)])
 	clear(s.queue[:cap(s.queue)])
 	clear(s.queueB[:cap(s.queueB)])

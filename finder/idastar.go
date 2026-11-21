@@ -74,7 +74,7 @@ func (f *IDAStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 }
 
 func (f *IDAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
-	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
+	heuristic, heuristicWeight := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic, f.Weight)
 	stepCost := gridStepCost(grid)
 	start := grid.GetNodeAt(startX, startY)
 	end := grid.GetNodeAt(endX, endY)
@@ -84,14 +84,7 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 	}
 
 	cost := func(a, b *Node) float32 {
-		dx, dy := b.X-a.X, b.Y-a.Y
-		if stepCost != nil {
-			return stepCost(dx, dy) * b.Weight
-		}
-		if dx == 0 || dy == 0 {
-			return b.Weight
-		}
-		return SQRT2 * b.Weight
+		return moveCost(stepCost, b.X-a.X, b.Y-a.Y, b.Weight)
 	}
 
 	startTime := time.Now()
@@ -139,7 +132,7 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 			return float32(math.Inf(1)), false
 		}
 
-		fScore := g + h(node, end)*f.Weight
+		fScore := g + h(node, end)*heuristicWeight
 		if fScore > cutoff {
 			return fScore, false
 		}
@@ -196,7 +189,7 @@ func (f *IDAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, st
 		return min, false
 	}
 
-	cutOff := h(start, end) * f.Weight
+	cutOff := h(start, end) * heuristicWeight
 
 	for {
 		pathEnd = -1

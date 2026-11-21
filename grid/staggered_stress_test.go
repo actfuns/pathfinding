@@ -2,11 +2,7 @@
 
 package grid
 
-import (
-	"testing"
-
-	"github.com/actfuns/pathfinding/finder"
-)
+import "testing"
 
 func TestStaggeredStress_AllOpen(t *testing.T) {
 	matrix := generateGrid(100, 100, 0)
@@ -19,7 +15,7 @@ func TestStaggeredStress_AllOpen(t *testing.T) {
 		t.Fatalf("FindPathWorld: %v", err)
 	}
 	if path == nil {
-		t.Skip("staggered FindPathWorld: no path (coordinate edge behavior)")
+		t.Fatal("FindPathWorld: expected a path on the open staggered grid")
 	}
 	smooth, err := NewStaggeredGrid(matrix, WithSmoothDense()).FindPathWorld(sx, sy, ex, ey, nil)
 	if err != nil {

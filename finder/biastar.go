@@ -65,127 +65,114 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 }
 
 func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
-	heuristic := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic)
+	if !canSearchBidirectionally(grid, startX, startY) {
+		forward := AStarFinder{
+			Heuristic: f.Heuristic, Weight: f.Weight, DiagonalMovement: f.DiagonalMovement,
+			customHeuristic: f.customHeuristic,
+		}
+		return forward.findPath(startX, startY, endX, endY, grid, states)
+	}
+
+	heuristic, weight := heuristicFor(grid, f.DiagonalMovement, f.Heuristic, f.customHeuristic, f.Weight)
 	stepCost := gridStepCost(grid)
-	startNode := grid.GetNodeAt(startX, startY)
-	endNode := grid.GetNodeAt(endX, endY)
+	start := grid.GetNodeAt(startX, startY)
+	end := grid.GetNodeAt(endX, endY)
 
-	const (
-		BY_START = 1
-		BY_END   = 2
-	)
-
-	startOpenList := &minHeap{nodes: states.heap[:0], tieBreak: true, state: states}
-	endOpenList := &minHeap{nodes: states.heapB[:0], tieBreak: true, state: states}
+	n := len(states.states)
+	if cap(states.reverse) < n {
+		states.reverse = make([]nodeState, n)
+	}
+	reverse := searchStates{width: states.width, height: states.height, seq: states.seq, states: states.reverse[:n]}
+	forwardOpen := minHeap{nodes: states.heap[:0], tieBreak: true, state: states}
+	reverseOpen := minHeap{nodes: states.heapB[:0], tieBreak: true, state: &reverse}
+	neighborBuf := states.neighborBuf[:0]
 	defer func() {
-		clear(startOpenList.nodes[:cap(startOpenList.nodes)])
-		clear(endOpenList.nodes[:cap(endOpenList.nodes)])
-		states.heap = startOpenList.nodes[:0]
-		states.heapB = endOpenList.nodes[:0]
+		states.heap = forwardOpen.nodes[:0]
+		states.heapB = reverseOpen.nodes[:0]
+		states.neighborBuf = neighborBuf
 	}()
 
-	startState := states.get(startNode)
-	startState.G = 0
-	startState.F = 0
-	startOpenList.Push(startNode)
-	startState.Opened = BY_START
+	directions := [...]struct {
+		open         *minHeap
+		other        *searchStates
+		from, target *Node
+		reversed     bool
+	}{
+		{&forwardOpen, &reverse, start, end, false},
+		{&reverseOpen, states, end, start, true},
+	}
+	for _, side := range directions {
+		index := side.open.state.index(side.from)
+		state := side.open.state.at(index)
+		state.Opened = 1
+		state.H = weight * heuristic(float32(AbsInt(startX-endX)), float32(AbsInt(startY-endY)))
+		state.F = state.H
+		side.open.Push(index, state.F)
+	}
 
-	endState := states.get(endNode)
-	endState.G = 0
-	endState.F = 0
-	endOpenList.Push(endNode)
-	endState.Opened = BY_END
-
-	neighborBuf := states.neighborBuf[:0]
-	defer func() { states.neighborBuf = neighborBuf }()
-
-	for !startOpenList.Empty() && !endOpenList.Empty() {
-		node := startOpenList.Pop()
-		nodeState := states.get(node)
-		nodeState.Closed = true
-
-		neighbors := grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
-		neighborBuf = neighbors
-		for _, neighbor := range neighbors {
-			ns := states.get(neighbor)
-			if ns.Closed {
-				continue
+	meeting := int32(-1)
+	var best float32
+search:
+	for {
+		for _, side := range directions {
+			// A frontier's minimum F is a lower bound with an admissible
+			// heuristic. The best complete route is an upper bound.
+			if side.open.Empty() || (meeting >= 0 && side.open.nodes[0].F >= best) {
+				break search
 			}
-			if ns.Opened == BY_END {
-				states.pathBuf = states.biBacktrace(node, neighbor, states.pathBuf)
-				return states.pathBuf, nil
-			}
-
-			x, y := neighbor.X, neighbor.Y
-			var ng float32
-			if stepCost != nil {
-				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
-			} else if x-node.X == 0 || y-node.Y == 0 {
-				ng = nodeState.G + neighbor.Weight
-			} else {
-				ng = nodeState.G + SQRT2*neighbor.Weight
-			}
-
-			if ns.Opened == 0 || ng < ns.G {
-				ns.G = ng
-				if ns.Opened == 0 {
-					ns.H = f.Weight * heuristic(float32(AbsInt(x-endX)), float32(AbsInt(y-endY)))
+			current := side.open.state
+			index := side.open.Pop()
+			state := &current.states[index]
+			state.Closed = true
+			x, y := current.xy(index)
+			node := grid.GetNodeAt(x, y)
+			neighborBuf = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
+			for _, next := range neighborBuf {
+				nextIndex := current.index(next)
+				nextState := current.at(nextIndex)
+				dx, dy := next.X-x, next.Y-y
+				tileWeight := next.Weight
+				if side.reversed {
+					// The forward edge enters node, even when explored backwards.
+					dx, dy = -dx, -dy
+					tileWeight = node.Weight
 				}
-				ns.F = ns.G + ns.H
-				ns.Parent = states.index(node)
-
-				if ns.Opened == 0 {
-					startOpenList.Push(neighbor)
-					ns.Opened = BY_START
+				cost := state.G + moveCost(stepCost, dx, dy, tileWeight)
+				if nextState.Opened != 0 && cost >= nextState.G {
+					continue
+				}
+				if nextState.Opened == 0 {
+					nextState.H = weight * heuristic(float32(AbsInt(next.X-side.target.X)), float32(AbsInt(next.Y-side.target.Y)))
+				}
+				nextState.G = cost
+				nextState.F = cost + nextState.H
+				nextState.Parent = index
+				if nextState.Opened == 0 || nextState.Closed {
+					nextState.Opened = 1
+					nextState.Closed = false
+					side.open.Push(nextIndex, nextState.F)
 				} else {
-					startOpenList.UpdateItem(neighbor)
+					side.open.UpdateItem(nextIndex, nextState.F)
 				}
-			}
-		}
-
-		node = endOpenList.Pop()
-		nodeState = states.get(node)
-		nodeState.Closed = true
-
-		neighbors = grid.GetNeighbors(node, f.DiagonalMovement, neighborBuf)
-		neighborBuf = neighbors
-		for _, neighbor := range neighbors {
-			ns := states.get(neighbor)
-			if ns.Closed {
-				continue
-			}
-			if ns.Opened == BY_START {
-				states.pathBuf = states.biBacktrace(neighbor, node, states.pathBuf)
-				return states.pathBuf, nil
-			}
-
-			x, y := neighbor.X, neighbor.Y
-			var ng float32
-			if stepCost != nil {
-				ng = nodeState.G + stepCost(x-node.X, y-node.Y)*neighbor.Weight
-			} else if x-node.X == 0 || y-node.Y == 0 {
-				ng = nodeState.G + neighbor.Weight
-			} else {
-				ng = nodeState.G + SQRT2*neighbor.Weight
-			}
-
-			if ns.Opened == 0 || ng < ns.G {
-				ns.G = ng
-				if ns.Opened == 0 {
-					ns.H = f.Weight * heuristic(float32(AbsInt(x-startX)), float32(AbsInt(y-startY)))
-				}
-				ns.F = ns.G + ns.H
-				ns.Parent = states.index(node)
-
-				if ns.Opened == 0 {
-					endOpenList.Push(neighbor)
-					ns.Opened = BY_END
-				} else {
-					endOpenList.UpdateItem(neighbor)
+				if other := &side.other.states[nextIndex]; other.SearchID == states.seq && other.Opened != 0 {
+					total := cost + other.G
+					if meeting < 0 || total < best {
+						meeting, best = nextIndex, total
+					}
 				}
 			}
 		}
 	}
 
-	return nil, nil
+	if meeting < 0 {
+		return nil, nil
+	}
+	x, y := states.xy(meeting)
+	path := states.backtrace(grid.GetNodeAt(x, y), states.pathBuf)
+	for i := reverse.at(meeting).Parent; i >= 0; i = reverse.at(i).Parent {
+		x, y := reverse.xy(i)
+		path = append(path, [2]int32{x, y})
+	}
+	states.pathBuf = path
+	return path, nil
 }

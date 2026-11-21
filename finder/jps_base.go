@@ -16,14 +16,22 @@ type JumpPointFinderBase struct {
 	findNeighborsFn  func(s *jpsSearch, node *Node, buf [][2]int32) [][2]int32
 }
 
-// jpsSearch holds the per-call context and scratch for a JPS search. The
-// Finder itself stays immutable so one Finder can serve concurrent searches.
+type jpsSearchOptions struct {
+	heuristic      HeuristicFunc
+	weight         float32
+	trackRecursion bool
+	neighbors      func(*jpsSearch, *Node, [][2]int32) [][2]int32
+	jump           func(*jpsSearch, int32, int32, int32, int32) (int32, int32, bool)
+	table          *jumpTable
+}
+
+// jpsSearch holds the scratch and immutable configuration of one query.
 type jpsSearch struct {
-	*JumpPointFinderBase
+	jpsSearchOptions
 	states      *searchStates
 	grid        Grid
-	startNode   *Node
-	endNode     *Node
+	walk        walkableView
+	endX, endY  int32
 	neighborBuf []*Node
 }
 
@@ -87,20 +95,28 @@ func (b *JumpPointFinderBase) FindPath(startX, startY, endX, endY int32, grid Gr
 		return nil, err
 	}
 	defer releaseStates(states)
-	p, err := b.findPath(startX, startY, endX, endY, grid, states)
+	p, err := findJPSPath(startX, startY, endX, endY, grid, states, jpsSearchOptions{
+		heuristic: b.Heuristic, weight: b.Weight, trackRecursion: b.TrackRecursion,
+		neighbors: b.findNeighborsFn, jump: b.jumpFn,
+	})
 	return finishPath(p, dst, false), err
 }
 
-func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
-	s := &jpsSearch{
-		JumpPointFinderBase: b,
-		states:              states,
-		grid:                grid,
-		startNode:           grid.GetNodeAt(startX, startY),
-		endNode:             grid.GetNodeAt(endX, endY),
-		neighborBuf:         states.neighborBuf[:0],
+func findJPSPath(startX, startY, endX, endY int32, grid Grid, states *searchStates, options jpsSearchOptions) ([][2]int32, error) {
+	s := &states.jps
+	*s = jpsSearch{
+		jpsSearchOptions: options,
+		states:           states,
+		grid:             grid,
+		walk:             newWalkableView(grid),
+		endX:             endX,
+		endY:             endY,
+		neighborBuf:      states.neighborBuf[:0],
 	}
-	defer func() { states.neighborBuf = s.neighborBuf }()
+	defer func() {
+		states.neighborBuf = s.neighborBuf
+		*s = jpsSearch{}
+	}()
 	openList := &minHeap{nodes: states.heap[:0], state: states}
 	defer func() {
 		clear(openList.nodes[:cap(openList.nodes)])
@@ -113,103 +129,62 @@ func (b *JumpPointFinderBase) findPath(startX, startY, endX, endY int32, grid Gr
 		states.expandBuf = expandBuf
 	}()
 
-	startState := states.get(s.startNode)
-	startState.G = 0
-	startState.F = 0
-	openList.Push(s.startNode)
+	startIdx := states.index(grid.GetNodeAt(startX, startY))
+	endNode := grid.GetNodeAt(endX, endY)
+	endIdx := states.index(endNode)
+	startState := states.at(startIdx)
+	openList.Push(startIdx, startState.F)
 	startState.Opened = 1
 
 	for !openList.Empty() {
-		node := openList.Pop()
-		states.get(node).Closed = true
+		nodeIdx := openList.Pop()
+		node := grid.GetNodeAt(nodeIdx%states.width, nodeIdx/states.width)
+		states.states[nodeIdx].Closed = true
 
-		if node == s.endNode {
-			pathBuf = states.backtrace(s.endNode, pathBuf)
-			// Jump point paths skip intermediate tiles, so expand inline.
-			// Uses expandBuf instead of ExpandPath to avoid allocation.
-			expandBuf = expandBuf[:0]
-			for i := 0; i < len(pathBuf)-1; i++ {
-				x0, y0 := pathBuf[i][0], pathBuf[i][1]
-				x1, y1 := pathBuf[i+1][0], pathBuf[i+1][1]
-				dx := x1 - x0
-				dy := y1 - y0
-				var sx, sy int32
-				if dx < 0 {
-					dx = -dx
-					sx = -1
-				} else {
-					sx = 1
-				}
-				if dy < 0 {
-					dy = -dy
-					sy = -1
-				} else {
-					sy = 1
-				}
-				err := dx - dy
-				for {
-					if x0 == x1 && y0 == y1 {
-						break
-					}
-					expandBuf = append(expandBuf, [2]int32{x0, y0})
-					e2 := 2 * err
-					if e2 > -dy {
-						err -= dy
-						x0 += sx
-					}
-					if e2 < dx {
-						err += dx
-						y0 += sy
-					}
-				}
-			}
-			expandBuf = append(expandBuf, pathBuf[len(pathBuf)-1])
+		if nodeIdx == endIdx {
+			pathBuf = states.backtrace(endNode, pathBuf)
+			expandBuf = expandPathInto(expandBuf, pathBuf)
 			return expandBuf, nil
 		}
 
-		s.identifySuccessors(node, openList)
+		s.identifySuccessors(node, nodeIdx, openList)
 	}
 
 	return nil, nil
 }
 
-func (s *jpsSearch) identifySuccessors(node *Node, openList *minHeap) {
-	grid := s.grid
-	heuristic := s.Heuristic
-	endX := s.endNode.X
-	endY := s.endNode.Y
+func (s *jpsSearch) identifySuccessors(node *Node, nodeIdx int32, openList *minHeap) {
 	x, y := node.X, node.Y
-
-	// FindPath guarantees supportsJPS(grid), so canonical pruning is safe.
-	neighbors := s.findNeighborsFn(s, node, s.states.neighborPosBuf[:0])
+	nodeG := s.states.states[nodeIdx].G
+	neighbors := s.neighbors(s, node, s.states.neighborPosBuf[:0])
 	s.states.neighborPosBuf = neighbors[:0]
 	for _, neighbor := range neighbors {
-		jx, jy, ok := s.jumpFn(s, neighbor[0], neighbor[1], x, y)
+		jx, jy, ok := s.jump(s, neighbor[0], neighbor[1], x, y)
 		if !ok {
 			continue
 		}
-		jumpNode := grid.GetNodeAt(jx, jy)
-		ns := s.states.get(jumpNode)
+		jumpIdx := jy*s.states.width + jx
+		ns := s.states.at(jumpIdx)
 		if ns.Closed {
 			continue
 		}
 
 		d := Octile(float32(AbsInt(jx-x)), float32(AbsInt(jy-y)))
-		ng := s.states.get(node).G + d
+		ng := nodeG + d
 
 		if ns.Opened == 0 || ng < ns.G {
 			ns.G = ng
 			if ns.Opened == 0 {
-				ns.H = heuristic(float32(AbsInt(jx-endX)), float32(AbsInt(jy-endY)))
+				ns.H = s.heuristic(float32(AbsInt(jx-s.endX)), float32(AbsInt(jy-s.endY)))
 			}
-			ns.F = ns.G + ns.H*s.Weight
-			ns.Parent = s.states.index(node)
+			ns.F = ns.G + ns.H*s.weight
+			ns.Parent = nodeIdx
 
 			if ns.Opened == 0 {
-				openList.Push(jumpNode)
+				openList.Push(jumpIdx, ns.F)
 				ns.Opened = 1
 			} else {
-				openList.UpdateItem(jumpNode)
+				openList.UpdateItem(jumpIdx, ns.F)
 			}
 		}
 	}

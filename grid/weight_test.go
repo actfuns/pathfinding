@@ -40,3 +40,27 @@ func TestSetWeightAtRejectsInvalid(t *testing.T) {
 		}
 	}
 }
+
+func TestTileWeightBoundsCountsSharedMinimum(t *testing.T) {
+	g := NewOrthogonalGrid(NewMatrix(4, 1)).(*OrthogonalGrid)
+	g.SetWeightAt(0, 0, 0.25)
+	g.SetWeightAt(1, 0, 0.25)
+	g.SetWeightAt(2, 0, 0.5)
+	g.SetWeightAt(0, 0, 1)
+	if g.weightBounds.count != 1 || g.HeuristicWeightLowerBound() != 0.25 {
+		t.Fatalf("unexpected bounds after removing the first minimum: %+v", g.weightBounds)
+	}
+	cloned, err := g.Clone()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cloned.(*OrthogonalGrid).SetWeightAt(1, 0, 1)
+	if cloned.(*OrthogonalGrid).HeuristicWeightLowerBound() != 0.5 || g.HeuristicWeightLowerBound() != 0.25 {
+		t.Fatal("raising the last minimum on a clone must update only the clone")
+	}
+	g.SetWeightAt(1, 0, 1)
+	g.SetWeightAt(2, 0, 1)
+	if g.HeuristicWeightLowerBound() != 1 {
+		t.Fatalf("got %g, want the default bound", g.HeuristicWeightLowerBound())
+	}
+}

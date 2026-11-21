@@ -50,7 +50,12 @@ func PathLength(path [][2]int32) float32 {
 // Interpolate returns all coordinates on the line from (x0, y0) to (x1, y1)
 // using Bresenham's algorithm.
 func Interpolate(x0, y0, x1, y1 int32) [][2]int32 {
-	line := make([][2]int32, 0, 16)
+	line := appendLineInterior(make([][2]int32, 0, 16), x0, y0, x1, y1)
+	return append(line, [2]int32{x1, y1})
+}
+
+// appendLineInterior includes the start and omits the end, so adjacent segments share a point.
+func appendLineInterior(line [][2]int32, x0, y0, x1, y1 int32) [][2]int32 {
 	dx := x1 - x0
 	dy := y1 - y0
 	var sx, sy int32
@@ -68,11 +73,8 @@ func Interpolate(x0, y0, x1, y1 int32) [][2]int32 {
 	}
 	err := dx - dy
 
-	for {
+	for x0 != x1 || y0 != y1 {
 		line = append(line, [2]int32{x0, y0})
-		if x0 == x1 && y0 == y1 {
-			break
-		}
 		e2 := 2 * err
 		if e2 > -dy {
 			err -= dy
@@ -91,13 +93,16 @@ func ExpandPath(path [][2]int32) [][2]int32 {
 	if len(path) < 2 {
 		return nil
 	}
-	expanded := make([][2]int32, 0, len(path)*2)
-	for i := 0; i < len(path)-1; i++ {
-		interpolated := Interpolate(path[i][0], path[i][1], path[i+1][0], path[i+1][1])
-		expanded = append(expanded, interpolated[:len(interpolated)-1]...)
+	return expandPathInto(make([][2]int32, 0, len(path)*2), path)
+}
+
+func expandPathInto(dst, path [][2]int32) [][2]int32 {
+	dst = dst[:0]
+	for i := 1; i < len(path); i++ {
+		from, to := path[i-1], path[i]
+		dst = appendLineInterior(dst, from[0], from[1], to[0], to[1])
 	}
-	expanded = append(expanded, path[len(path)-1])
-	return expanded
+	return append(dst, path[len(path)-1])
 }
 
 // CompressPath removes redundant collinear nodes from a path.

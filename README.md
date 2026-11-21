@@ -284,7 +284,7 @@ wpath, err = g.FindPathWorld(wx1, wy1, wx2, wy2, nil)
 - `buff.World`：复用 world 输出
 - 容量不够时自动扩容，并回写 `PathBuff` 的 slice 头
 - 返回 slice 归调用方所有；`dst` / `PathBuff` 不能被并发调用共享
-- 状态和 scratch 仍然复用；A*/BiA*/BFS/BiBFS/JPS+ 预热后可做到 0 alloc/op，JPS 有 1 次编译器 escape 分配
+- 搜索状态和临时缓冲会复用。分配表现取决于具体 Finder、输出缓冲容量和搜索状态池是否已热身
 - Waypoint 已使用 scratch pool，传 `dst` 预热后可 0 alloc；HPA 仍会分配内部 map/scratch；Flowfield 的 `FindPath` 也接收 `dst`
 - Flowfield 构建完成后，`GetDirection` / `GetCost` / `FindPath` 可以并发读；`Reset` / `ResetMulti` 仍不能与读取并发
 
@@ -321,12 +321,13 @@ JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `ju
 
 | 特性 | 说明 |
 | :--- | :--- |
-| **Precompute** | 两阶段预计算：Phase 1 检测 Primary Jump Points，Phase 2 计算 8 方向距离表 |
-| **export/import** | `PrecomputedData()` / `LoadPrecomputed()` 支持烘焙数据导出为文件，服务端启动直接加载 |
-| **searchSeq 全局唯一** | 所有 finder 的 `searchSeq` 通过全局原子计数器初始化，不同 finder 可安全共享同一 grid |
-| **Adaptive** | `finder.WithAdaptive()`：障碍密度 ≥10% 时自动改用 A*，避免密集图上的退化 |
+| **Precompute** | `DiagonalAlways` 按方向扫描一次生成跳表，查询时结合终点确定跳点。为保证最短路径，`DiagonalIfAtMostOneObstacle` 查询使用在线 JPS |
+| **导出和加载** | `PrecomputedData()` / `LoadPrecomputed()` 保存和读取跳表。新版附带校验和及障碍布局指纹。缺少布局指纹的旧表加载后使用在线 JPS，重新预计算可恢复查表 |
+| **地图变更** | 修改可走性后重新预计算。布局与跳表不匹配时，查询会返回 `finder.ErrPrecomputedMismatch` |
+| **自定义网格** | 实现 `finder.WalkabilityFingerprintGrid` 可启用常数时间的跳表校验。缺少该能力时查询使用在线 JPS，预计算仍可生成跳表 |
+| **Adaptive** | 显式启用 `finder.WithAdaptive()` 后，障碍密度达到 10% 时改用 A* |
 
-适用场景：**障碍物密集的静态小地图**（如游戏房间内布局固定的障碍地图）。开阔地形下利用预计算距离表可直接跳跃到目标，反而是 JPS+ 最快的场景（100×100 仅 0.6µs）。
+适用于反复查询的静态、等成本正交地图。选型时可以用实际地图和查询分布，同时测量预计算时间、表大小和查询耗时。
 
 ```go
 import (
@@ -418,11 +419,11 @@ path, _ := f.FindPath(0, 0, 10, 10, grid, nil)
 | **零分配 A\*** | AStar Finder 内部复用 Node 和 OpenSet 缓冲区，benchmark 显示 0 B/op |
 | **LOS Smoothing** | `WithSmoothBresenham()` 等选项基于 Bresenham 直线可视性自动消除冗余路径点，开销仅 ~25% |
 | **可插拔 Finder** | 通过 `WithFinder()` 可替换底层寻路算法 |
-| **障碍物计数** | `obstacleCount` 跟踪不可通行瓦片数，全空时 FindPath 直接返回线段，不走算法 |
+| **世界坐标路径** | `FindPathWorld` 使用配置的 Finder 搜索，适用的地形权重和对角规则由 Finder 决定。启用平滑时，随后按几何视线合并路径点 |
 
 ## 性能基准
 
-以下基准测试在 **Intel i5-13400** 上运行。测试三种障碍密度（固定种子，可复现）：
+以下是 **Intel i5-13400** 上的历史基准，供理解测试场景和数量级。当前版本请用同一环境、相同查询集重新对照。测试覆盖三种障碍密度（固定种子，可复现）：
 
 - **Open (0%)** — 全空网格
 - **Sparse (10%)** — 稀疏障碍
@@ -539,6 +540,14 @@ go run examples/flowfield/
 ```
 
 ## 版本历史
+
+### Unreleased — 寻路一致性与 JPS+ 跳表
+
+- 三种内置网格的 `FindPathWorld` 都会调用配置的 Finder，包括无障碍地图。无障碍查询也有搜索开销，且可能返回多于两个的路径点。显式启用的平滑仍在搜索后处理。
+- A* 和 IDA* 的默认启发式考虑低于 1 的地形权重。双向 A* 和双向 Dijkstra 按正向边计费，并在已知路径达到停止下界后返回。
+- 自定义网格可通过 `finder.SymmetricNeighborGrid` 声明对称邻接。未声明对称的网格使用单向搜索，保留单向边的语义。
+- JPS+ 跳表与障碍布局绑定，新格式带校验和。缺少布局指纹的旧表仍可加载，查询会使用在线 JPS，重新运行 `Precompute` 可恢复查表加速。
+- 从 v0.9.0 升级时，外部 `grid.Grid` 实现需迁移坐标签名。例如 `TileIndex(x, y int32) int` 接收 `int32` 坐标，`TileXY(index int) (int32, int32)` 返回 `int32` 坐标。平面索引仍是 `int`。
 
 ### Unreleased — 状态外置与直接并发
 - `Node` 只保留 `X/Y/Walkable/Weight`；搜索状态改为 per-FindPath scratch，`Parent`/`HeapIndex` 使用 flat index
