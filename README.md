@@ -153,10 +153,10 @@ g := grid.NewOrthogonalGrid(matrix)
 g.(grid.MutableGrid).SetWalkableAt(1, 2, false)
 ```
 
-- **只做只读快照**：向 `Clone` 传入空回调。无状态 Finder 自动共享；有状态 Finder 仍需安装替代 Finder：
+- **只做只读快照**：`Clone(nil)` 复制一份不修改的快照。无状态 Finder 自动共享；有状态 Finder 仍需安装替代 Finder：
 
 ```go
-g2, err := g.Clone(func(grid.MutableGrid) {})
+g2, err := g.Clone(nil)
 ```
 
 - **并发搜索期间修改**：用 `Clone` 复制一次，在回调中批量修改：
@@ -570,7 +570,7 @@ BREAKING: 移除 `Node` 搜索字段/`ResetSearch`、`Backtrace`/`BiBacktrace`/`
 ### Unreleased — 只读 Grid 与显式可变视图
 - `NewOrthogonalGrid` / `NewHexGrid` / `NewStaggeredGrid` 返回只读 `grid.Grid`
 - Setter 移入 `grid.MutableGrid`；单线程可通过类型断言零拷贝访问
-- **快照 API 变更**：统一使用 `Grid.Clone(func(MutableGrid)) (Grid, error)`。旧的 `Clone()` 调用改传空回调，旧的 `CloneWith(fn)` 改为 `Clone(fn)`。传入 nil 会返回 `ErrCloneFuncRequired`；有状态 Finder 必须在回调中替换。
+- **快照 API 变更**：统一使用 `Grid.Clone(func(MutableGrid)) (Grid, error)`。旧的 `Clone()` 调用改传 `nil`，旧的 `CloneWith(fn)` 改为 `Clone(fn)`。`nil` 表示无编辑快照；有状态 Finder 仍必须在回调中替换。
 
 ### v0.9.0 — 并发寻路 + 寻路返回 error
 - **破坏性变更**：`finder.Finder.FindPath`、`grid.Grid.FindPath`、`hpa` / `waypoint` / `flowfield.Field.FindPath` 改为返回 `([][2]int, error)`；`grid.Grid.FindPathWorld` 返回 `([][2]float32, error)`

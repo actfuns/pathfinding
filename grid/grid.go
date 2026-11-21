@@ -10,9 +10,6 @@ import (
 // ErrFinderRequired is returned when a snapshot would have no usable finder.
 var ErrFinderRequired = errors.New("grid: Clone requires an explicit finder for a stateful finder")
 
-// ErrCloneFuncRequired is returned when Clone receives a nil callback.
-var ErrCloneFuncRequired = errors.New("grid: Clone requires a non-nil callback")
-
 // Smoother is a path smoothing function. It takes a tile path and returns a
 // simplified path with fewer waypoints, typically by removing intermediate
 // tiles that have line-of-sight to each other.
@@ -168,13 +165,12 @@ type Grid interface {
 	// (0, 0, false) if no walkable tile exists within the search radius.
 	FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edgeInset float32) (float32, float32, bool)
 
-	// Clone copies the grid once, calls fn with the private copy, and returns
-	// the resulting read-only snapshot. fn must be non-nil and must not retain
-	// the MutableGrid it receives. Use an empty callback for an unedited copy.
+	// Clone copies the grid once, optionally calls fn with the private copy,
+	// and returns the resulting read-only snapshot. A nil fn creates an
+	// unedited copy. fn must not retain the MutableGrid it receives.
 	// A stateless Finder is shared automatically; for a
-	// stateful Finder (JPS+, HPA, Waypoint), the callback must call SetFinder
-	// with a Finder prepared for the new grid, otherwise ErrFinderRequired is
-	// returned.
+	// stateful Finder (JPS+, HPA, Waypoint), fn must call SetFinder with a
+	// Finder prepared for the new grid, otherwise ErrFinderRequired is returned.
 	Clone(fn func(MutableGrid)) (Grid, error)
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder

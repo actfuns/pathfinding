@@ -71,8 +71,10 @@ func TestCloneRebindsSmoother(t *testing.T) {
 
 func TestCloneRequiresFinderForStateful(t *testing.T) {
 	g := NewOrthogonalGrid([][]int32{{0, 0}, {0, 0}}, WithFinder(finder.NewJPSPlusFinder()))
-	if _, err := g.Clone(func(MutableGrid) {}); !errors.Is(err, ErrFinderRequired) {
-		t.Fatalf("Clone error = %v, want ErrFinderRequired", err)
+	for _, fn := range []func(MutableGrid){nil, func(MutableGrid) {}} {
+		if _, err := g.Clone(fn); !errors.Is(err, ErrFinderRequired) {
+			t.Fatalf("Clone error = %v, want ErrFinderRequired", err)
+		}
 	}
 }
 
@@ -101,8 +103,12 @@ func TestCloneReturnsSnapshot(t *testing.T) {
 	}
 	for _, tc := range grids {
 		t.Run(tc.name, func(t *testing.T) {
-			if snapshot, err := tc.g.Clone(nil); snapshot != nil || !errors.Is(err, ErrCloneFuncRequired) {
-				t.Fatalf("Clone(nil) = %v, %v, want ErrCloneFuncRequired", snapshot, err)
+			snapshot, err := tc.g.Clone(nil)
+			if err != nil || snapshot == nil {
+				t.Fatalf("Clone(nil) = %v, %v, want an unedited snapshot", snapshot, err)
+			}
+			if !snapshot.IsWalkableAt(0, 0) || snapshot.GetWeightAt(1, 1) != 1 {
+				t.Fatal("Clone(nil) changed the snapshot")
 			}
 			g2, err := tc.g.Clone(func(m MutableGrid) {
 				m.SetWalkableAt(0, 0, false)
