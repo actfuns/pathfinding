@@ -1,11 +1,22 @@
 package waypoint
 
 import (
+	"runtime"
 	"sync"
 	"testing"
+
+	"github.com/actfuns/pathfinding/finder"
 )
 
+func ensureConcurrentSearchSlots(t *testing.T, n int) {
+	t.Helper()
+	old := runtime.GOMAXPROCS(0)
+	finder.SetMaxConcurrentSearches(n)
+	t.Cleanup(func() { finder.SetMaxConcurrentSearches(old) })
+}
+
 func TestConcurrentWaypointFindPath(t *testing.T) {
+	ensureConcurrentSearchSlots(t, 32)
 	f := NewWaypointFinder()
 	g := f.Graph()
 	start := g.AddNode(0, 0)

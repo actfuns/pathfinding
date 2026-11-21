@@ -1,6 +1,7 @@
 package finder_test
 
 import (
+	"runtime"
 	"sync"
 	"testing"
 
@@ -8,7 +9,15 @@ import (
 	"github.com/actfuns/pathfinding/grid"
 )
 
+func ensureConcurrentSearchSlots(t *testing.T, n int) {
+	t.Helper()
+	old := runtime.GOMAXPROCS(0)
+	finder.SetMaxConcurrentSearches(n)
+	t.Cleanup(func() { finder.SetMaxConcurrentSearches(old) })
+}
+
 func TestConcurrentFinders(t *testing.T) {
+	ensureConcurrentSearchSlots(t, 32)
 	m := make([][]int32, 32)
 	for y := range m {
 		m[y] = make([]int32, 32)
@@ -67,6 +76,7 @@ func TestConcurrentFinders(t *testing.T) {
 }
 
 func TestConcurrentJPSPlusAdaptive(t *testing.T) {
+	ensureConcurrentSearchSlots(t, 32)
 	m := make([][]int32, 32)
 	for y := range m {
 		m[y] = make([]int32, 32)

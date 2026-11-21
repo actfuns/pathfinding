@@ -1,13 +1,23 @@
 package hpa
 
 import (
+	"runtime"
 	"sync"
 	"testing"
 
+	"github.com/actfuns/pathfinding/finder"
 	"github.com/actfuns/pathfinding/grid"
 )
 
+func ensureConcurrentSearchSlots(t *testing.T, n int) {
+	t.Helper()
+	old := runtime.GOMAXPROCS(0)
+	finder.SetMaxConcurrentSearches(n)
+	t.Cleanup(func() { finder.SetMaxConcurrentSearches(old) })
+}
+
 func TestConcurrentHPAFindPath(t *testing.T) {
+	ensureConcurrentSearchSlots(t, 32)
 	g := grid.NewOrthogonalGrid(grid.NewMatrix(48, 48))
 	f := NewHPAFinder(WithChunkSize(8))
 	if err := f.Build(g); err != nil {
