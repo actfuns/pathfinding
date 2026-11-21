@@ -189,9 +189,12 @@ type Grid interface {
 	FindPath(x1, y1, x2, y2 int32, dst [][2]int32) ([][2]int32, error)
 
 	// FindPathWorld finds a path between two world positions through the grid.
-	// buff.World is the world-space output; buff.Tile is the Finder's tile-space
-	// scratch. nil buff lets both steps allocate. The buffer's slice headers are
-	// updated if either backing array grows.
+	// It always invokes the configured Finder, including for fully open grids,
+	// and then applies configured smoothing. buff.World receives world-space
+	// output; buff.Tile receives the resulting tile path after smoothing. The
+	// caller's original world start/end are preserved while intermediate points
+	// are tile centres. nil buff lets both paths allocate. The buffer's slice
+	// headers are updated if either backing array grows.
 	FindPathWorld(wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error)
 
 	// RenderSVG renders the grid and paths as an SVG string.

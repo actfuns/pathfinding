@@ -139,7 +139,7 @@ g := grid.NewOrthogonalGrid(terrain,
 - **流场群体寻路** — flowfield.New / GetDirection（O(1) 多人查表，v0.5.0+）
 - **世界坐标转换** — WorldToTile, TileToWorld, IsWalkableAtWorld
 - **最近可通行点** — FindNearestWalkable, FindNearestWalkableWorld
-- **寻路** — `FindPath` / `FindPathWorld`，返回 `([][2]int32, error)`（可用 `WithSmoothBresenham()` 等选项做路径平滑）
+- **寻路** — `FindPath` 返回瓦片路径 `([][2]int32, error)`；`FindPathWorld` 返回世界坐标路径 `([][2]float32, error)`（可用 `WithSmoothBresenham()` 等选项做路径平滑）
 - **渲染** — RenderSVG(cfg, paths...)（权重着色 + 多路径 + 图例，v0.5.0+）
 
 ### 可写网格与并发
@@ -280,9 +280,11 @@ wpath, err = g.FindPathWorld(wx1, wy1, wx2, wy2, nil)
 
 - `dst == nil` / `buff == nil`：普通分配
 - `dst != nil`：复用 tile 路径
-- `buff.Tile`：复用 tile scratch
-- `buff.World`：复用 world 输出
+- `buff.Tile`：复用并回写平滑后的 tile 路径
+- `buff.World`：复用并回写 world 输出
 - 容量不够时自动扩容，并回写 `PathBuff` 的 slice 头
+- `FindPathWorld` 始终调用配置的 Finder，包括全空地图；全空地图仍可能有搜索开销，并可能返回多于两个路径点
+- `FindPathWorld` 的起点/终点保留调用方传入的原始 world 坐标，中间点使用瓦片中心；`PathBuff.World` 与 `PathBuff.Tile` 分别是 world 结果和平滑后的 tile 路径
 - 返回 slice 归调用方所有；`dst` / `PathBuff` 不能被并发调用共享
 - 搜索状态和临时缓冲会复用。分配表现取决于具体 Finder、输出缓冲容量和搜索状态池是否已热身
 - Waypoint 已使用 scratch pool，传 `dst` 预热后可 0 alloc；HPA 仍会分配内部 map/scratch；Flowfield 的 `FindPath` 也接收 `dst`

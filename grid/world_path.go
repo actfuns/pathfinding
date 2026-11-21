@@ -2,6 +2,9 @@ package grid
 
 import "github.com/actfuns/pathfinding/finder"
 
+// findPathWorld is shared by the built-in grids. It always runs the configured
+// Finder (there is no open-grid shortcut), applies smoothing, then maps tile
+// centres to world space while preserving the caller's original start and end points.
 func findPathWorld(g Grid, smoother Smoother, wx1, wy1, wx2, wy2 float32, buff *PathBuff) ([][2]float32, error) {
 	var dst [][2]float32
 	var tileDst [][2]int32
