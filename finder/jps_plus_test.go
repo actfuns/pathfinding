@@ -207,7 +207,7 @@ func TestJPSPlusRejectsMismatchedWalkability(t *testing.T) {
 			t.Fatalf("different map: got %v, %v, want ErrPrecomputedMismatch", path, err)
 		}
 	}
-	edited, err := open.CloneWith(func(g grid.MutableGrid) { g.SetWalkableAt(2, 0, false) })
+	edited, err := open.Clone(func(g grid.MutableGrid) { g.SetWalkableAt(2, 0, false) })
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,9 +7,11 @@ import (
 	"github.com/actfuns/pathfinding/finder"
 )
 
-// ErrFinderRequired is returned by CloneWith when the source finder is
-// stateful and the edit callback does not install a replacement finder.
-var ErrFinderRequired = errors.New("grid: CloneWith requires an explicit finder for a stateful finder")
+// ErrFinderRequired is returned when a snapshot would have no usable finder.
+var ErrFinderRequired = errors.New("grid: Clone requires an explicit finder for a stateful finder")
+
+// ErrCloneFuncRequired is returned when Clone receives a nil callback.
+var ErrCloneFuncRequired = errors.New("grid: Clone requires a non-nil callback")
 
 // Smoother is a path smoothing function. It takes a tile path and returns a
 // simplified path with fewer waypoints, typically by removing intermediate
@@ -166,17 +168,14 @@ type Grid interface {
 	// (0, 0, false) if no walkable tile exists within the search radius.
 	FindNearestWalkableWorld(wx, wy float32, maxRadius int32, edgeInset float32) (float32, float32, bool)
 
-	// Clone returns a read-only copy with its own node storage. A stateless
-	// Finder is shared; a stateful Finder returns ErrFinderRequired. Use
-	// CloneWith to install a Finder prepared for the new snapshot.
-	Clone() (Grid, error)
-	// CloneWith copies the grid once, applies edits to the private copy, and
-	// returns it as a new read-only snapshot. The callback must not retain the
-	// MutableGrid it receives. A stateless Finder is shared automatically; for a
+	// Clone copies the grid once, calls fn with the private copy, and returns
+	// the resulting read-only snapshot. fn must be non-nil and must not retain
+	// the MutableGrid it receives. Use an empty callback for an unedited copy.
+	// A stateless Finder is shared automatically; for a
 	// stateful Finder (JPS+, HPA, Waypoint), the callback must call SetFinder
 	// with a Finder prepared for the new grid, otherwise ErrFinderRequired is
 	// returned.
-	CloneWith(edit func(MutableGrid)) (Grid, error)
+	Clone(fn func(MutableGrid)) (Grid, error)
 	// Finder returns the pathfinder used by this grid.
 	Finder() finder.Finder
 	// FindPath finds a path between two tile positions.

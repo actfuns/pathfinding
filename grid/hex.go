@@ -300,25 +300,8 @@ func (g *HexGrid) clone() *HexGrid {
 	return ng
 }
 
-func (g *HexGrid) Clone() (Grid, error) {
-	if !finder.IsStateless(g.finder) {
-		return nil, ErrFinderRequired
-	}
-	return g.clone(), nil
-}
-
-func (g *HexGrid) CloneWith(edit func(MutableGrid)) (Grid, error) {
-	ng := g.clone()
-	if !finder.IsStateless(g.finder) {
-		ng.finder = nil
-	}
-	if edit != nil {
-		edit(ng)
-	}
-	if ng.finder == nil {
-		return nil, ErrFinderRequired
-	}
-	return ng, nil
+func (g *HexGrid) Clone(fn func(MutableGrid)) (Grid, error) {
+	return cloneSnapshot(g.finder, g.clone, fn)
 }
 
 // --- world coordinate conversion (Tiled-style) ---

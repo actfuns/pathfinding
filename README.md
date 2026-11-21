@@ -153,16 +153,16 @@ g := grid.NewOrthogonalGrid(matrix)
 g.(grid.MutableGrid).SetWalkableAt(1, 2, false)
 ```
 
-- **只做只读快照**：用 `Clone`。无状态 Finder 自动共享；有状态 Finder 返回 `grid.ErrFinderRequired`：
+- **只做只读快照**：向 `Clone` 传入空回调。无状态 Finder 自动共享；有状态 Finder 仍需安装替代 Finder：
 
 ```go
-g2, err := g.Clone()
+g2, err := g.Clone(func(grid.MutableGrid) {})
 ```
 
-- **并发搜索期间修改**：用 `CloneWith` 复制一次，批量修改后得到新快照：
+- **并发搜索期间修改**：用 `Clone` 复制一次，在回调中批量修改：
 
 ```go
-g2, err := g.CloneWith(func(m grid.MutableGrid) {
+g2, err := g.Clone(func(m grid.MutableGrid) {
     m.SetWalkableAt(1, 2, false)
     m.SetWeightAt(3, 4, 5)
 })
@@ -171,11 +171,11 @@ if err != nil {
 }
 ```
 
-`MutableGrid` 的断言是零拷贝的，调用方必须保证没有并发读/搜索；`CloneWith` 返回的新网格与旧网格完全隔离。无状态 Finder 会被自动共享；JPS+ / HPA / Waypoint 等有状态 Finder 不会复制，回调必须 `SetFinder` 换成针对新网格准备好的 Finder，否则返回 `grid.ErrFinderRequired`。可写接口包含 `SetWalkableAt`、`SetWeightAt`、`SetWalkableAtWorld`、`SetWeightAtWorld` 和 `SetFinder`。
+`MutableGrid` 的断言是零拷贝的，调用方必须保证没有并发读/搜索；`Clone` 返回的新网格与旧网格完全隔离。无状态 Finder 会被自动共享；JPS+ / HPA / Waypoint 等有状态 Finder 不会复制，回调必须 `SetFinder` 换成针对新网格准备好的 Finder，否则返回 `grid.ErrFinderRequired`。可写接口包含 `SetWalkableAt`、`SetWeightAt`、`SetWalkableAtWorld`、`SetWeightAtWorld` 和 `SetFinder`。
 
 ## 寻路结果与错误
 
-`FindPath` / `FindPathWorld` 统一返回 `([][2]int32, error)`，三种结果形态：
+`FindPath` 返回 `([][2]int32, error)`，`FindPathWorld` 返回 `([][2]float32, error)`；两者都有三种结果形态：
 
 | 返回 | 含义 | 处理方式 |
 | :--- | :--- | :--- |
@@ -216,7 +216,7 @@ if len(path) == 0 {
 
 - **同一个 Finder、同一个只读 Grid** 可以并发调用 `FindPath` / `FindPathWorld`。
 - 返回的 `[][2]int32` / `[][2]float32` 是独立结果，归调用方所有，不需要在下一次调用前拷贝。
-- **不能**在搜索期间通过 `MutableGrid` 调用 `SetWalkableAt` / `SetWeightAt`，也不能并发修改 Finder 配置；需要并发更新时使用 `CloneWith` 生成新快照。
+- **不能**在搜索期间通过 `MutableGrid` 调用 `SetWalkableAt` / `SetWeightAt`，也不能并发修改 Finder 配置；需要并发更新时使用 `Clone` 生成新快照。
 - JPS+ 的 `Precompute`、HPA 的 `Build`、waypoint 图的增删边都必须在并发搜索开始前完成；它们与搜索并发不安全。
 - 每个 `FindPath` 占用一个状态槽；池会先复用空闲槽，没有空闲且未到上限时新建，达到上限后阻塞等待别人释放。内存随实际并发量增长。
 - 默认上限是 `runtime.GOMAXPROCS(0)`，可在启动时调用 `finder.SetMaxConcurrentSearches(n)` 调整；调低不会取消正在运行的搜索。
@@ -570,11 +570,10 @@ BREAKING: 移除 `Node` 搜索字段/`ResetSearch`、`Backtrace`/`BiBacktrace`/`
 ### Unreleased — 只读 Grid 与显式可变视图
 - `NewOrthogonalGrid` / `NewHexGrid` / `NewStaggeredGrid` 返回只读 `grid.Grid`
 - Setter 移入 `grid.MutableGrid`；单线程可通过类型断言零拷贝访问
-- `Grid.Clone() (Grid, error)`：只读快照；有状态 Finder 返回 `ErrFinderRequired`
-- 新增 `Grid.CloneWith(func(MutableGrid)) (Grid, error)`：一次复制后批量修改并返回新快照；有状态 Finder 必须显式替换
+- **快照 API 变更**：统一使用 `Grid.Clone(func(MutableGrid)) (Grid, error)`。旧的 `Clone()` 调用改传空回调，旧的 `CloneWith(fn)` 改为 `Clone(fn)`。传入 nil 会返回 `ErrCloneFuncRequired`；有状态 Finder 必须在回调中替换。
 
 ### v0.9.0 — 并发寻路 + 寻路返回 error
-- **破坏性变更**：`finder.Finder.FindPath`、`grid.Grid.FindPath` / `FindPathWorld`、`hpa` / `waypoint` / `flowfield.Field.FindPath` 改为返回 `([][2]int, error)`
+- **破坏性变更**：`finder.Finder.FindPath`、`grid.Grid.FindPath`、`hpa` / `waypoint` / `flowfield.Field.FindPath` 改为返回 `([][2]int, error)`；`grid.Grid.FindPathWorld` 返回 `([][2]float32, error)`
 - `grid.Pool` 只保留 `Acquire` 一个取实例入口,自带超时上限（默认 `DefaultAcquireTimeout`）；`WithCapacity` 默认取 CPU 核数
 - `PoolManager.Acquire` / `Reset` 对 nil 工厂返回 `ErrNilFactory` 而非 panic；`Reset` 不返回 bool
 - 新增 `finder.ErrOutOfBounds`：**所有 9 个 finder 及三种网格**的端点越界从 panic 改为返回错误（原先直接 `GetNodeAt` 索引越界崩溃，而 `FindPathWorld` 却返回 nil，行为不一致）

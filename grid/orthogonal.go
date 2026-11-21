@@ -442,25 +442,8 @@ func (g *OrthogonalGrid) clone() *OrthogonalGrid {
 	return ng
 }
 
-func (g *OrthogonalGrid) Clone() (Grid, error) {
-	if !finder.IsStateless(g.finder) {
-		return nil, ErrFinderRequired
-	}
-	return g.clone(), nil
-}
-
-func (g *OrthogonalGrid) CloneWith(edit func(MutableGrid)) (Grid, error) {
-	ng := g.clone()
-	if !finder.IsStateless(g.finder) {
-		ng.finder = nil
-	}
-	if edit != nil {
-		edit(ng)
-	}
-	if ng.finder == nil {
-		return nil, ErrFinderRequired
-	}
-	return ng, nil
+func (g *OrthogonalGrid) Clone(fn func(MutableGrid)) (Grid, error) {
+	return cloneSnapshot(g.finder, g.clone, fn)
 }
 
 // SupportsJPSCanonicalPruning returns true — orthogonal grids have axis-aligned topology

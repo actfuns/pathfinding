@@ -50,7 +50,7 @@ func TestTileWeightBoundsCountsSharedMinimum(t *testing.T) {
 	if g.weightBounds.count != 1 || g.HeuristicWeightLowerBound() != 0.25 {
 		t.Fatalf("unexpected bounds after removing the first minimum: %+v", g.weightBounds)
 	}
-	cloned, err := g.Clone()
+	cloned, err := g.Clone(func(MutableGrid) {})
 	if err != nil {
 		t.Fatal(err)
 	}

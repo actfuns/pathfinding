@@ -46,17 +46,17 @@ func TestMutableGridWorldSetters(t *testing.T) {
 	}
 }
 
-func TestCloneWithRebindsSmoother(t *testing.T) {
+func TestCloneRebindsSmoother(t *testing.T) {
 	g := NewOrthogonalGrid([][]int32{
 		{0, 0, 0},
 		{0, 0, 0},
 		{0, 0, 0},
 	}, WithSmoothBresenham())
-	g2, err := g.CloneWith(func(m MutableGrid) {
+	g2, err := g.Clone(func(m MutableGrid) {
 		m.SetWalkableAt(1, 1, false)
 	})
 	if err != nil {
-		t.Fatalf("CloneWith: %v", err)
+		t.Fatalf("Clone: %v", err)
 	}
 	path, err := g2.FindPath(0, 1, 2, 1, nil)
 	if err != nil {
@@ -71,29 +71,26 @@ func TestCloneWithRebindsSmoother(t *testing.T) {
 
 func TestCloneRequiresFinderForStateful(t *testing.T) {
 	g := NewOrthogonalGrid([][]int32{{0, 0}, {0, 0}}, WithFinder(finder.NewJPSPlusFinder()))
-	if _, err := g.Clone(); !errors.Is(err, ErrFinderRequired) {
+	if _, err := g.Clone(func(MutableGrid) {}); !errors.Is(err, ErrFinderRequired) {
 		t.Fatalf("Clone error = %v, want ErrFinderRequired", err)
 	}
 }
 
-func TestCloneWithRequiresFinderForStateful(t *testing.T) {
+func TestCloneAcceptsReplacementFinder(t *testing.T) {
 	g := NewOrthogonalGrid([][]int32{{0, 0}, {0, 0}}, WithFinder(finder.NewJPSPlusFinder()))
-	if _, err := g.CloneWith(nil); !errors.Is(err, ErrFinderRequired) {
-		t.Fatalf("CloneWith error = %v, want ErrFinderRequired", err)
-	}
 	f := finder.NewBreadthFirstFinder()
-	g2, err := g.CloneWith(func(m MutableGrid) {
+	g2, err := g.Clone(func(m MutableGrid) {
 		m.SetFinder(f)
 	})
 	if err != nil {
-		t.Fatalf("CloneWith with replacement finder: %v", err)
+		t.Fatalf("Clone with replacement finder: %v", err)
 	}
 	if g2.Finder() != f {
-		t.Fatal("CloneWith did not install the replacement finder")
+		t.Fatal("Clone did not install the replacement finder")
 	}
 }
 
-func TestCloneWithReturnsSnapshot(t *testing.T) {
+func TestCloneReturnsSnapshot(t *testing.T) {
 	grids := []struct {
 		name string
 		g    Grid
@@ -104,27 +101,30 @@ func TestCloneWithReturnsSnapshot(t *testing.T) {
 	}
 	for _, tc := range grids {
 		t.Run(tc.name, func(t *testing.T) {
-			g2, err := tc.g.CloneWith(func(m MutableGrid) {
+			if snapshot, err := tc.g.Clone(nil); snapshot != nil || !errors.Is(err, ErrCloneFuncRequired) {
+				t.Fatalf("Clone(nil) = %v, %v, want ErrCloneFuncRequired", snapshot, err)
+			}
+			g2, err := tc.g.Clone(func(m MutableGrid) {
 				m.SetWalkableAt(0, 0, false)
 				m.SetWeightAt(1, 1, 5)
 			})
 			if err != nil {
-				t.Fatalf("CloneWith: %v", err)
+				t.Fatalf("Clone: %v", err)
 			}
 			if g2 == nil {
-				t.Fatal("CloneWith returned nil")
+				t.Fatal("Clone returned nil")
 			}
 			if !tc.g.IsWalkableAt(0, 0) {
-				t.Error("CloneWith modified the original grid")
+				t.Error("Clone modified the original grid")
 			}
 			if tc.g.GetWeightAt(1, 1) != 1 {
-				t.Error("CloneWith modified the original weight")
+				t.Error("Clone modified the original weight")
 			}
 			if g2.IsWalkableAt(0, 0) {
-				t.Error("CloneWith did not apply walkability edit")
+				t.Error("Clone did not apply walkability edit")
 			}
 			if got := g2.GetWeightAt(1, 1); got != 5 {
-				t.Errorf("CloneWith weight = %v, want 5", got)
+				t.Errorf("Clone weight = %v, want 5", got)
 			}
 		})
 	}

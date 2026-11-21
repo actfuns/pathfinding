@@ -386,7 +386,7 @@ func TestHexObstacleCount(t *testing.T) {
 	if n := g.ObstacleCount(); n != 0 {
 		t.Errorf("expected 0 obstacles, got %d", n)
 	}
-	g2, err := g.Clone()
+	g2, err := g.Clone(func(MutableGrid) {})
 	if err != nil {
 		t.Fatalf("Clone: %v", err)
 	}
