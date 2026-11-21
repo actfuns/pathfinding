@@ -20,7 +20,7 @@ func (g eastboundGrid) GetNeighbors(node *finder.Node, _ finder.DiagonalMovement
 
 func TestBidirectionalFindersOnDirectedGrid(t *testing.T) {
 	g := eastboundGrid{grid.NewOrthogonalGrid(grid.NewMatrix(4, 1))}
-	for _, f := range []finder.Finder{finder.NewBiAStarFinder(), finder.NewBiDijkstraFinder()} {
+	for _, f := range []finder.Finder{finder.NewBiAStarFinder(), finder.NewBiDijkstraFinder(), finder.NewBiBreadthFirstFinder()} {
 		path, err := f.FindPath(0, 0, 3, 0, g, nil)
 		if err != nil || len(path) != 4 {
 			t.Fatalf("%T: eastbound path %v, err %v", f, path, err)

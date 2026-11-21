@@ -45,6 +45,11 @@ func (f *BiBreadthFirstFinder) FindPath(startX, startY, endX, endY int32, grid G
 }
 
 func (f *BiBreadthFirstFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
+	if !canSearchBidirectionally(grid, startX, startY) {
+		forward := BreadthFirstFinder{DiagonalMovement: f.DiagonalMovement}
+		return forward.findPath(startX, startY, endX, endY, grid, states)
+	}
+
 	startNode := grid.GetNodeAt(startX, startY)
 	endNode := grid.GetNodeAt(endX, endY)
 

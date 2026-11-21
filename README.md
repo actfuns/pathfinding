@@ -540,6 +540,13 @@ go run examples/flowfield/
 
 ## 版本历史
 
+### Unreleased — 寻路一致性与 JPS+ 跳表
+
+- 三种内置网格的 `FindPathWorld` 都会调用配置的 Finder，包括无障碍地图。调用方可能收到更多路径点。显式启用的平滑仍在搜索后处理。
+- A* 和 IDA* 的默认启发式考虑低于 1 的地形权重。双向 A* 和双向 Dijkstra 按正向边计费，并在已知路径达到停止下界后返回。
+- 自定义网格可通过 `finder.SymmetricNeighborGrid` 声明对称邻接。未声明对称的网格使用单向搜索，保留单向边的语义。
+- JPS+ 跳表与障碍布局绑定，新格式带校验和。缺少布局指纹的旧表仍可加载，查询会使用在线 JPS，重新运行 `Precompute` 可恢复查表加速。
+
 ### Unreleased — 状态外置与直接并发
 - `Node` 只保留 `X/Y/Walkable/Weight`；搜索状态改为 per-FindPath scratch，`Parent`/`HeapIndex` 使用 flat index
 - `Finder.FindPath` 接收 `[][2]int32` 输出缓冲；`Grid.FindPathWorld` 接收 `*grid.PathBuff`（Tile + World）；核心 finder 可做到预热后 0 alloc/op

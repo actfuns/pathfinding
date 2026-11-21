@@ -34,6 +34,12 @@ type SymmetricNeighborGrid interface {
 	HasSymmetricNeighbors() bool
 }
 
+func canSearchBidirectionally(grid Grid, startX, startY int32) bool {
+	topology, ok := grid.(SymmetricNeighborGrid)
+	// A blocked start may have outgoing edges without reverse edges.
+	return ok && topology.HasSymmetricNeighbors() && grid.IsWalkableAt(startX, startY)
+}
+
 // heuristicGrid is optionally implemented by grids that need a topology-specific
 // default heuristic (for example, hex grids with unit-cost moves).
 type heuristicGrid interface {

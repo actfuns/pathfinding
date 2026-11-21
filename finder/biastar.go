@@ -65,9 +65,7 @@ func (f *BiAStarFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 }
 
 func (f *BiAStarFinder) findPath(startX, startY, endX, endY int32, grid Grid, states *searchStates) ([][2]int32, error) {
-	// Reverse traversal requires symmetric adjacency between walkable tiles.
-	// A blocked start can have outgoing edges only, so search it forwards.
-	if topology, ok := grid.(SymmetricNeighborGrid); !ok || !topology.HasSymmetricNeighbors() || !grid.IsWalkableAt(startX, startY) {
+	if !canSearchBidirectionally(grid, startX, startY) {
 		forward := AStarFinder{
 			Heuristic: f.Heuristic, Weight: f.Weight, DiagonalMovement: f.DiagonalMovement,
 			customHeuristic: f.customHeuristic,
