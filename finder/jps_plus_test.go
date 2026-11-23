@@ -393,3 +393,87 @@ func TestJPSPlusLoadInvalidData(t *testing.T) {
 		t.Error("expected error for invalid magic")
 	}
 }
+
+func TestJPSPlusCanonicalModeMismatch(t *testing.T) {
+	g := grid.NewOrthogonalGrid([][]int32{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}})
+	source := finder.NewJPSPlusFinder(finder.WithDiagonal(finder.DiagonalNever))
+	if err := source.Precompute(g); err != nil {
+		t.Fatal(err)
+	}
+	data, err := source.PrecomputedData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []finder.DiagonalMovement{
+		finder.DiagonalNever,
+		finder.DiagonalOnlyWhenNoObstacles,
+		finder.DiagonalIfAtMostOneObstacle,
+		finder.DiagonalAlways,
+	} {
+		f := finder.NewJPSPlusFinder(finder.WithDiagonal(mode))
+		if err := f.LoadPrecomputed(data); err != nil {
+			t.Fatal(err)
+		}
+		path, err := f.FindPath(0, 0, 2, 2, g, nil)
+		if mode != finder.DiagonalNever {
+			if path != nil || !errors.Is(err, finder.ErrPrecomputedMismatch) {
+				t.Fatalf("mode %v: got %v, %v, want ErrPrecomputedMismatch", mode, path, err)
+			}
+			continue
+		}
+		if err != nil || path == nil {
+			t.Fatalf("mode %v: got %v, %v, want a path", mode, path, err)
+		}
+	}
+}
+
+func TestJPSPlusCanonicalModesRoundTrip(t *testing.T) {
+	matrix := grid.NewMatrix(16, 16)
+	for y := 0; y < 16; y++ {
+		for x := 0; x < 16; x++ {
+			if (x*7+y*11)%13 == 0 && !(x == 0 && y == 0) && !(x == 15 && y == 15) {
+				matrix[y][x] = 1
+			}
+		}
+	}
+	g := grid.NewOrthogonalGrid(matrix)
+	for _, mode := range []finder.DiagonalMovement{
+		finder.DiagonalNever,
+		finder.DiagonalOnlyWhenNoObstacles,
+		finder.DiagonalIfAtMostOneObstacle,
+		finder.DiagonalAlways,
+	} {
+		option := finder.WithDiagonal(mode)
+		source := finder.NewJPSPlusFinder(option)
+		if err := source.Precompute(g); err != nil {
+			t.Fatal(err)
+		}
+		data, err := source.PrecomputedData()
+		if err != nil {
+			t.Fatal(err)
+		}
+		loaded := finder.NewJPSPlusFinder(option)
+		if err := loaded.LoadPrecomputed(data); err != nil {
+			t.Fatal(err)
+		}
+		got, err := loaded.FindPath(0, 0, 15, 15, g, nil)
+		if err != nil {
+			t.Fatalf("mode %v: %v", mode, err)
+		}
+		want, err := finder.NewDijkstraFinder(option).FindPath(0, 0, 15, 15, g, nil)
+		if err != nil {
+			t.Fatalf("mode %v reference: %v", mode, err)
+		}
+		if (got == nil) != (want == nil) {
+			t.Fatalf("mode %v: got %v, want %v", mode, got, want)
+		}
+		if got != nil {
+			if got[0] != [2]int32{0, 0} || got[len(got)-1] != [2]int32{15, 15} {
+				t.Fatalf("mode %v: wrong endpoints %v", mode, got)
+			}
+			if weightedRouteCost(t, g, mode, got) != weightedRouteCost(t, g, mode, want) {
+				t.Fatalf("mode %v: path cost differs", mode)
+			}
+		}
+	}
+}

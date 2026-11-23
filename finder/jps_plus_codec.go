@@ -14,6 +14,9 @@ const (
 	jpsPlusCanonicalFlag   uint32 = 1 << 31
 	jpsPlusFingerprintFlag uint32 = 1 << 29
 	jpsPlusChecksumFlag    uint32 = 1 << 28
+	// Canonical modes use two free high bits; zero means DiagonalAlways for
+	// tables written before the mode field existed.
+	jpsPlusCanonicalModeMask uint32 = 1<<24 | 1<<26
 )
 
 // PrecomputedData serializes the jump table to binary data.
@@ -30,7 +33,7 @@ func (j *JPSPlusFinder) PrecomputedData() ([]byte, error) {
 		cellBytes = 2
 	}
 	if j.canonical {
-		magic |= jpsPlusCanonicalFlag
+		magic |= jpsPlusCanonicalFlag | canonicalModeBits(j.canonicalMode)
 	}
 	headerSize := 12
 	if j.hasFingerprint {
@@ -63,8 +66,7 @@ func (j *JPSPlusFinder) PrecomputedData() ([]byte, error) {
 }
 
 // LoadPrecomputed loads previously exported jump table data.
-// FindPath verifies the dimensions and obstacle layout against the table.
-// Canonical tables also require DiagonalAlways.
+// FindPath verifies the dimensions, obstacle layout, and canonical mode.
 // A failed load leaves the previous table available.
 // Legacy data without a fingerprint can be loaded, but searches use online
 // JPS until Precompute builds a table bound to the map.
@@ -82,6 +84,7 @@ func (j *JPSPlusFinder) LoadPrecomputed(data []byte) error {
 type encodedJumpTable struct {
 	width, height   int32
 	wide, canonical bool
+	canonicalMode   DiagonalMovement
 	fingerprint     uint64
 	hasFingerprint  bool
 	payload         []byte
@@ -101,7 +104,7 @@ func parseJumpTable(data []byte) (encodedJumpTable, error) {
 	}
 	magic := binary.LittleEndian.Uint32(data[0:4])
 	var wide bool
-	switch magic &^ (jpsPlusCanonicalFlag | jpsPlusFingerprintFlag | jpsPlusChecksumFlag) {
+	switch magic &^ (jpsPlusCanonicalFlag | jpsPlusFingerprintFlag | jpsPlusChecksumFlag | jpsPlusCanonicalModeMask) {
 	case jpsPlusMagic8:
 	case jpsPlusMagic16:
 		wide = true
@@ -112,6 +115,10 @@ func parseJumpTable(data []byte) (encodedJumpTable, error) {
 	h := binary.LittleEndian.Uint32(data[8:12])
 	hasFingerprint := magic&jpsPlusFingerprintFlag != 0
 	canonical := magic&jpsPlusCanonicalFlag != 0
+	canonicalMode := DiagonalMovement(0)
+	if canonical {
+		canonicalMode = decodeCanonicalMode(magic & jpsPlusCanonicalModeMask)
+	}
 	hasChecksum := magic&jpsPlusChecksumFlag != 0
 	headerSize := 12
 	var fingerprint uint64
@@ -140,7 +147,8 @@ func parseJumpTable(data []byte) (encodedJumpTable, error) {
 	payload := data[headerSize:payloadEnd]
 	table := encodedJumpTable{
 		width: int32(w), height: int32(h), wide: wide, canonical: canonical,
-		fingerprint: fingerprint, hasFingerprint: hasFingerprint, payload: payload, size: tableSize,
+		canonicalMode: canonicalMode, fingerprint: fingerprint, hasFingerprint: hasFingerprint,
+		payload: payload, size: tableSize,
 	}
 	if err := table.validateDistances(); err != nil {
 		return encodedJumpTable{}, err
@@ -150,7 +158,7 @@ func parseJumpTable(data []byte) (encodedJumpTable, error) {
 
 func (j *jumpTable) installJumpTable(table encodedJumpTable) {
 	j.width, j.height = table.width, table.height
-	j.wide, j.canonical = table.wide, table.canonical
+	j.wide, j.canonical, j.canonicalMode = table.wide, table.canonical, table.canonicalMode
 	j.fingerprint, j.hasFingerprint = table.fingerprint, table.hasFingerprint
 	j.resize(table.size)
 	for i := range j.jump16 {
@@ -182,6 +190,32 @@ func (table encodedJumpTable) validateDistances() error {
 		}
 	}
 	return nil
+}
+
+func canonicalModeBits(mode DiagonalMovement) uint32 {
+	switch mode {
+	case DiagonalNever:
+		return 1 << 24
+	case DiagonalIfAtMostOneObstacle:
+		return 1 << 26
+	case DiagonalOnlyWhenNoObstacles:
+		return 1<<24 | 1<<26
+	default: // DiagonalAlways and legacy canonical tables
+		return 0
+	}
+}
+
+func decodeCanonicalMode(bits uint32) DiagonalMovement {
+	switch bits {
+	case 1 << 24:
+		return DiagonalNever
+	case 1 << 26:
+		return DiagonalIfAtMostOneObstacle
+	case 1<<24 | 1<<26:
+		return DiagonalOnlyWhenNoObstacles
+	default:
+		return DiagonalAlways
+	}
 }
 
 // PrecomputedSize returns the byte size of the serialized jump table.

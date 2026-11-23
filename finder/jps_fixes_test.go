@@ -168,8 +168,8 @@ func TestJPSVariantConstructorsSetMovement(t *testing.T) {
 	}
 }
 
-// The jump table is relaxed with one-step turns at runtime, so every diagonal
-// mode must match A* on these previously-misbehaving maps.
+// Canonical tables are generated per movement rule, so every diagonal mode
+// must match A* on these previously-misbehaving maps.
 func TestJPSPlusDiagonalModesAreOptimal(t *testing.T) {
 	g := grid.NewOrthogonalGrid([][]int32{
 		{0, 0, 1, 0, 0, 0},
@@ -195,9 +195,8 @@ func TestJPSPlusDiagonalModesAreOptimal(t *testing.T) {
 	}
 }
 
-// JPS+ must agree with A* (presence and cost) for every diagonal mode. The
-// precomputed table is augmented at runtime with one-step turns because some
-// jump points depend on the goal and cannot be encoded statically.
+// JPS+ must agree with A* (presence, endpoints, valid edges, and cost) for
+// every diagonal mode. Goal-dependent jumps are resolved at query time.
 func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 	rng := rand.New(rand.NewSource(21))
 	modes := []finder.DiagonalMovement{
@@ -236,7 +235,10 @@ func TestJPSPlusMatchesAStarRandom(t *testing.T) {
 					it, mode, m, want, got)
 			}
 			if len(want) > 0 {
-				wc, gc := tilePathCost(want), tilePathCost(got)
+				if got[0] != [2]int32{int32(sx), int32(sy)} || got[len(got)-1] != [2]int32{int32(ex), int32(ey)} {
+					t.Fatalf("it=%d mode=%v wrong endpoints: %v", it, mode, got)
+				}
+				wc, gc := weightedRouteCost(t, g, mode, want), weightedRouteCost(t, g, mode, got)
 				if math.Abs(wc-gc) > 1e-9 {
 					t.Fatalf("it=%d mode=%v cost mismatch a=%.4f p=%.4f\n m=%v\n A=%v\n P=%v",
 						it, mode, wc, gc, m, want, got)

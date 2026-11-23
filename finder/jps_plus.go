@@ -54,8 +54,9 @@ var jpsDiagonalIdx = map[[2]int32]int{
 // Precompute returns ErrUnsupportedGrid for hex/staggered grids; FindPath also
 // rejects them.
 //
-// DiagonalAlways uses canonical JPS pruning with goal-dependent jumps resolved
-// at query time. Other modes and legacy tables also relax one-step moves.
+// Canonical JPS pruning uses goal-dependent jumps resolved at query time for
+// every diagonal movement rule. Legacy tables without a canonical mode still
+// use the online/relaxed path.
 //
 // JPS+ assumes every step has the same cost (tile Weight == 1). Tile weights are
 // ignored; use A* or Dijkstra for weighted grids.
@@ -123,13 +124,14 @@ func (j *JPSPlusFinder) precompute(grid Grid, wide bool) error {
 	j.wide = wide
 	j.fingerprint = gridWalkabilityFingerprint(grid)
 	j.hasFingerprint = true
-	j.canonical = j.DiagonalMovement == DiagonalAlways
+	j.canonical = true
+	j.canonicalMode = j.DiagonalMovement
 	j.resize(size)
 	clear(j.jump8)
 	clear(j.jump16)
 
 	if j.canonical {
-		j.computeAlwaysDistances(grid)
+		j.computeCanonicalDistances(grid, j.canonicalMode)
 		return nil
 	}
 
@@ -179,7 +181,7 @@ func (j *JPSPlusFinder) preflight(startX, startY, endX, endY int32, grid Grid) (
 		panic("JPSPlusFinder: Precompute(grid) must be called before FindPath")
 	}
 	if grid.Width() != j.width || grid.Height() != j.height ||
-		(j.canonical && j.DiagonalMovement != DiagonalAlways) {
+		(j.canonical && j.canonicalMode != j.DiagonalMovement) {
 		return nil, ErrPrecomputedMismatch
 	}
 	return nil, nil
@@ -199,8 +201,7 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 	if j.Adaptive && j.useAStar(grid) {
 		return j.newAdaptiveFallback().FindPath(startX, startY, endX, endY, grid, dst)
 	}
-	// Legacy jumps for the at-most-one-obstacle rule can miss optimal turns.
-	if !useTable || j.DiagonalMovement == DiagonalIfAtMostOneObstacle {
+	if !useTable {
 		fallback := NewJumpPointFinder(WithDiagonal(j.DiagonalMovement), WithHeuristic(j.Heuristic), WithWeight(j.Weight))
 		return fallback.FindPath(startX, startY, endX, endY, grid, dst)
 	}
@@ -213,7 +214,9 @@ func (j *JPSPlusFinder) FindPath(startX, startY, endX, endY int32, grid Grid, ds
 	if j.canonical {
 		p, err := findJPSPath(startX, startY, endX, endY, grid, states, jpsSearchOptions{
 			heuristic: j.Heuristic, weight: j.Weight,
-			neighbors: alwaysFindNeighbors, jump: alwaysTableJump, table: &j.jumpTable,
+			neighbors: jpsPlusNeighbors(j.canonicalMode),
+			jump:      tableJump,
+			table:     &j.jumpTable,
 		})
 		return finishPath(p, dst, false), err
 	}

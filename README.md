@@ -319,12 +319,12 @@ wpath, err = g.FindPathWorld(wx1, wy1, wx2, wy2, nil)
 
 ### JPS+ (Jump Point Search Plus)
 
-JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `jump()` 扫描：
+JPS+ 是 JPS 的预计算优化变体，用 O(1) 跳点距离表替换递归 `jump()` 扫描。canonical 表按对角线规则分别生成，不能跨模式复用：
 
 | 特性 | 说明 |
 | :--- | :--- |
-| **Precompute** | `DiagonalAlways` 按方向扫描一次生成跳表，查询时结合终点确定跳点。为保证最短路径，`DiagonalIfAtMostOneObstacle` 查询使用在线 JPS |
-| **导出和加载** | `PrecomputedData()` / `LoadPrecomputed()` 保存和读取跳表。新版附带校验和及障碍布局指纹。缺少布局指纹的旧表加载后使用在线 JPS，重新预计算可恢复查表 |
+| **Precompute** | 四种对角线模式都会按方向生成 canonical 跳表，查询时结合终点确定跳点；表格式记录模式，不能跨模式复用 |
+| **导出和加载** | `PrecomputedData()` / `LoadPrecomputed()` 保存和读取跳表。新版附带模式、校验和及障碍布局指纹。缺少布局指纹或模式的旧表仍可加载，查询会退回在线 JPS；重新预计算可恢复查表 |
 | **地图变更** | 修改可走性后重新预计算。布局与跳表不匹配时，查询会返回 `finder.ErrPrecomputedMismatch` |
 | **自定义网格** | 实现 `finder.WalkabilityFingerprintGrid` 可启用常数时间的跳表校验。缺少该能力时查询使用在线 JPS，预计算仍可生成跳表 |
 | **Adaptive** | 显式启用 `finder.WithAdaptive()` 后，障碍密度达到 10% 时改用 A* |
@@ -548,7 +548,7 @@ go run examples/flowfield/
 - 三种内置网格的 `FindPathWorld` 都会调用配置的 Finder，包括无障碍地图。无障碍查询也有搜索开销，且可能返回多于两个的路径点。显式启用的平滑仍在搜索后处理。
 - A* 和 IDA* 的默认启发式考虑低于 1 的地形权重。双向 A* 和双向 Dijkstra 按正向边计费，并在已知路径达到停止下界后返回。
 - 自定义网格可通过 `finder.SymmetricNeighborGrid` 声明对称邻接。未声明对称的网格使用单向搜索，保留单向边的语义。
-- JPS+ 跳表与障碍布局绑定，新格式带校验和。缺少布局指纹的旧表仍可加载，查询会使用在线 JPS，重新运行 `Precompute` 可恢复查表加速。
+- JPS+ canonical 跳表现在覆盖四种对角线模式，表与障碍布局及模式绑定，新格式带校验和。缺少布局指纹或模式的旧表仍可加载，查询会使用在线 JPS，重新运行 `Precompute` 可恢复查表加速。
 - 从 v0.9.0 升级时，外部 `grid.Grid` 实现需迁移坐标签名。例如 `TileIndex(x, y int32) int` 接收 `int32` 坐标，`TileXY(index int) (int32, int32)` 返回 `int32` 坐标。平面索引仍是 `int`。
 
 ### Unreleased — 状态外置与直接并发

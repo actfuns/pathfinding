@@ -10,10 +10,12 @@ type jumpTable struct {
 	// Layout: (y*width + x)*8 + dir
 	// Positive = jump point at that distance; negative = open ray length without a jump point.
 	// int8 is used when both dimensions are <= 128; int16 otherwise.
+	// canonicalMode identifies the movement rule used to build the table.
 	jump8          []int8
 	jump16         []int16
 	wide           bool
 	canonical      bool
+	canonicalMode  DiagonalMovement
 	fingerprint    uint64
 	hasFingerprint bool
 }
