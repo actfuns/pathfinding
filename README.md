@@ -543,15 +543,24 @@ go run examples/flowfield/
 
 ## 版本历史
 
-### Unreleased — 寻路一致性与 JPS+ 跳表
+### v0.10.1 — JPS+ 全模式 canonical 跳表
+
+- JPS+ canonical 跳表扩展到全部四种对角线模式：`DiagonalNever`、`DiagonalOnlyWhenNoObstacles`、`DiagonalIfAtMostOneObstacle`、`DiagonalAlways`。
+- 跳表记录对角线模式，禁止跨模式复用；模式不匹配返回 `ErrPrecomputedMismatch`。
+- 增加全模式随机图、边界、导出/加载对照测试，验证端点、合法边和路径代价。
+- 并发测试显式配置测试期搜索池容量，避免慢速 race + stress 查询误报 `ErrSearchBusy`。
+
+### v0.10.0 — 寻路一致性、并发与只读 Grid
+
+#### 寻路一致性与 JPS+ 跳表
 
 - 三种内置网格的 `FindPathWorld` 都会调用配置的 Finder，包括无障碍地图。无障碍查询也有搜索开销，且可能返回多于两个的路径点。显式启用的平滑仍在搜索后处理。
 - A* 和 IDA* 的默认启发式考虑低于 1 的地形权重。双向 A* 和双向 Dijkstra 按正向边计费，并在已知路径达到停止下界后返回。
 - 自定义网格可通过 `finder.SymmetricNeighborGrid` 声明对称邻接。未声明对称的网格使用单向搜索，保留单向边的语义。
-- JPS+ canonical 跳表现在覆盖四种对角线模式，表与障碍布局及模式绑定，新格式带校验和。缺少布局指纹或模式的旧表仍可加载，查询会使用在线 JPS，重新运行 `Precompute` 可恢复查表加速。
+- JPS+ 引入 canonical 跳表（`DiagonalAlways`）、布局指纹与校验和；缺少指纹的旧表仍可加载，查询会使用在线 JPS，重新运行 `Precompute` 可恢复查表加速。
 - 从 v0.9.0 升级时，外部 `grid.Grid` 实现需迁移坐标签名。例如 `TileIndex(x, y int32) int` 接收 `int32` 坐标，`TileXY(index int) (int32, int32)` 返回 `int32` 坐标。平面索引仍是 `int`。
 
-### Unreleased — 状态外置与直接并发
+#### 状态外置与直接并发
 - `Node` 只保留 `X/Y/Walkable/Weight`；搜索状态改为 per-FindPath scratch，`Parent`/`HeapIndex` 使用 flat index
 - `Finder.FindPath` 接收 `[][2]int32` 输出缓冲；`Grid.FindPathWorld` 接收 `*grid.PathBuff`（Tile + World）；核心 finder 可做到预热后 0 alloc/op
 - 新增 `ErrSearchBusy` 与 `SetMaxSearchWait`：槽位等待超时返回错误，避免无限阻塞
@@ -562,12 +571,12 @@ go run examples/flowfield/
 
 BREAKING: 移除 `Node` 搜索字段/`ResetSearch`、`Backtrace`/`BiBacktrace`/`NewMinHeap`、grid Pool API；JPS+ `Precompute`、HPA `Build` 不可与搜索并发
 
-### Unreleased — int32/float32 全链路迁移
+#### int32/float32 全链路迁移
 - tile 坐标、路径、网格尺寸与矩阵统一为 `int32` / `[][2]int32` / `[][]int32`
 - 权重、代价、启发式与 `G/H/F` 统一为 `float32`；`TimeLimit` 仍为 `float64`
 - `StepCost`、`HeuristicFunc` 签名同步迁移；内部 slice 索引仅在边界转换为 `int`
 
-### Unreleased — 只读 Grid 与显式可变视图
+#### 只读 Grid 与显式可变视图
 - `NewOrthogonalGrid` / `NewHexGrid` / `NewStaggeredGrid` 返回只读 `grid.Grid`
 - Setter 移入 `grid.MutableGrid`；单线程可通过类型断言零拷贝访问
 - **快照 API 变更**：统一使用 `Grid.Clone(func(MutableGrid)) (Grid, error)`。旧的 `Clone()` 调用改传 `nil`，旧的 `CloneWith(fn)` 改为 `Clone(fn)`。`nil` 表示无编辑快照；有状态 Finder 仍必须在回调中替换。
